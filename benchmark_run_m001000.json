@@ -1,0 +1,36 @@
+{
+  "config": {
+    "S0": 100.0,
+    "K": 100.0,
+    "r": 0.05,
+    "sigma": 0.2,
+    "T": 1.0,
+    "N": 1,
+    "M": 1000,
+    "seed": 42
+  },
+  "result": 10.405328536017599,
+  "runtimes": [
+    0.0008849489968270063,
+    0.0008239430608227849,
+    0.0007456699386239052,
+    0.0006915210979059339,
+    0.0006576059386134148
+  ],
+  "statistics": {
+    "mean_runtime": 0.000760737806558609,
+    "std_runtime": 9.364494052158277e-05,
+    "min_runtime": 0.0006576059386134148,
+    "max_runtime": 0.0008849489968270063
+  },
+  "config_hash": "3ff6640c",
+  "ad_mode": "none",
+  "metadata": {
+    "timestamp": "2026-03-29T15:55:04.620595",
+    "python_version": "3.12.3",
+    "python_implementation": "CPython",
+    "platform": "Linux-6.14.0-29-generic-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "framework_version": "0.1.0"
+  }
+}
