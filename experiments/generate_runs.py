@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from benchmarking.core.config import MCConfig
 from benchmarking.runner.runner import BenchmarkRunner
-from benchmarking.workloads.mc_cpu import monte_carlo_european_call
+from benchmarking.workloads.mc_cpu import CPUMonteCarloEngine
 
 
 def generate_runs():
@@ -26,7 +26,7 @@ def generate_runs():
         'seed': 42,
     }
     
-    runner = BenchmarkRunner(monte_carlo_european_call, name="CPU European Call")
+    runner = BenchmarkRunner(CPUMonteCarloEngine(), name="CPU European Call")
     
     # Different path counts to benchmark
     path_counts = [1000, 5000, 10000, 50000]
@@ -45,8 +45,8 @@ def generate_runs():
         # Run benchmark
         result = runner.run(config, num_warmup=1, num_runs=5, ad_mode="none")
         
-        # Save with descriptive filename
-        filename = f"benchmark_run_m{M:06d}.json"
+        # Save with descriptive filename to results folder
+        filename = f"results/benchmark_run_m{M:06d}.json"
         runner.save_results(result, filename)
         
         print(f"   ✓ Saved to: {filename}")

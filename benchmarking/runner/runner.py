@@ -2,10 +2,12 @@ import time
 import json
 import platform
 import sys
-from typing import Callable, List
+from typing import Union, Callable, List
 from datetime import datetime
 from benchmarking.core.config import MCConfig
 from benchmarking.core.result import BenchmarkResult
+from benchmarking.core.engine import MonteCarloEngine
+
 
 class BenchmarkRunner:
     """
@@ -20,15 +22,16 @@ class BenchmarkRunner:
     Designed to be language-agnostic and support multiple engines.
     """
     
-    def __init__(self, workload_func: Callable[[MCConfig, str], float], name: str = "unnamed"):
+    def __init__(self, engine: Union[MonteCarloEngine, Callable], name: str = "unnamed"):
         """
-        Initialize the runner with a workload function.
+        Initialize the runner with a Monte Carlo engine.
         
         Args:
-            workload_func: Function that takes (MCConfig, ad_mode_str) and returns a float result
+            engine: MonteCarloEngine instance, or legacy Callable for backwards compatibility
+                   (Callable should match signature: (MCConfig, str) -> float)
             name: Human-readable name for the workload (for metadata)
         """
-        self.workload_func = workload_func
+        self.engine = engine
         self.name = name
     
     @staticmethod
@@ -85,7 +88,11 @@ class BenchmarkRunner:
         
         # Warmup runs (not timed, results discarded)
         for _ in range(num_warmup):
-            self.workload_func(config, ad_mode)
+            if isinstance(self.engine, MonteCarloEngine):
+                self.engine.run(config, ad_mode)
+            else:
+                # Backwards compatibility: treat as Callable
+                self.engine(config, ad_mode)
         
         # Timed runs
         runtimes: List[float] = []
@@ -93,7 +100,11 @@ class BenchmarkRunner:
         
         for _ in range(num_runs):
             start = time.perf_counter()
-            res = self.workload_func(config, ad_mode)
+            if isinstance(self.engine, MonteCarloEngine):
+                res = self.engine.run(config, ad_mode)
+            else:
+                # Backwards compatibility: treat as Callable
+                res = self.engine(config, ad_mode)
             end = time.perf_counter()
             
             runtimes.append(end - start)

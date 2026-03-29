@@ -1,6 +1,45 @@
 import math
 import random
 from benchmarking.core.config import MCConfig
+from benchmarking.core.engine import MonteCarloEngine
+
+
+class CPUMonteCarloEngine(MonteCarloEngine):
+    """
+    Pure Python CPU implementation of Monte Carlo simulation for European options.
+    
+    Uses geometric Brownian motion with Euler discretization.
+    Implements deterministic seeding for reproducibility.
+    """
+    
+    def run(self, config: MCConfig, ad_mode: str = "none") -> float:
+        """
+        Execute Monte Carlo simulation on CPU.
+        
+        Implements geometric Brownian motion: dS = r*S*dt + sigma*S*sqrt(dt)*dZ
+        """
+        random.seed(config.seed)
+        payoff_sum = 0.0
+        
+        for _ in range(config.M):
+            # Generate random normal variable for single step
+            Z = random.gauss(0, 1)
+            
+            # Simulate stock price at maturity using geometric Brownian motion
+            # S_T = S_0 * exp((r - 0.5*sigma^2)*T + sigma*sqrt(T)*Z)
+            S_T = config.S0 * math.exp(
+                (config.r - 0.5 * config.sigma**2) * config.T + 
+                config.sigma * math.sqrt(config.T) * Z
+            )
+            
+            # Calculate payoff: max(S_T - K, 0)
+            payoff = max(S_T - config.K, 0)
+            payoff_sum += payoff
+        
+        # Discount the average payoff back to present value
+        price = math.exp(-config.r * config.T) * payoff_sum / config.M
+        return price
+
 
 def monte_carlo_european_call(config: MCConfig, ad_mode: str = "none") -> float:
     """

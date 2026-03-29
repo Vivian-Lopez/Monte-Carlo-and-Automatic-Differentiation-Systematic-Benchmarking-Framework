@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from benchmarking.core.config import MCConfig
 from benchmarking.runner.runner import BenchmarkRunner
 from benchmarking.workloads.mc_cpu import (
-    monte_carlo_european_call,
+    CPUMonteCarloEngine,
     black_scholes_call,
     european_call_delta
 )
@@ -90,8 +90,8 @@ def main():
     print_header("STEP 3: Running Benchmark with Profiling")
     print("-" * 70)
     
-    # Create runner
-    runner = BenchmarkRunner(monte_carlo_european_call, name="CPU European Call")
+    # Create runner with engine
+    runner = BenchmarkRunner(CPUMonteCarloEngine(), name="CPU European Call")
     
     # Run benchmarks
     print("Running benchmark:")
@@ -129,9 +129,14 @@ def main():
     print_header("STEP 5: Saving Results")
     print("-" * 70)
     
-    output_file = "benchmark_results.json"
+    output_file = "results/benchmark_results.json"
     runner.save_results(result, output_file)
     print(f"✓ Results saved to: {output_file}")
+    
+    # Ensure results directory exists
+    import os
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    runner.save_results(result, output_file)
     
     print(f"\nResult structure (JSON):")
     print(f"  - config: MCConfig parameters")
