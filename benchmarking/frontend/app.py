@@ -17,6 +17,7 @@ from benchmarking.frontend.components.sidebar import render_sidebar
 from benchmarking.frontend.components.overview import render_overview
 from benchmarking.frontend.components.compare import render_compare
 from benchmarking.frontend.components.detailed import render_detailed
+from benchmarking.frontend.components.ad_analysis import render_ad_analysis
 
 # Page config
 st.set_page_config(
@@ -61,14 +62,18 @@ else:
     df = results_to_dataframe(st.session_state.results)
     
     # Tabs
-    tab_overview, tab_compare, tab_detailed = st.tabs([
+    tab_overview, tab_ad, tab_compare, tab_detailed = st.tabs([
         "📈 Overview",
+        "🔬 AD Analysis",
         "🔍 Compare Runs",
         "📋 Detailed View"
     ])
     
     with tab_overview:
         render_overview(df)
+    
+    with tab_ad:
+        render_ad_analysis(st.session_state.results)
     
     with tab_compare:
         render_compare(df)

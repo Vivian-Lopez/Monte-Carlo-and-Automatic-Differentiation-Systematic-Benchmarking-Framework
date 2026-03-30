@@ -25,6 +25,10 @@ class BenchmarkResult:
     config_hash: str  # For reproducibility verification
     metadata: Dict[str, Any]  # Environment info: version, timestamp, etc.
     ad_mode: str = "none"  # none, forward, or reverse
+    ad_overhead_ratio: float = 1.0  # gradient_time / baseline_time
+    gradient_time_ms: float = 0.0  # milliseconds
+    memory_peak_mb: float = 0.0  # megabytes
+    ad_accuracy_error: float = 0.0  # relative error vs. analytical
     
     @staticmethod
     def from_runs(
@@ -33,7 +37,11 @@ class BenchmarkResult:
         runtimes: List[float],
         config_hash: str,
         metadata: Dict[str, Any],
-        ad_mode: str = "none"
+        ad_mode: str = "none",
+        ad_overhead_ratio: float = 1.0,
+        gradient_time_ms: float = 0.0,
+        memory_peak_mb: float = 0.0,
+        ad_accuracy_error: float = 0.0
     ) -> "BenchmarkResult":
         """Construct result from raw run data, computing statistics."""
         if not runtimes:
@@ -49,7 +57,11 @@ class BenchmarkResult:
             max_runtime=max(runtimes),
             config_hash=config_hash,
             metadata=metadata,
-            ad_mode=ad_mode
+            ad_mode=ad_mode,
+            ad_overhead_ratio=ad_overhead_ratio,
+            gradient_time_ms=gradient_time_ms,
+            memory_peak_mb=memory_peak_mb,
+            ad_accuracy_error=ad_accuracy_error
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -67,17 +79,28 @@ class BenchmarkResult:
             "config_hash": self.config_hash,
             "ad_mode": self.ad_mode,
             "metadata": self.metadata,
+            "ad_metrics": {
+                "ad_overhead_ratio": self.ad_overhead_ratio,
+                "gradient_time_ms": self.gradient_time_ms,
+                "memory_peak_mb": self.memory_peak_mb,
+                "ad_accuracy_error": self.ad_accuracy_error,
+            },
         }
     
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "BenchmarkResult":
         """Reconstruct from dictionary."""
         config = MCConfig(**data["config"])
+        ad_metrics = data.get("ad_metrics", {})
         return BenchmarkResult.from_runs(
             config=config,
             result=data["result"],
             runtimes=data["runtimes"],
             config_hash=data["config_hash"],
             metadata=data["metadata"],
-            ad_mode=data.get("ad_mode", "none")
+            ad_mode=data.get("ad_mode", "none"),
+            ad_overhead_ratio=ad_metrics.get("ad_overhead_ratio", 1.0),
+            gradient_time_ms=ad_metrics.get("gradient_time_ms", 0.0),
+            memory_peak_mb=ad_metrics.get("memory_peak_mb", 0.0),
+            ad_accuracy_error=ad_metrics.get("ad_accuracy_error", 0.0)
         )
