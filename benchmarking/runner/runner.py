@@ -4,7 +4,7 @@ import platform
 import sys
 from typing import Union, Callable, List
 from datetime import datetime
-from benchmarking.core.config import MCConfig
+from benchmarking.core.config import WorkloadConfig
 from benchmarking.core.result import BenchmarkResult
 from benchmarking.core.engine import MonteCarloEngine
 
@@ -58,7 +58,7 @@ class BenchmarkRunner:
     
     def run(
         self,
-        config: MCConfig,
+        config: WorkloadConfig,
         num_warmup: int = 1,
         num_runs: int = 5,
         ad_mode: str = "none"

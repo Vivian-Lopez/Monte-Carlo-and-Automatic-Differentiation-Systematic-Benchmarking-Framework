@@ -2,7 +2,7 @@ from dataclasses import dataclass, asdict
 from typing import List, Optional, Dict, Any
 import statistics
 import json
-from .config import MCConfig
+from .config import WorkloadConfig, config_from_dict
 
 @dataclass
 class BenchmarkResult:
@@ -15,7 +15,7 @@ class BenchmarkResult:
     - Computes summary statistics
     - Captures environment metadata
     """
-    config: MCConfig
+    config: WorkloadConfig
     result: float  # Estimated option price
     runtimes: List[float]  # Individual run times (seconds)
     mean_runtime: float
@@ -32,7 +32,7 @@ class BenchmarkResult:
     
     @staticmethod
     def from_runs(
-        config: MCConfig,
+        config: WorkloadConfig,
         result: float,
         runtimes: List[float],
         config_hash: str,
@@ -67,7 +67,7 @@ class BenchmarkResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
-            "config": asdict(self.config),
+            "config": self.config.to_dict(),
             "result": self.result,
             "runtimes": self.runtimes,
             "statistics": {
@@ -90,7 +90,7 @@ class BenchmarkResult:
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "BenchmarkResult":
         """Reconstruct from dictionary."""
-        config = MCConfig(**data["config"])
+        config = config_from_dict(data["config"])
         ad_metrics = data.get("ad_metrics", {})
         return BenchmarkResult.from_runs(
             config=config,
