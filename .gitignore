@@ -1,8 +1,11 @@
+# =========================
 # Python
+# =========================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+
 .Python
 build/
 develop-eggs/
@@ -20,29 +23,80 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environment
+# =========================
+# Virtual environments
+# =========================
 venv/
 ENV/
 env/
+.venv/
 
-# IDE
-.vscode/
+# =========================
+# Node / Frontend (Vite, React)
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite build output
+dist/
+dist-ssr/
+*.local
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo
 *~
 
+# =========================
 # Jupyter
+# =========================
 .ipynb_checkpoints/
 
-# Streamlit
-.streamlit/
-.streamlit_cache/
+# =========================
+# Codespaces / Devcontainers
+# =========================
+.devcontainer/.env
+.devcontainer/*.log
 
-# Results (generated locally, keep in git for examples but note they're ephemeral)
-# benchmark_run_*.json     # Uncomment to ignore generated runs
-# benchmark_results.json
-
+# =========================
 # OS
+# =========================
 .DS_Store
 Thumbs.db
+
+# =========================
+# Logs / temp
+# =========================
+*.log
+*.tmp
+*.temp
+
+# =========================
+# Testing / coverage
+# =========================
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# =========================
+# Benchmark outputs (optional)
+# =========================
+# Uncomment if you don't want to track generated runs
+# results/*.json
+# benchmark_run_*.json
+# benchmark_results.json

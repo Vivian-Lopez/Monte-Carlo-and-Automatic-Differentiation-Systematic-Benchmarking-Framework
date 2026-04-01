@@ -133,7 +133,6 @@ class CPUMonteCarloEngine(MonteCarloEngine):
             payoff = np.maximum(config.K - basket_price, 0.0)
         return float(math.exp(-config.r * config.T) * payoff.mean())
 
-
 # ---------------------------------------------------------------------------
 # Black-Scholes closed form (European only, for validation)
 # ---------------------------------------------------------------------------
@@ -148,67 +147,17 @@ def black_scholes_call(config: EuropeanOptionConfig) -> float:
             config.K * math.exp(-config.r * config.T) * norm.cdf(d2))
 
 
-# ---------------------------------------------------------------------------
-# Legacy function alias kept for backward compatibility
-# ---------------------------------------------------------------------------
-
-def monte_carlo_european_call(config, ad_mode: str = "none") -> float:
-    return CPUMonteCarloEngine().run(config, ad_mode)
-
-
-def black_scholes_call(config: MCConfig) -> float:
-    """
-    Analytical Black-Scholes price for European call option.
-    
-    Used to validate Monte Carlo results:
-    C = S_0 * N(d1) - K * exp(-r*T) * N(d2)
-    
-    where:
-    d1 = (ln(S_0/K) + (r + 0.5*sigma^2)*T) / (sigma*sqrt(T))
-    d2 = d1 - sigma*sqrt(T)
-    N(x) = cumulative standard normal distribution
-    
-    Args:
-        config: MCConfig containing option parameters
-        
-    Returns:
-        Exact option price under Black-Scholes assumptions
-    """
-    from scipy.stats import norm
-    
-    sqrt_T = math.sqrt(config.T)
-    d1 = (
-        math.log(config.S0 / config.K) + 
-        (config.r + 0.5 * config.sigma**2) * config.T
-    ) / (config.sigma * sqrt_T)
-    d2 = d1 - config.sigma * sqrt_T
-    
-    call_price = (
-        config.S0 * norm.cdf(d1) - 
-        config.K * math.exp(-config.r * config.T) * norm.cdf(d2)
-    )
-    return call_price
-
-
-def european_call_delta(config: MCConfig) -> float:
-    """
-    Analytical delta (dC/dS0) for European call option.
-    
-    Delta = N(d1), where d1 is as in Black-Scholes formula.
-    This is useful for AD validation.
-    
-    Args:
-        config: MCConfig containing option parameters
-        
-    Returns:
-        Delta (first derivative w.r.t. S0)
-    """
-    from scipy.stats import norm
-    
-    sqrt_T = math.sqrt(config.T)
-    d1 = (
-        math.log(config.S0 / config.K) + 
-        (config.r + 0.5 * config.sigma**2) * config.T
-    ) / (config.sigma * sqrt_T)
-    
+def european_call_delta(config: EuropeanOptionConfig) -> float:
+    """Analytical delta for European call option."""
+    d1 = (math.log(config.S0 / config.K) +
+          (config.r + 0.5 * config.sigma ** 2) * config.T) / \
+         (config.sigma * math.sqrt(config.T))
     return norm.cdf(d1)
+
+
+# ---------------------------------------------------------------------------
+# Legacy runner wrapper (kept for compatibility)
+# ---------------------------------------------------------------------------
+
+def monte_carlo_european_call(config: EuropeanOptionConfig, ad_mode: str = "none") -> float:
+    return CPUMonteCarloEngine().run(config, ad_mode)
