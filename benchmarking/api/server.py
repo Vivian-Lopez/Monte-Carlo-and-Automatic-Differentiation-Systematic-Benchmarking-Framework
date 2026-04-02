@@ -38,6 +38,16 @@ from benchmarking.storage.database import BenchmarkDB
 from benchmarking.workloads.mc_cpu import CPUMonteCarloEngine
 from benchmarking.workloads.mc_jax import JAXMonteCarloEngine
 
+try:
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "benchmarking" / "cpp"))
+    from benchmarking.workloads.mc_cpp import CPPMonteCarloEngine
+    _CPP_AVAILABLE = True
+except Exception as _cpp_err:
+    log.warning("C++ engine unavailable (build with: cd benchmarking/cpp && pip install -e .): %s", _cpp_err)
+    CPPMonteCarloEngine = None  # type: ignore[assignment,misc]
+    _CPP_AVAILABLE = False
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
@@ -53,6 +63,7 @@ db = BenchmarkDB()
 ENGINES = {
     "cpu": CPUMonteCarloEngine,
     "jax": JAXMonteCarloEngine,
+    **({"cpp": CPPMonteCarloEngine} if _CPP_AVAILABLE else {}),
 }
 
 
