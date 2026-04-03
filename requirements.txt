@@ -1,16 +1,16 @@
-# Core dependencies
-scipy>=1.7.0  # For Black-Scholes validation and statistical functions
-jax>=0.4.0    # For automatic differentiation
-jax[cpu]>=0.4.0  # CPU backend
+# Core numerical stack
+numpy>=1.26
+scipy>=1.11
 
-# Frontend
-streamlit>=1.28.0  # Interactive dashboard
-plotly>=5.0.0  # Interactive plotting
-pandas>=1.3.0  # Data manipulation
+# AD / JAX engine (CPU)
+jax[cpu]>=0.4.28
 
-# C++ engine build dependency
-pybind11>=2.11.0  # Python bindings for cpp_mc extension
+# API backend
+flask>=3.0
+flask-cors>=4.0
 
-# Optional: future extensions
-# numpy>=1.20.0  # For vectorized operations
-# cupy>=9.0.0   # For GPU acceleration
+# Testing
+pytest>=8.0
+
+# Optional C++ build support (only needed if building benchmarking/cpp)
+pybind11>=2.11
