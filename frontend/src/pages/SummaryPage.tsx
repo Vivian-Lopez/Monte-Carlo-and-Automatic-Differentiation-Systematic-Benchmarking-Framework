@@ -1,22 +1,21 @@
 import React, { useEffect, useState } from "react";
 import {
     Box,
-    Typography,
-    Grid,
     Card,
     CardContent,
     CircularProgress,
+    Divider,
+    Grid,
+    Typography,
 } from "@mui/material";
-import { fetchRuns, type RunStatus } from "../api/client";
+import {
+    fetchSummary,
+    fetchRuns,
+    type SummaryResponse,
+    type RunStatus,
+} from "../api/client";
 
-interface SummaryStats {
-    total: number;
-    completed: number;
-    failed: number;
-    avgRuntimeMs: number | null;
-    fastestMs: number | null;
-    slowestMs: number | null;
-}
+// ── Stat card ─────────────────────────────────────────────────────────────
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
     return (
@@ -33,47 +32,112 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
     );
 }
 
-function computeStats(runs: RunStatus[]): SummaryStats {
-    const completed = runs.filter((r) => r.status === "completed");
-    const failed = runs.filter((r) => r.status === "failed");
-    const runtimes = completed
-        .map((r) => r.mean_runtime_ms)
-        .filter((v): v is number => v !== null);
+// ── Inline bar comparison chart ───────────────────────────────────────────
 
-    return {
-        total: runs.length,
-        completed: completed.length,
-        failed: failed.length,
-        avgRuntimeMs: runtimes.length
-            ? runtimes.reduce((a, b) => a + b, 0) / runtimes.length
-            : null,
-        fastestMs: runtimes.length ? Math.min(...runtimes) : null,
-        slowestMs: runtimes.length ? Math.max(...runtimes) : null,
-    };
+const ENGINE_COLOURS: Record<string, string> = {
+    cpu: "#1565c0",
+    jax: "#2e7d32",
+    cpp: "#b71c1c",
+};
+
+function ComparisonChart({ runs }: { runs: RunStatus[] }) {
+    const completed = runs.filter(
+        (r) => r.status === "completed" && r.mean_runtime_ms !== null
+    );
+
+    if (completed.length === 0) {
+        return (
+            <Typography variant="body2" color="text.secondary" py={2}>
+                No completed runs to compare yet.
+            </Typography>
+        );
+    }
+
+    // Group: workload → engine → list of runtimes
+    const grouped: Record<string, Record<string, number[]>> = {};
+    for (const r of completed) {
+        if (!grouped[r.workload_type]) grouped[r.workload_type] = {};
+        if (!grouped[r.workload_type][r.engine]) grouped[r.workload_type][r.engine] = [];
+        grouped[r.workload_type][r.engine].push(r.mean_runtime_ms as number);
+    }
+
+    // Compute averages and global max for proportional scaling
+    const avgMap: Record<string, Record<string, number>> = {};
+    let maxMs = 0;
+    for (const [wl, engines] of Object.entries(grouped)) {
+        avgMap[wl] = {};
+        for (const [eng, times] of Object.entries(engines)) {
+            const avg = times.reduce((a, b) => a + b, 0) / times.length;
+            avgMap[wl][eng] = avg;
+            if (avg > maxMs) maxMs = avg;
+        }
+    }
+    if (maxMs === 0) maxMs = 1;
+
+    return (
+        <Box display="flex" flexDirection="column" gap={3}>
+            {Object.entries(avgMap).map(([wl, engines]) => (
+                <Box key={wl}>
+                    <Typography
+                        variant="subtitle2"
+                        mb={1}
+                        sx={{ textTransform: "capitalize" }}
+                    >
+                        {wl}
+                    </Typography>
+                    <Box display="flex" flexDirection="column" gap={1}>
+                        {Object.entries(engines).map(([eng, avgMs]) => (
+                            <Box key={eng} display="flex" alignItems="center" gap={1.5}>
+                                <Typography
+                                    variant="caption"
+                                    sx={{
+                                        width: 36,
+                                        flexShrink: 0,
+                                        textTransform: "uppercase",
+                                        fontWeight: 700,
+                                    }}
+                                >
+                                    {eng}
+                                </Typography>
+                                <Box
+                                    sx={{
+                                        height: 16,
+                                        width: `${(avgMs / maxMs) * 100}%`,
+                                        minWidth: 4,
+                                        bgcolor: ENGINE_COLOURS[eng] ?? "#546e7a",
+                                        borderRadius: 0.5,
+                                        transition: "width 0.4s ease",
+                                    }}
+                                />
+                                <Typography variant="caption" color="text.secondary">
+                                    {avgMs.toFixed(1)} ms
+                                </Typography>
+                            </Box>
+                        ))}
+                    </Box>
+                </Box>
+            ))}
+        </Box>
+    );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────
+
 export default function SummaryPage() {
+    const [summary, setSummary] = useState<SummaryResponse | null>(null);
     const [runs, setRuns] = useState<RunStatus[]>([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         setLoading(true);
-        fetchRuns(200)
-            .then(setRuns)
+        Promise.all([fetchSummary(), fetchRuns(500)])
+            .then(([s, r]) => {
+                setSummary(s);
+                setRuns(r);
+            })
             .catch(() => { })
             .finally(() => setLoading(false));
     }, []);
-
-    const stats = computeStats(runs);
-
-    const byWorkload: Record<string, number> = {};
-    const byEngine: Record<string, number> = {};
-    runs.forEach((r) => {
-        if (r.status === "completed") {
-            byWorkload[r.workload_type] = (byWorkload[r.workload_type] ?? 0) + 1;
-            byEngine[r.engine] = (byEngine[r.engine] ?? 0) + 1;
-        }
-    });
 
     return (
         <Box display="flex" flexDirection="column" gap={3}>
@@ -85,44 +149,28 @@ export default function SummaryPage() {
                 <CircularProgress />
             ) : (
                 <>
+                    {/* Stat cards */}
                     <Grid container spacing={2}>
-                        <Grid item xs={6} sm={4} md={2}>
-                            <StatCard label="Total Runs" value={stats.total} />
-                        </Grid>
-                        <Grid item xs={6} sm={4} md={2}>
-                            <StatCard label="Completed" value={stats.completed} />
-                        </Grid>
-                        <Grid item xs={6} sm={4} md={2}>
-                            <StatCard label="Failed" value={stats.failed} />
-                        </Grid>
-                        <Grid item xs={6} sm={4} md={3}>
-                            <StatCard
-                                label="Avg Runtime"
-                                value={
-                                    stats.avgRuntimeMs !== null
-                                        ? `${stats.avgRuntimeMs.toFixed(1)} ms`
-                                        : "—"
-                                }
-                            />
-                        </Grid>
-                        <Grid item xs={6} sm={4} md={2}>
-                            <StatCard
-                                label="Fastest"
-                                value={
-                                    stats.fastestMs !== null ? `${stats.fastestMs.toFixed(1)} ms` : "—"
-                                }
-                            />
-                        </Grid>
-                        <Grid item xs={6} sm={4} md={2}>
-                            <StatCard
-                                label="Slowest"
-                                value={
-                                    stats.slowestMs !== null ? `${stats.slowestMs.toFixed(1)} ms` : "—"
-                                }
-                            />
-                        </Grid>
+                        {[
+                            { label: "Total Runs", value: summary?.total ?? 0 },
+                            { label: "Completed", value: summary?.completed ?? 0 },
+                            { label: "Pending", value: summary?.pending ?? 0 },
+                            { label: "Failed", value: summary?.failed ?? 0 },
+                            {
+                                label: "Fastest",
+                                value:
+                                    summary?.fastest_ms != null
+                                        ? `${summary.fastest_ms.toFixed(1)} ms`
+                                        : "—",
+                            },
+                        ].map(({ label, value }) => (
+                            <Grid item xs={6} sm={4} md={2} key={label}>
+                                <StatCard label={label} value={value} />
+                            </Grid>
+                        ))}
                     </Grid>
 
+                    {/* By workload / by engine */}
                     <Grid container spacing={2}>
                         <Grid item xs={12} sm={6}>
                             <Card variant="outlined">
@@ -130,13 +178,19 @@ export default function SummaryPage() {
                                     <Typography variant="subtitle2" gutterBottom>
                                         By Workload
                                     </Typography>
-                                    {Object.keys(byWorkload).length === 0 ? (
+                                    {!summary ||
+                                        Object.keys(summary.by_workload).length === 0 ? (
                                         <Typography variant="body2" color="text.secondary">
                                             No completed runs yet.
                                         </Typography>
                                     ) : (
-                                        Object.entries(byWorkload).map(([w, n]) => (
-                                            <Box key={w} display="flex" justifyContent="space-between" mb={0.5}>
+                                        Object.entries(summary.by_workload).map(([w, n]) => (
+                                            <Box
+                                                key={w}
+                                                display="flex"
+                                                justifyContent="space-between"
+                                                mb={0.5}
+                                            >
                                                 <Typography variant="body2">{w}</Typography>
                                                 <Typography variant="body2" fontWeight={600}>
                                                     {n}
@@ -153,14 +207,22 @@ export default function SummaryPage() {
                                     <Typography variant="subtitle2" gutterBottom>
                                         By Engine
                                     </Typography>
-                                    {Object.keys(byEngine).length === 0 ? (
+                                    {!summary ||
+                                        Object.keys(summary.by_engine).length === 0 ? (
                                         <Typography variant="body2" color="text.secondary">
                                             No completed runs yet.
                                         </Typography>
                                     ) : (
-                                        Object.entries(byEngine).map(([eng, n]) => (
-                                            <Box key={eng} display="flex" justifyContent="space-between" mb={0.5}>
-                                                <Typography variant="body2">{eng.toUpperCase()}</Typography>
+                                        Object.entries(summary.by_engine).map(([eng, n]) => (
+                                            <Box
+                                                key={eng}
+                                                display="flex"
+                                                justifyContent="space-between"
+                                                mb={0.5}
+                                            >
+                                                <Typography variant="body2">
+                                                    {eng.toUpperCase()}
+                                                </Typography>
                                                 <Typography variant="body2" fontWeight={600}>
                                                     {n}
                                                 </Typography>
@@ -171,8 +233,20 @@ export default function SummaryPage() {
                             </Card>
                         </Grid>
                     </Grid>
+
+                    {/* Engine comparison chart */}
+                    <Card variant="outlined">
+                        <CardContent>
+                            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                                Engine Comparison — Avg Mean Runtime (ms)
+                            </Typography>
+                            <Divider sx={{ mb: 2 }} />
+                            <ComparisonChart runs={runs} />
+                        </CardContent>
+                    </Card>
                 </>
             )}
         </Box>
     );
 }
+

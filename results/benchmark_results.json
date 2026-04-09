@@ -5,32 +5,40 @@
     "r": 0.05,
     "sigma": 0.2,
     "T": 1.0,
+    "option_type": "call",
     "N": 1,
     "M": 10000,
-    "seed": 42
+    "seed": 42,
+    "workload_type": "european"
   },
-  "result": 10.309490733700043,
+  "result": 10.345182037175292,
   "runtimes": [
-    0.005552384071052074,
-    0.004955383948981762,
-    0.004960749996826053,
-    0.0049017100827768445,
-    0.004911239026114345
+    0.00022641999976258376,
+    0.00018622899960973882,
+    0.00017768299994713743,
+    0.00022608800009038532,
+    0.0002051750002465269
   ],
   "statistics": {
-    "mean_runtime": 0.005056293425150215,
-    "std_runtime": 0.00027854711739974544,
-    "min_runtime": 0.0049017100827768445,
-    "max_runtime": 0.005552384071052074
+    "mean_runtime": 0.00020431899993127444,
+    "std_runtime": 2.2359566771287865e-05,
+    "min_runtime": 0.00017768299994713743,
+    "max_runtime": 0.00022641999976258376
   },
-  "config_hash": "49c27a6a",
+  "config_hash": "0701d15f",
   "ad_mode": "none",
   "metadata": {
-    "timestamp": "2026-03-29T16:20:17.124803",
-    "python_version": "3.12.3",
+    "timestamp": "2026-04-03T14:11:25.582879",
+    "python_version": "3.12.1",
     "python_implementation": "CPython",
-    "platform": "Linux-6.14.0-29-generic-x86_64-with-glibc2.39",
+    "platform": "Linux-6.8.0-1044-azure-x86_64-with-glibc2.39",
     "processor": "x86_64",
     "framework_version": "0.1.0"
+  },
+  "ad_metrics": {
+    "ad_overhead_ratio": 1.0,
+    "gradient_time_ms": 0.0,
+    "memory_peak_mb": 0.0,
+    "ad_accuracy_error": 0.0
   }
 }

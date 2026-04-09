@@ -22,6 +22,7 @@ from benchmarking.workloads.mc_cpu import (
     black_scholes_call,
     european_call_delta
 )
+from benchmarking.storage.database import BenchmarkDB
 
 
 def print_header(text: str) -> None:
@@ -130,14 +131,22 @@ def main():
     print("-" * 70)
     
     output_file = "results/benchmark_results.json"
-    runner.save_results(result, output_file)
-    print(f"✓ Results saved to: {output_file}")
-    
-    # Ensure results directory exists
-    import os
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     runner.save_results(result, output_file)
-    
+    print(f"✓ Results saved to: {output_file}")
+
+    db = BenchmarkDB()
+    run_id = db.create_run(config.to_dict(), "cpu", "none")
+    db.mark_running(run_id)
+    db.mark_completed(
+        run_id=run_id,
+        result_value=result.result,
+        mean_runtime_ms=result.mean_runtime * 1000,
+        std_runtime_ms=result.std_runtime * 1000,
+        ad_overhead_ratio=result.ad_overhead_ratio,
+    )
+    print(f"✓ Run ID: {run_id[:8]} recorded in benchmarks.db")
+
     print(f"\nResult structure (JSON):")
     print(f"  - config: MCConfig parameters")
     print(f"  - result: Estimated option price")
@@ -183,10 +192,9 @@ def main():
     ✓ AD mode framework (ready for forward/reverse differentiation)
     
     Future extensions:
-    - JAX implementations with automatic differentiation
-    - GPU acceleration (CUDA/Metal backends)
-    - Multi-language support (C++, Julia)
-    - Parallel scheduling (MPI-inspired work stealing)
+    - GPU acceleration (CUDA backends)
+    - Multi-language support (Julia, Rust)
+    - Parallel scheduling and distributed execution
     - Advanced profiling (LIKWID, VTune integration)
     """)
     
