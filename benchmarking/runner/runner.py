@@ -71,6 +71,9 @@ class BenchmarkRunner:
         - Multiple timed runs to capture variability
         - Structured result capture with metadata
         
+        For AD modes (forward/reverse), also measures baseline (no-AD) performance
+        to compute the AD overhead ratio.
+        
         Args:
             config: Configuration for the Monte Carlo simulation
             num_warmup: Number of warmup runs (discarded) (default: 1)
@@ -86,6 +89,49 @@ class BenchmarkRunner:
         # Validate configuration
         config.validate()
         
+        # Run with the specified AD mode
+        runtimes, result = self._run_with_timings(config, num_warmup, num_runs, ad_mode)
+        
+        # If AD mode is enabled, also measure baseline (no-AD) to compute overhead
+        baseline_runtimes = None
+        if ad_mode != "none":
+            baseline_runtimes, _ = self._run_with_timings(config, num_warmup, num_runs, "none")
+        
+        # Capture environment and compute config hash
+        metadata = self.capture_environment()
+        config_hash = config.config_hash()
+        
+        # Compute AD overhead ratio if we have a baseline
+        ad_overhead_ratio = 1.0
+        if baseline_runtimes is not None:
+            baseline_mean = sum(baseline_runtimes) / len(baseline_runtimes)
+            ad_mean = sum(runtimes) / len(runtimes)
+            ad_overhead_ratio = ad_mean / baseline_mean if baseline_mean > 0 else 1.0
+        
+        # Create result with full statistics
+        return BenchmarkResult.from_runs(
+            config=config,
+            result=result,
+            runtimes=runtimes,
+            config_hash=config_hash,
+            metadata=metadata,
+            ad_mode=ad_mode,
+            ad_overhead_ratio=ad_overhead_ratio
+        )
+    
+    def _run_with_timings(
+        self,
+        config: WorkloadConfig,
+        num_warmup: int,
+        num_runs: int,
+        ad_mode: str
+    ) -> tuple:
+        """
+        Run benchmark with given ad_mode and return timings + result.
+        
+        Returns:
+            (runtimes: List[float], result: float)
+        """
         # Warmup runs (not timed, results discarded)
         for _ in range(num_warmup):
             if isinstance(self.engine, MonteCarloEngine):
@@ -110,19 +156,7 @@ class BenchmarkRunner:
             runtimes.append(end - start)
             result = res  # Result should be deterministic given seed
         
-        # Capture environment and compute config hash
-        metadata = self.capture_environment()
-        config_hash = config.config_hash()
-        
-        # Create result with full statistics
-        return BenchmarkResult.from_runs(
-            config=config,
-            result=result,
-            runtimes=runtimes,
-            config_hash=config_hash,
-            metadata=metadata,
-            ad_mode=ad_mode
-        )
+        return runtimes, result
     
     def save_results(self, result: BenchmarkResult, filename: str) -> None:
         """
