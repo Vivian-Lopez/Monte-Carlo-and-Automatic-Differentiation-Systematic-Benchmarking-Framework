@@ -47,22 +47,27 @@ class JAXMonteCarloEngine(MonteCarloEngine):
     # ------------------------------------------------------------------
 
     def _run_european(self, config: EuropeanOptionConfig, ad_mode: str) -> float:
+        # Generate random numbers with the config's seed
+        key = jax.random.PRNGKey(int(config.seed))
+        Z = jax.random.normal(key, shape=(int(config.M),))
+        
         if ad_mode == "none":
-            return float(self._price_european(config.S0, config.K, config.r,
-                                              config.sigma, config.T, config.M, config.seed,
-                                              config.option_type))
+            return float(self._price_european(
+                float(config.S0), float(config.K), float(config.r),
+                float(config.sigma), float(config.T), Z, config.option_type
+            ))
         elif ad_mode in ("forward", "reverse"):
-            self._compute_greeks(config)
-            return float(self._price_european(config.S0, config.K, config.r,
-                                              config.sigma, config.T, config.M, config.seed,
-                                              config.option_type))
+            self._compute_greeks(config)  # Compute greeks for potential future use
+            return float(self._price_european(
+                float(config.S0), float(config.K), float(config.r),
+                float(config.sigma), float(config.T), Z, config.option_type
+            ))
         else:
             raise ValueError(f"Unknown ad_mode: {ad_mode!r}")
 
     @staticmethod
-    def _price_european(S0, K, r, sigma, T, M, seed, option_type="call"):
-        key = jax.random.PRNGKey(seed)
-        Z = jax.random.normal(key, shape=(M,))
+    def _price_european(S0, K, r, sigma, T, Z, option_type="call"):
+        """Price European option given pre-generated standard normals Z."""
         S_T = S0 * jnp.exp((r - 0.5 * sigma ** 2) * T + sigma * jnp.sqrt(T) * Z)
         if option_type == "call":
             payoff = jnp.maximum(S_T - K, 0.0)
@@ -71,18 +76,24 @@ class JAXMonteCarloEngine(MonteCarloEngine):
         return jnp.exp(-r * T) * jnp.mean(payoff)
 
     def _compute_greeks(self, config: EuropeanOptionConfig) -> dict:
-        """Compute Delta, Vega, Rho via reverse-mode AD (grad on scalar output)."""
-        # Capture non-differentiable params as plain Python values so JAX
-        # never tries to trace/differentiate through integer arguments.
-        _K = float(config.K)
-        _T = float(config.T)
+        """Compute Delta, Vega, Rho via reverse-mode AD (grad on scalar output).
+        
+        Pre-generate random numbers outside the grad() context to avoid JAX
+        trying to differentiate through integer-seed RNG initialization.
+        """
+        # Generate random numbers once, outside the traced function
         _M = int(config.M)
         _seed = int(config.seed)
+        _K = float(config.K)
+        _T = float(config.T)
         _opt = config.option_type
+        
+        key = jax.random.PRNGKey(_seed)
+        Z = jax.random.normal(key, shape=(_M,))
 
         def price_fn(S0, r, sigma):
-            return self._price_european(S0, _K, r, sigma, _T,
-                                        _M, _seed, _opt)
+            """Price function that receives pre-generated Z; JAX will never see the seed."""
+            return self._price_european(S0, _K, r, sigma, _T, Z, _opt)
 
         d_S0 = grad(price_fn, argnums=0)(float(config.S0), float(config.r), float(config.sigma))
         d_r  = grad(price_fn, argnums=1)(float(config.S0), float(config.r), float(config.sigma))
