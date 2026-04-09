@@ -6,6 +6,10 @@ import TopBar from "./components/TopBar";
 import SimulatePage from "./pages/SimulatePage";
 import HistoryPage from "./pages/HistoryPage";
 import SummaryPage from "./pages/SummaryPage";
+import AdAnalysisPage from "./pages/AdAnalysisPage";
+import GpuPage from "./pages/GpuPage";
+import ScalingPage from "./pages/ScalingPage";
+import CloudPage from "./pages/CloudPage";
 
 const theme = createTheme({
     palette: {
@@ -27,7 +31,11 @@ const theme = createTheme({
 const PAGE_TITLES: Record<string, string> = {
     simulate: "Run Simulation",
     history: "Run History",
-    summary: "Summary",
+    summary: "Dashboard",
+    ad: "AD Analysis",
+    gpu: "GPU Implementation",
+    scaling: "Parallelism & Scaling",
+    cloud: "Cloud Profiling",
 };
 
 export default function App() {
@@ -47,6 +55,14 @@ export default function App() {
                 return <HistoryPage />;
             case "summary":
                 return <SummaryPage />;
+            case "ad":
+                return <AdAnalysisPage />;
+            case "gpu":
+                return <GpuPage />;
+            case "scaling":
+                return <ScalingPage />;
+            case "cloud":
+                return <CloudPage />;
             default:
                 return null;
         }

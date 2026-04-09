@@ -1,0 +1,44 @@
+{
+  "config": {
+    "S0": 100.0,
+    "K": 100.0,
+    "r": 0.05,
+    "sigma": 0.2,
+    "T": 1.0,
+    "option_type": "call",
+    "N": 1,
+    "M": 1000,
+    "seed": 42,
+    "workload_type": "european"
+  },
+  "result": 9.911979607280376,
+  "runtimes": [
+    8.992399989438127e-05,
+    5.5843000154709443e-05,
+    4.696299993156572e-05,
+    4.5480000153474975e-05,
+    4.346100013208343e-05
+  ],
+  "statistics": {
+    "mean_runtime": 5.6334200053242967e-05,
+    "std_runtime": 1.9364066296253758e-05,
+    "min_runtime": 4.346100013208343e-05,
+    "max_runtime": 8.992399989438127e-05
+  },
+  "config_hash": "0799564e",
+  "ad_mode": "none",
+  "metadata": {
+    "timestamp": "2026-04-03T14:31:20.921069",
+    "python_version": "3.12.1",
+    "python_implementation": "CPython",
+    "platform": "Linux-6.8.0-1044-azure-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "framework_version": "0.1.0"
+  },
+  "ad_metrics": {
+    "ad_overhead_ratio": 1.0,
+    "gradient_time_ms": 0.0,
+    "memory_peak_mb": 0.0,
+    "ad_accuracy_error": 0.0
+  }
+}

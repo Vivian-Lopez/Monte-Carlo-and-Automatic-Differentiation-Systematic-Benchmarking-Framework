@@ -72,9 +72,27 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
         setValidationError(null);
     }, [workloadType, workloads]);
 
+    // Auto-switch engine when the current one doesn't support the new workload
+    useEffect(() => {
+        if (Object.keys(engines).length === 0) return;
+        const supported = Object.keys(engines).filter(
+            (eng) => engines[eng].supported_workloads.includes(workloadType)
+        );
+        if (supported.length > 0 && !supported.includes(engine)) {
+            setEngine(supported[0]);
+        }
+    }, [workloadType, engines, engine]);
+
     const schema = workloads[workloadType]?.schema ?? [];
     const mainFields = schema.filter((f) => f.key !== "seed");
     const advancedFields = schema.filter((f) => f.key === "seed");
+
+    // Only show engines that support the current workload
+    const availableEngines = Object.keys(engines).length
+        ? Object.keys(engines).filter((eng) =>
+              engines[eng].supported_workloads.includes(workloadType)
+          )
+        : ["cpu", "jax"];
 
     function setConfigField(key: string, val: number | string) {
         setConfig((prev) => ({ ...prev, [key]: val }));
@@ -94,10 +112,6 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
     const workloadOptions = Object.keys(workloads).length
         ? Object.keys(workloads)
         : ["european", "asian", "barrier", "basket"];
-
-    const engineOptions = Object.keys(engines).length
-        ? Object.keys(engines)
-        : ["cpu", "jax"];
 
     function renderField(f: SchemaField) {
         const val = config[f.key];
@@ -174,10 +188,10 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
                                 <InputLabel>Engine</InputLabel>
                                 <Select
                                     label="Engine"
-                                    value={engine}
+                                    value={availableEngines.includes(engine) ? engine : (availableEngines[0] ?? "")}
                                     onChange={(e) => setEngine(e.target.value)}
                                 >
-                                    {engineOptions.map((eng) => (
+                                    {availableEngines.map((eng) => (
                                         <MenuItem key={eng} value={eng}>
                                             {eng.toUpperCase()}
                                         </MenuItem>
