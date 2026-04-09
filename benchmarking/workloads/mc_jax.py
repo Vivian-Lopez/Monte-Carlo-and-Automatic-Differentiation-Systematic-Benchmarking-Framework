@@ -72,13 +72,21 @@ class JAXMonteCarloEngine(MonteCarloEngine):
 
     def _compute_greeks(self, config: EuropeanOptionConfig) -> dict:
         """Compute Delta, Vega, Rho via reverse-mode AD (grad on scalar output)."""
-        def price_fn(S0, r, sigma):
-            return self._price_european(S0, config.K, r, sigma, config.T,
-                                        config.M, config.seed, config.option_type)
+        # Capture non-differentiable params as plain Python values so JAX
+        # never tries to trace/differentiate through integer arguments.
+        _K = float(config.K)
+        _T = float(config.T)
+        _M = int(config.M)
+        _seed = int(config.seed)
+        _opt = config.option_type
 
-        d_S0 = grad(price_fn, argnums=0)(config.S0, config.r, config.sigma)
-        d_r  = grad(price_fn, argnums=1)(config.S0, config.r, config.sigma)
-        d_sig = grad(price_fn, argnums=2)(config.S0, config.r, config.sigma)
+        def price_fn(S0, r, sigma):
+            return self._price_european(S0, _K, r, sigma, _T,
+                                        _M, _seed, _opt)
+
+        d_S0 = grad(price_fn, argnums=0)(float(config.S0), float(config.r), float(config.sigma))
+        d_r  = grad(price_fn, argnums=1)(float(config.S0), float(config.r), float(config.sigma))
+        d_sig = grad(price_fn, argnums=2)(float(config.S0), float(config.r), float(config.sigma))
         return {
             "dC/dS0":    float(d_S0),
             "dC/dr":     float(d_r),
