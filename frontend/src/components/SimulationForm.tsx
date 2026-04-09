@@ -13,59 +13,42 @@ import {
     InputLabel,
     Select,
     Box,
-    Typography,
     Collapse,
     Alert,
 } from "@mui/material";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import type { WorkloadInfo, EngineInfo } from "../api/client";
+import type { WorkloadInfo, EngineInfo, SchemaField } from "../api/client";
 
 export interface FormValues {
     workload_type: string;
     engine: string;
     ad_mode: string;
-    S0: number;
-    K: number;
-    r: number;
-    sigma: number;
-    T: number;
-    N: number;
-    M: number;
-    seed: number;
-    option_type: string;
-    // asian-specific
-    averaging: string;
-    // barrier-specific
-    B: number;
-    barrier_type: string;
-    barrier_side: string;
-    // basket-specific
-    n_assets: number;
-    rho: number;
+    config: Record<string, number | string>;
 }
 
-const DEFAULTS: FormValues = {
-    workload_type: "european",
-    engine: "cpu",
-    ad_mode: "none",
-    S0: 100,
-    K: 100,
-    r: 0.05,
-    sigma: 0.2,
-    T: 1.0,
-    N: 252,
-    M: 10000,
-    seed: 42,
-    option_type: "call",
-    averaging: "arithmetic",
-    B: 120,
-    barrier_type: "knock_out",
-    barrier_side: "up",
-    n_assets: 3,
-    rho: 0.5,
-};
+function buildConfigDefaults(schema: SchemaField[]): Record<string, number | string> {
+    const out: Record<string, number | string> = {};
+    for (const f of schema) {
+        out[f.key] = f.default;
+    }
+    return out;
+}
+
+function validateConfig(
+    schema: SchemaField[],
+    config: Record<string, number | string>
+): string | null {
+    for (const f of schema) {
+        const val = config[f.key];
+        if (typeof val === "number") {
+            if (f.min !== undefined && val < f.min) return `${f.label} must be ≥ ${f.min}`;
+            if (f.max !== undefined && val > f.max) return `${f.label} must be ≤ ${f.max}`;
+        }
+    }
+    return null;
+}
 
 interface Props {
     workloads: Record<string, WorkloadInfo>;
@@ -74,80 +57,38 @@ interface Props {
     onSubmit: (values: FormValues) => void;
 }
 
-function NumField({
-    label,
-    name,
-    value,
-    onChange,
-    step = "any",
-    min,
-    max,
-    integer = false,
-}: {
-    label: string;
-    name: keyof FormValues;
-    value: number;
-    onChange: (name: keyof FormValues, val: number) => void;
-    step?: string | number;
-    min?: number;
-    max?: number;
-    integer?: boolean;
-}) {
-    return (
-        <TextField
-            label={label}
-            type="number"
-            size="small"
-            fullWidth
-            value={value}
-            inputProps={{ step: integer ? 1 : step, min, max }}
-            onChange={(e) => {
-                const parsed = integer ? parseInt(e.target.value, 10) : parseFloat(e.target.value);
-                if (!isNaN(parsed)) onChange(name, parsed);
-            }}
-        />
-    );
-}
-
 export default function SimulationForm({ workloads, engines, loading, onSubmit }: Props) {
-    const [values, setValues] = useState<FormValues>(DEFAULTS);
+    const [workloadType, setWorkloadType] = useState("european");
+    const [engine, setEngine] = useState("cpu");
+    const [adMode, setAdMode] = useState("none");
+    const [config, setConfig] = useState<Record<string, number | string>>({});
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [validationError, setValidationError] = useState<string | null>(null);
 
-    // When workload changes, reset N to a sensible default
+    // Reset config to schema defaults whenever workload type changes or schema first loads
     useEffect(() => {
-        if (values.workload_type === "european") {
-            setValues((v) => ({ ...v, N: 1 }));
-        } else if (values.workload_type === "basket") {
-            setValues((v) => ({ ...v, N: 52 }));
-        } else {
-            setValues((v) => ({ ...v, N: 252 }));
-        }
-    }, [values.workload_type]);
-
-    function set<K extends keyof FormValues>(name: K, val: FormValues[K]) {
-        setValues((prev) => ({ ...prev, [name]: val }));
+        const schema = workloads[workloadType]?.schema ?? [];
+        setConfig(buildConfigDefaults(schema));
         setValidationError(null);
-    }
+    }, [workloadType, workloads]);
 
-    function validate(): string | null {
-        if (values.S0 <= 0) return "S0 must be positive";
-        if (values.K <= 0) return "K must be positive";
-        if (values.sigma <= 0) return "σ must be positive";
-        if (values.T <= 0) return "T must be positive";
-        if (values.M < 100) return "M (paths) must be at least 100";
-        if (values.workload_type === "barrier" && values.B <= 0) return "Barrier B must be positive";
-        return null;
+    const schema = workloads[workloadType]?.schema ?? [];
+    const mainFields = schema.filter((f) => f.key !== "seed");
+    const advancedFields = schema.filter((f) => f.key === "seed");
+
+    function setConfigField(key: string, val: number | string) {
+        setConfig((prev) => ({ ...prev, [key]: val }));
+        setValidationError(null);
     }
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        const err = validate();
+        const err = validateConfig(schema, config);
         if (err) {
             setValidationError(err);
             return;
         }
-        onSubmit(values);
+        onSubmit({ workload_type: workloadType, engine, ad_mode: adMode, config });
     }
 
     const workloadOptions = Object.keys(workloads).length
@@ -158,7 +99,51 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
         ? Object.keys(engines)
         : ["cpu", "jax"];
 
-    const isPathDependent = values.workload_type !== "european";
+    function renderField(f: SchemaField) {
+        const val = config[f.key];
+
+        if (f.type === "select") {
+            return (
+                <Grid item xs={12} sm={4} key={f.key}>
+                    <FormControl size="small" fullWidth>
+                        <InputLabel>{f.label}</InputLabel>
+                        <Select
+                            label={f.label}
+                            value={String(val ?? f.default)}
+                            onChange={(e) => setConfigField(f.key, e.target.value)}
+                        >
+                            {(f.options ?? []).map((opt) => (
+                                <MenuItem key={opt} value={opt}>
+                                    {opt.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </Grid>
+            );
+        }
+
+        // "number" or "integer"
+        const isInt = f.type === "integer";
+        return (
+            <Grid item xs={6} sm={3} key={f.key}>
+                <TextField
+                    label={f.label}
+                    type="number"
+                    size="small"
+                    fullWidth
+                    value={val ?? f.default}
+                    inputProps={{ step: isInt ? 1 : "any", min: f.min, max: f.max }}
+                    onChange={(e) => {
+                        const raw = isInt
+                            ? parseInt(e.target.value, 10)
+                            : parseFloat(e.target.value);
+                        if (!isNaN(raw)) setConfigField(f.key, raw);
+                    }}
+                />
+            </Grid>
+        );
+    }
 
     return (
         <Card variant="outlined">
@@ -167,14 +152,14 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
             <CardContent>
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={2}>
-                        {/* Row 1: Workload + Engine + AD mode */}
+                        {/* Workload / Engine / AD mode */}
                         <Grid item xs={12} sm={4}>
                             <FormControl size="small" fullWidth>
                                 <InputLabel>Workload</InputLabel>
                                 <Select
                                     label="Workload"
-                                    value={values.workload_type}
-                                    onChange={(e) => set("workload_type", e.target.value)}
+                                    value={workloadType}
+                                    onChange={(e) => setWorkloadType(e.target.value)}
                                 >
                                     {workloadOptions.map((w) => (
                                         <MenuItem key={w} value={w}>
@@ -189,8 +174,8 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
                                 <InputLabel>Engine</InputLabel>
                                 <Select
                                     label="Engine"
-                                    value={values.engine}
-                                    onChange={(e) => set("engine", e.target.value)}
+                                    value={engine}
+                                    onChange={(e) => setEngine(e.target.value)}
                                 >
                                     {engineOptions.map((eng) => (
                                         <MenuItem key={eng} value={eng}>
@@ -205,8 +190,8 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
                                 <InputLabel>AD Mode</InputLabel>
                                 <Select
                                     label="AD Mode"
-                                    value={values.ad_mode}
-                                    onChange={(e) => set("ad_mode", e.target.value)}
+                                    value={adMode}
+                                    onChange={(e) => setAdMode(e.target.value)}
                                 >
                                     <MenuItem value="none">None</MenuItem>
                                     <MenuItem value="forward">Forward</MenuItem>
@@ -215,128 +200,31 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
                             </FormControl>
                         </Grid>
 
-                        {/* Row 2: Core numerical params */}
-                        <Grid item xs={6} sm={3}>
-                            <NumField label="S₀ (Initial Price)" name="S0" value={values.S0} onChange={set} min={0.01} />
-                        </Grid>
-                        <Grid item xs={6} sm={3}>
-                            <NumField label="K (Strike)" name="K" value={values.K} onChange={set} min={0.01} />
-                        </Grid>
-                        <Grid item xs={6} sm={3}>
-                            <NumField label="r (Rate)" name="r" value={values.r} onChange={set} step={0.01} min={0} max={1} />
-                        </Grid>
-                        <Grid item xs={6} sm={3}>
-                            <NumField label="σ (Volatility)" name="sigma" value={values.sigma} onChange={set} step={0.01} min={0} max={1} />
-                        </Grid>
-                        <Grid item xs={6} sm={3}>
-                            <NumField label="T (Maturity, yr)" name="T" value={values.T} onChange={set} step={0.25} min={0.01} />
-                        </Grid>
-                        <Grid item xs={6} sm={3}>
-                            <NumField label="M (Paths)" name="M" value={values.M} onChange={set} integer min={100} />
-                        </Grid>
-                        {isPathDependent && (
-                            <Grid item xs={6} sm={3}>
-                                <NumField label="N (Time Steps)" name="N" value={values.N} onChange={set} integer min={2} />
-                            </Grid>
-                        )}
-                        <Grid item xs={6} sm={3}>
-                            <FormControl size="small" fullWidth>
-                                <InputLabel>Option Type</InputLabel>
-                                <Select
-                                    label="Option Type"
-                                    value={values.option_type}
-                                    onChange={(e) => set("option_type", e.target.value)}
-                                >
-                                    <MenuItem value="call">Call</MenuItem>
-                                    <MenuItem value="put">Put</MenuItem>
-                                </Select>
-                            </FormControl>
-                        </Grid>
-
-                        {/* Workload-specific fields */}
-                        {values.workload_type === "asian" && (
-                            <Grid item xs={12} sm={4}>
-                                <FormControl size="small" fullWidth>
-                                    <InputLabel>Averaging</InputLabel>
-                                    <Select
-                                        label="Averaging"
-                                        value={values.averaging}
-                                        onChange={(e) => set("averaging", e.target.value)}
-                                    >
-                                        <MenuItem value="arithmetic">Arithmetic</MenuItem>
-                                        <MenuItem value="geometric">Geometric</MenuItem>
-                                    </Select>
-                                </FormControl>
-                            </Grid>
-                        )}
-
-                        {values.workload_type === "barrier" && (
-                            <>
-                                <Grid item xs={6} sm={3}>
-                                    <NumField label="B (Barrier)" name="B" value={values.B} onChange={set} min={0.01} />
-                                </Grid>
-                                <Grid item xs={6} sm={3}>
-                                    <FormControl size="small" fullWidth>
-                                        <InputLabel>Barrier Type</InputLabel>
-                                        <Select
-                                            label="Barrier Type"
-                                            value={values.barrier_type}
-                                            onChange={(e) => set("barrier_type", e.target.value)}
-                                        >
-                                            <MenuItem value="knock_out">Knock-Out</MenuItem>
-                                            <MenuItem value="knock_in">Knock-In</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid item xs={6} sm={3}>
-                                    <FormControl size="small" fullWidth>
-                                        <InputLabel>Barrier Side</InputLabel>
-                                        <Select
-                                            label="Barrier Side"
-                                            value={values.barrier_side}
-                                            onChange={(e) => set("barrier_side", e.target.value)}
-                                        >
-                                            <MenuItem value="up">Up</MenuItem>
-                                            <MenuItem value="down">Down</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                            </>
-                        )}
-
-                        {values.workload_type === "basket" && (
-                            <>
-                                <Grid item xs={6} sm={3}>
-                                    <NumField label="Assets (n)" name="n_assets" value={values.n_assets} onChange={set} integer min={2} max={10} />
-                                </Grid>
-                                <Grid item xs={6} sm={3}>
-                                    <NumField label="ρ (Correlation)" name="rho" value={values.rho} onChange={set} step={0.05} min={-1} max={1} />
-                                </Grid>
-                            </>
-                        )}
+                        {/* Schema-driven workload parameters */}
+                        {mainFields.map(renderField)}
 
                         {/* Advanced: seed */}
-                        <Grid item xs={12}>
-                            <Button
-                                size="small"
-                                variant="text"
-                                color="inherit"
-                                endIcon={showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                                onClick={() => setShowAdvanced((v) => !v)}
-                                sx={{ textTransform: "none", color: "text.secondary" }}
-                            >
-                                Advanced
-                            </Button>
-                            <Collapse in={showAdvanced}>
-                                <Box mt={1}>
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={6} sm={3}>
-                                            <NumField label="Seed" name="seed" value={values.seed} onChange={set} integer min={0} />
+                        {advancedFields.length > 0 && (
+                            <Grid item xs={12}>
+                                <Button
+                                    size="small"
+                                    variant="text"
+                                    color="inherit"
+                                    endIcon={showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                    onClick={() => setShowAdvanced((v) => !v)}
+                                    sx={{ textTransform: "none", color: "text.secondary" }}
+                                >
+                                    Advanced
+                                </Button>
+                                <Collapse in={showAdvanced}>
+                                    <Box mt={1}>
+                                        <Grid container spacing={2}>
+                                            {advancedFields.map(renderField)}
                                         </Grid>
-                                    </Grid>
-                                </Box>
-                            </Collapse>
-                        </Grid>
+                                    </Box>
+                                </Collapse>
+                            </Grid>
+                        )}
 
                         {validationError && (
                             <Grid item xs={12}>
@@ -354,7 +242,13 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
                                 size="large"
                                 fullWidth
                                 disabled={loading}
-                                startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <PlayArrowIcon />}
+                                startIcon={
+                                    loading ? (
+                                        <CircularProgress size={18} color="inherit" />
+                                    ) : (
+                                        <PlayArrowIcon />
+                                    )
+                                }
                             >
                                 {loading ? "Running…" : "Run Simulation"}
                             </Button>

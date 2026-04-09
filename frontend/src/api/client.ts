@@ -10,17 +10,7 @@ export interface SimulationRequest {
     workload_type: string;
     engine: string;
     ad_mode: string;
-    config: {
-        S0: number;
-        K: number;
-        r: number;
-        sigma: number;
-        T: number;
-        N: number;
-        M: number;
-        seed: number;
-        option_type: string;
-    };
+    config: Record<string, number | string>;
 }
 
 export interface RunStatus {
@@ -85,5 +75,20 @@ export async function pollRun(runId: string): Promise<RunStatus> {
 
 export async function fetchRuns(limit = 50): Promise<RunStatus[]> {
     const res = await client.get<RunStatus[]>(`/runs?limit=${limit}`);
+    return res.data;
+}
+
+export interface SummaryResponse {
+    total: number;
+    completed: number;
+    pending: number;
+    failed: number;
+    fastest_ms: number | null;
+    by_workload: Record<string, number>;
+    by_engine: Record<string, number>;
+}
+
+export async function fetchSummary(): Promise<SummaryResponse> {
+    const res = await client.get<SummaryResponse>("/summary");
     return res.data;
 }

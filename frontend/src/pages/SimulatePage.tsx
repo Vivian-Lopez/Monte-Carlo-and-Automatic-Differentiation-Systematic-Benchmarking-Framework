@@ -84,37 +84,11 @@ export default function SimulatePage({ onBackendStatus }: Props) {
         setCurrentRun(null);
         setSubmitting(true);
 
-        const config: SimulationRequest["config"] = {
-            S0: values.S0,
-            K: values.K,
-            r: values.r,
-            sigma: values.sigma,
-            T: values.T,
-            N: values.N,
-            M: values.M,
-            seed: values.seed,
-            option_type: values.option_type,
-        };
-
-        // Attach workload-specific fields
-        if (values.workload_type === "asian") {
-            (config as Record<string, unknown>)["averaging"] = values.averaging;
-        }
-        if (values.workload_type === "barrier") {
-            (config as Record<string, unknown>)["B"] = values.B;
-            (config as Record<string, unknown>)["barrier_type"] = values.barrier_type;
-            (config as Record<string, unknown>)["barrier_side"] = values.barrier_side;
-        }
-        if (values.workload_type === "basket") {
-            (config as Record<string, unknown>)["n_assets"] = values.n_assets;
-            (config as Record<string, unknown>)["rho"] = values.rho;
-        }
-
         const payload: SimulationRequest = {
             workload_type: values.workload_type,
             engine: values.engine,
             ad_mode: values.ad_mode,
-            config,
+            config: values.config,
         };
 
         try {
