@@ -29,19 +29,22 @@ def test_jax_engine_runs():
     engine = JAXMonteCarloEngine()
     
     # Test no-AD mode
-    result = engine.run(config, ad_mode="none")
+    result, greeks = engine.run(config, ad_mode="none")
     assert isinstance(result, float)
     assert result > 0
+    assert greeks is None
     
     # Test forward-mode AD
-    result_fwd = engine.run(config, ad_mode="forward")
+    result_fwd, greeks_fwd = engine.run(config, ad_mode="forward")
     assert isinstance(result_fwd, float)
     assert result_fwd > 0
+    assert greeks_fwd is not None
     
     # Test reverse-mode AD
-    result_rev = engine.run(config, ad_mode="reverse")
+    result_rev, greeks_rev = engine.run(config, ad_mode="reverse")
     assert isinstance(result_rev, float)
     assert result_rev > 0
+    assert greeks_rev is not None
 
 
 def test_jax_function_signature():
@@ -170,8 +173,8 @@ def test_jax_deterministic_seeding():
     
     engine = JAXMonteCarloEngine()
     
-    result1 = engine.run(config1, ad_mode="none")
-    result2 = engine.run(config2, ad_mode="none")
+    result1, _ = engine.run(config1, ad_mode="none")
+    result2, _ = engine.run(config2, ad_mode="none")
     
     assert result1 == result2, "Same seed should produce identical results"
 
@@ -181,13 +184,11 @@ def test_forward_mode_uses_jvp():
     config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=50_000, seed=42)
     engine = JAXMonteCarloEngine()
 
-    engine.run(config, ad_mode="forward")
-    fwd = engine.last_greeks
-    assert fwd is not None, "forward-mode should populate last_greeks"
+    _, fwd = engine.run(config, ad_mode="forward")
+    assert fwd is not None, "forward-mode should return greeks"
     assert set(fwd.keys()) == {"delta", "rho", "vega"}
 
-    engine.run(config, ad_mode="reverse")
-    rev = engine.last_greeks
+    _, rev = engine.run(config, ad_mode="reverse")
     assert rev is not None
 
     # Forward and reverse should produce the same Greeks (within numerical tolerance)
@@ -204,20 +205,19 @@ def test_greeks_vs_analytical():
 
     engine = JAXMonteCarloEngine()
     for mode in ("forward", "reverse"):
-        engine.run(config, ad_mode=mode)
-        g = engine.last_greeks
+        _, g = engine.run(config, ad_mode=mode)
         assert g is not None
         assert abs(g["delta"] - analytical["dC/dS0"]) < 0.02, f"{mode} delta off"
         assert abs(g["vega"] - analytical["dC/dsigma"]) < 2.0, f"{mode} vega off"
         assert abs(g["rho"] - analytical["dC/dr"]) < 2.0, f"{mode} rho off"
 
 
-def test_no_ad_does_not_set_greeks():
-    """Running with ad_mode='none' should leave last_greeks as None."""
+def test_no_ad_does_not_return_greeks():
+    """Running with ad_mode='none' should return None greeks."""
     config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
     engine = JAXMonteCarloEngine()
-    engine.run(config, ad_mode="none")
-    assert engine.last_greeks is None
+    _, greeks = engine.run(config, ad_mode="none")
+    assert greeks is None
 
 
 def test_runner_captures_greeks():

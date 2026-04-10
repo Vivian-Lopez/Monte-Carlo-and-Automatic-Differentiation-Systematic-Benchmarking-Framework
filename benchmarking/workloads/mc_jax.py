@@ -8,11 +8,12 @@ adding a new _price_<type> method here plus the config class in config.py.
 import jax
 import jax.numpy as jnp
 from jax import grad
+from typing import Optional, Tuple
 from benchmarking.core.config import (
     WorkloadConfig, EuropeanOptionConfig, AsianOptionConfig,
     BarrierOptionConfig, BasketOptionConfig,
 )
-from benchmarking.core.engine import MonteCarloEngine
+from benchmarking.core.engine import MonteCarloEngine, ADMode
 
 
 class JAXMonteCarloEngine(MonteCarloEngine):
@@ -22,29 +23,26 @@ class JAXMonteCarloEngine(MonteCarloEngine):
     Supported workloads: european, asian, barrier, basket.
     AD (forward / reverse) is wired for European options;
     other workloads fall back to no-AD pricing.
-
-    After a run with AD, the computed Greeks are stored in self.last_greeks.
     """
 
     SUPPORTED = {"european", "asian", "barrier", "basket"}
 
-    def __init__(self):
-        self.last_greeks: dict | None = None
-
     def supports(self, workload_type: str) -> bool:
         return workload_type in self.SUPPORTED
 
-    def run(self, config: WorkloadConfig, ad_mode: str = "none") -> float:
-        self.last_greeks = None
+    def supported_ad_modes(self) -> Tuple[ADMode, ...]:
+        return ("none", "forward", "reverse")
+
+    def run(self, config: WorkloadConfig, ad_mode: ADMode = "none") -> Tuple[float, Optional[dict]]:
         wtype = config.workload_type
         if wtype == "european":
             return self._run_european(config, ad_mode)
         elif wtype == "asian":
-            return float(self._price_asian(config))
+            return (float(self._price_asian(config)), None)
         elif wtype == "barrier":
-            return float(self._price_barrier(config))
+            return (float(self._price_barrier(config)), None)
         elif wtype == "basket":
-            return float(self._price_basket(config))
+            return (float(self._price_basket(config)), None)
         else:
             raise NotImplementedError(f"JAXMonteCarloEngine does not support '{wtype}'")
 
@@ -52,29 +50,23 @@ class JAXMonteCarloEngine(MonteCarloEngine):
     # European  (with AD support)
     # ------------------------------------------------------------------
 
-    def _run_european(self, config: EuropeanOptionConfig, ad_mode: str) -> float:
+    def _run_european(self, config: EuropeanOptionConfig, ad_mode: str) -> Tuple[float, Optional[dict]]:
         key = jax.random.PRNGKey(int(config.seed))
         Z = jax.random.normal(key, shape=(int(config.M),))
 
+        price = float(self._price_european(
+            float(config.S0), float(config.K), float(config.r),
+            float(config.sigma), float(config.T), Z, config.option_type
+        ))
+
         if ad_mode == "none":
-            return float(self._price_european(
-                float(config.S0), float(config.K), float(config.r),
-                float(config.sigma), float(config.T), Z, config.option_type
-            ))
+            return (price, None)
         elif ad_mode == "reverse":
             greeks = self._compute_greeks_reverse(config, Z)
-            self.last_greeks = greeks
-            return float(self._price_european(
-                float(config.S0), float(config.K), float(config.r),
-                float(config.sigma), float(config.T), Z, config.option_type
-            ))
+            return (price, greeks)
         elif ad_mode == "forward":
             greeks = self._compute_greeks_forward(config, Z)
-            self.last_greeks = greeks
-            return float(self._price_european(
-                float(config.S0), float(config.K), float(config.r),
-                float(config.sigma), float(config.T), Z, config.option_type
-            ))
+            return (price, greeks)
         else:
             raise ValueError(f"Unknown ad_mode: {ad_mode!r}")
 
@@ -199,4 +191,5 @@ class JAXMonteCarloEngine(MonteCarloEngine):
 # ---------------------------------------------------------------------------
 
 def monte_carlo_european_call_jax(config, ad_mode: str = "none") -> float:
-    return JAXMonteCarloEngine().run(config, ad_mode)
+    price, _ = JAXMonteCarloEngine().run(config, ad_mode)
+    return price

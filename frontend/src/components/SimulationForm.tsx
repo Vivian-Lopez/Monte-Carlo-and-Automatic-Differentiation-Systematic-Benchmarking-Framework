@@ -94,6 +94,16 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
         )
         : ["cpu", "jax"];
 
+    // Only show AD modes supported by the selected engine
+    const availableAdModes = engines[engine]?.supported_ad_modes ?? ["none"];
+
+    // Auto-reset AD mode when the engine changes and current mode is unsupported
+    useEffect(() => {
+        if (!availableAdModes.includes(adMode)) {
+            setAdMode(availableAdModes[0] ?? "none");
+        }
+    }, [engine, availableAdModes, adMode]);
+
     function setConfigField(key: string, val: number | string) {
         setConfig((prev) => ({ ...prev, [key]: val }));
         setValidationError(null);
@@ -204,12 +214,14 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
                                 <InputLabel>AD Mode</InputLabel>
                                 <Select
                                     label="AD Mode"
-                                    value={adMode}
+                                    value={availableAdModes.includes(adMode) ? adMode : (availableAdModes[0] ?? "none")}
                                     onChange={(e) => setAdMode(e.target.value)}
                                 >
-                                    <MenuItem value="none">None</MenuItem>
-                                    <MenuItem value="forward">Forward</MenuItem>
-                                    <MenuItem value="reverse">Reverse</MenuItem>
+                                    {availableAdModes.map((m) => (
+                                        <MenuItem key={m} value={m}>
+                                            {m === "none" ? "None" : m.charAt(0).toUpperCase() + m.slice(1)}
+                                        </MenuItem>
+                                    ))}
                                 </Select>
                             </FormControl>
                         </Grid>

@@ -50,6 +50,7 @@ export interface SchemaField {
 export interface EngineInfo {
     name: string;
     supported_workloads: string[];
+    supported_ad_modes: string[];
 }
 
 export async function fetchWorkloads(): Promise<Record<string, WorkloadInfo>> {

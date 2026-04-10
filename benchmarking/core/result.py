@@ -29,7 +29,7 @@ class BenchmarkResult:
     gradient_time_ms: float = 0.0  # milliseconds
     memory_peak_mb: float = 0.0  # megabytes
     ad_accuracy_error: float = 0.0  # relative error vs. analytical
-    greeks: Dict[str, float] = None  # type: ignore[assignment]
+    greeks: Optional[Dict[str, float]] = None
     
     @staticmethod
     def from_runs(

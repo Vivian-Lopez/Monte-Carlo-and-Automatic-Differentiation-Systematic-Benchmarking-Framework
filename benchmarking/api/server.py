@@ -188,6 +188,7 @@ def list_engines():
             "supported_workloads": [
                 wt for wt in WORKLOAD_REGISTRY if engine.supports(wt)
             ],
+            "supported_ad_modes": list(engine.supported_ad_modes()),
         }
     return jsonify(result)
 
@@ -231,6 +232,12 @@ def submit_run():
         abort(400, f"Unknown engine '{engine_name}'. Available: {list(ENGINES)}")
     if ad_mode not in ("none", "forward", "reverse"):
         abort(400, f"ad_mode must be none/forward/reverse, got '{ad_mode}'")
+
+    # Verify the engine supports the requested AD mode
+    engine_instance = _get_engine(engine_name)
+    if ad_mode not in engine_instance.supported_ad_modes():
+        abort(400, f"Engine '{engine_name}' does not support ad_mode='{ad_mode}'. "
+                    f"Supported: {list(engine_instance.supported_ad_modes())}")
 
     run_id = db.create_run(config.to_dict(), engine_name, ad_mode)
     return jsonify({"id": run_id, "status": "pending"}), 201

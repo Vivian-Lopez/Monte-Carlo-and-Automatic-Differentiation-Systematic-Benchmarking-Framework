@@ -2,11 +2,12 @@ import math
 import random
 import numpy as np
 from scipy.stats import norm
+from typing import Optional, Tuple
 from benchmarking.core.config import (
     WorkloadConfig, EuropeanOptionConfig, AsianOptionConfig,
     BarrierOptionConfig, BasketOptionConfig,
 )
-from benchmarking.core.engine import MonteCarloEngine
+from benchmarking.core.engine import MonteCarloEngine, ADMode
 
 
 class CPUMonteCarloEngine(MonteCarloEngine):
@@ -22,16 +23,24 @@ class CPUMonteCarloEngine(MonteCarloEngine):
     def supports(self, workload_type: str) -> bool:
         return workload_type in self.SUPPORTED
 
-    def run(self, config: WorkloadConfig, ad_mode: str = "none") -> float:
+    def supported_ad_modes(self) -> Tuple[ADMode, ...]:
+        return ("none",)
+
+    def run(self, config: WorkloadConfig, ad_mode: ADMode = "none") -> Tuple[float, Optional[dict]]:
+        if ad_mode != "none":
+            raise NotImplementedError(
+                f"CPUMonteCarloEngine does not support ad_mode={ad_mode!r}. "
+                "Use the JAX engine for automatic differentiation."
+            )
         wtype = config.workload_type
         if wtype == "european":
-            return self._price_european(config)
+            return (self._price_european(config), None)
         elif wtype == "asian":
-            return self._price_asian(config)
+            return (self._price_asian(config), None)
         elif wtype == "barrier":
-            return self._price_barrier(config)
+            return (self._price_barrier(config), None)
         elif wtype == "basket":
-            return self._price_basket(config)
+            return (self._price_basket(config), None)
         else:
             raise NotImplementedError(f"CPUMonteCarloEngine does not support workload '{wtype}'")
 
@@ -160,4 +169,5 @@ def european_call_delta(config: EuropeanOptionConfig) -> float:
 # ---------------------------------------------------------------------------
 
 def monte_carlo_european_call(config: EuropeanOptionConfig, ad_mode: str = "none") -> float:
-    return CPUMonteCarloEngine().run(config, ad_mode)
+    price, _ = CPUMonteCarloEngine().run(config, ad_mode)
+    return price

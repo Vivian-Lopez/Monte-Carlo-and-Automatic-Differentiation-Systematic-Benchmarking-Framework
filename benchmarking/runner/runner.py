@@ -90,17 +90,12 @@ class BenchmarkRunner:
         config.validate()
         
         # Run with the specified AD mode
-        runtimes, result = self._run_with_timings(config, num_warmup, num_runs, ad_mode)
-        
-        # Capture Greeks right after AD run (before baseline overwrites them)
-        greeks = None
-        if isinstance(self.engine, MonteCarloEngine) and hasattr(self.engine, 'last_greeks'):
-            greeks = self.engine.last_greeks
+        runtimes, result, greeks = self._run_with_timings(config, num_warmup, num_runs, ad_mode)
         
         # If AD mode is enabled, also measure baseline (no-AD) to compute overhead
         baseline_runtimes = None
         if ad_mode != "none":
-            baseline_runtimes, _ = self._run_with_timings(config, num_warmup, num_runs, "none")
+            baseline_runtimes, _, _ = self._run_with_timings(config, num_warmup, num_runs, "none")
         
         # Capture environment and compute config hash
         metadata = self.capture_environment()
@@ -133,10 +128,10 @@ class BenchmarkRunner:
         ad_mode: str
     ) -> tuple:
         """
-        Run benchmark with given ad_mode and return timings + result.
+        Run benchmark with given ad_mode and return timings + result + greeks.
         
         Returns:
-            (runtimes: List[float], result: float)
+            (runtimes: List[float], result: float, greeks: dict | None)
         """
         # Warmup runs (not timed, results discarded)
         for _ in range(num_warmup):
@@ -149,6 +144,7 @@ class BenchmarkRunner:
         # Timed runs
         runtimes: List[float] = []
         result: float = 0.0
+        greeks = None
         
         for _ in range(num_runs):
             start = time.perf_counter()
@@ -160,9 +156,12 @@ class BenchmarkRunner:
             end = time.perf_counter()
             
             runtimes.append(end - start)
-            result = res  # Result should be deterministic given seed
+            if isinstance(res, tuple):
+                result, greeks = res
+            else:
+                result = res  # Legacy callable
         
-        return runtimes, result
+        return runtimes, result, greeks
     
     def save_results(self, result: BenchmarkResult, filename: str) -> None:
         """

@@ -167,7 +167,7 @@ class TestCPUEngineEuropean:
         )
 
     def test_call_converges_to_bs(self, engine, atm_config):
-        mc_price = engine.run(atm_config)
+        mc_price, _ = engine.run(atm_config)
         bs_price = black_scholes_call(atm_config)
         assert abs(mc_price - bs_price) / bs_price < 0.02  # <2% relative error
 
@@ -175,12 +175,12 @@ class TestCPUEngineEuropean:
         c = EuropeanOptionConfig(
             S0=100, K=120, r=0.05, sigma=0.2, T=1.0, option_type="put", M=10_000, seed=7,
         )
-        price = engine.run(c)
+        price, _ = engine.run(c)
         assert price > 0
 
     def test_deterministic_with_seed(self, engine, atm_config):
-        p1 = engine.run(atm_config)
-        p2 = engine.run(atm_config)
+        p1, _ = engine.run(atm_config)
+        p2, _ = engine.run(atm_config)
         assert p1 == p2
 
 
@@ -194,13 +194,13 @@ class TestCPUEngineExotics:
     def test_asian_arithmetic(self, engine):
         c = AsianOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
                               N=50, M=10_000, seed=42, averaging="arithmetic")
-        price = engine.run(c)
+        price, _ = engine.run(c)
         assert 0 < price < 20  # reasonable range for ATM asian
 
     def test_asian_geometric(self, engine):
         c = AsianOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
                               N=50, M=10_000, seed=42, averaging="geometric")
-        price = engine.run(c)
+        price, _ = engine.run(c)
         assert 0 < price < 20
 
     def test_asian_cheaper_than_european(self, engine):
@@ -208,8 +208,8 @@ class TestCPUEngineExotics:
         eu = EuropeanOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=50_000, seed=42)
         asian = AsianOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
                                   N=252, M=50_000, seed=42, averaging="arithmetic")
-        eu_price = engine.run(eu)
-        asian_price = engine.run(asian)
+        eu_price, _ = engine.run(eu)
+        asian_price, _ = engine.run(asian)
         assert asian_price < eu_price
 
     def test_barrier_knock_out_leq_vanilla(self, engine):
@@ -219,8 +219,8 @@ class TestCPUEngineExotics:
             S0=100, K=100, r=0.05, sigma=0.2, T=1.0, B=130, N=252,
             barrier_type="knock_out", barrier_side="up", M=50_000, seed=42,
         )
-        eu_price = engine.run(eu)
-        barrier_price = engine.run(barrier)
+        eu_price, _ = engine.run(eu)
+        barrier_price, _ = engine.run(barrier)
         assert barrier_price <= eu_price * 1.01  # 1% tolerance for MC noise
 
     def test_barrier_knock_in_plus_knock_out_eq_vanilla(self, engine):
@@ -231,23 +231,23 @@ class TestCPUEngineExotics:
         ki = BarrierOptionConfig(barrier_type="knock_in", **base)
         ko = BarrierOptionConfig(barrier_type="knock_out", **base)
         eu = EuropeanOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=M, seed=seed)
-        ki_price = engine.run(ki)
-        ko_price = engine.run(ko)
-        eu_price = engine.run(eu)
+        ki_price, _ = engine.run(ki)
+        ko_price, _ = engine.run(ko)
+        eu_price, _ = engine.run(eu)
         assert abs((ki_price + ko_price) - eu_price) / eu_price < 0.03
 
     def test_basket_runs(self, engine):
         c = BasketOptionConfig(n_assets=3, S0=100, K=100, r=0.05, sigma=0.2,
                                rho=0.5, T=1.0, N=12, M=10_000, seed=42)
-        price = engine.run(c)
+        price, _ = engine.run(c)
         assert 0 < price < 30
 
     def test_basket_correlation_effect(self, engine):
         """Higher ρ → more correlated assets → basket behaves more like single asset."""
         base = dict(n_assets=3, S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
                    N=12, M=50_000, seed=42)
-        low_rho = engine.run(BasketOptionConfig(rho=0.1, **base))
-        high_rho = engine.run(BasketOptionConfig(rho=0.9, **base))
+        low_rho, _ = engine.run(BasketOptionConfig(rho=0.1, **base))
+        high_rho, _ = engine.run(BasketOptionConfig(rho=0.9, **base))
         # Higher correlation → higher basket option price (less diversification benefit)
         assert high_rho > low_rho
 
@@ -256,14 +256,24 @@ class TestCPUEngineExotics:
             assert engine.supports(wtype)
         assert not engine.supports("lookback")
 
+    def test_cpu_rejects_ad_mode(self, engine):
+        """CPU engine raises NotImplementedError for non-none AD modes."""
+        c = EuropeanOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=1000, seed=1)
+        for mode in ("forward", "reverse"):
+            with pytest.raises(NotImplementedError):
+                engine.run(c, ad_mode=mode)
+
+    def test_cpu_supported_ad_modes(self, engine):
+        assert engine.supported_ad_modes() == ("none",)
+
 
 class TestJAXEngineEuropean:
     """JAX engine produces same-ballpark prices as CPU for European."""
 
     def test_jax_matches_cpu(self):
         c = EuropeanOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=50_000, seed=42)
-        cpu_price = CPUMonteCarloEngine().run(c)
-        jax_price = JAXMonteCarloEngine().run(c, ad_mode="none")
+        cpu_price, _ = CPUMonteCarloEngine().run(c)
+        jax_price, _ = JAXMonteCarloEngine().run(c, ad_mode="none")
         # Different RNG streams → prices won't be identical, but both close to BS
         bs = black_scholes_call(c)
         assert abs(cpu_price - bs) / bs < 0.02
@@ -273,9 +283,16 @@ class TestJAXEngineEuropean:
         c = EuropeanOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=1000, seed=42)
         engine = JAXMonteCarloEngine()
         for mode in ("none", "forward", "reverse"):
-            price = engine.run(c, ad_mode=mode)
+            price, _ = engine.run(c, ad_mode=mode)
             assert isinstance(price, float)
             assert price > 0
+
+    def test_jax_supported_ad_modes(self):
+        engine = JAXMonteCarloEngine()
+        modes = engine.supported_ad_modes()
+        assert "none" in modes
+        assert "forward" in modes
+        assert "reverse" in modes
 
 
 # ── Layer 3: Runner ───────────────────────────────────────────────────────
@@ -458,6 +475,10 @@ class TestAPI:
         assert "cpu" in data
         assert "jax" in data
         assert "european" in data["cpu"]["supported_workloads"]
+        # Verify supported_ad_modes are exposed
+        assert "supported_ad_modes" in data["cpu"]
+        assert data["cpu"]["supported_ad_modes"] == ["none"]
+        assert "forward" in data["jax"]["supported_ad_modes"]
 
     def test_submit_run_returns_201(self, client):
         payload = {
@@ -489,6 +510,18 @@ class TestAPI:
         payload = {
             "workload_type": "european",
             "engine": "quantum",
+            "config": {"S0": 100, "K": 100, "r": 0.05, "sigma": 0.2, "T": 1.0,
+                       "M": 1000, "seed": 42},
+        }
+        r = client.post("/api/runs", json=payload)
+        assert r.status_code == 400
+
+    def test_submit_run_rejects_unsupported_ad_mode(self, client):
+        """CPU engine + forward AD should be rejected at submission time."""
+        payload = {
+            "workload_type": "european",
+            "engine": "cpu",
+            "ad_mode": "forward",
             "config": {"S0": 100, "K": 100, "r": 0.05, "sigma": 0.2, "T": 1.0,
                        "M": 1000, "seed": 42},
         }
@@ -609,6 +642,6 @@ class TestEndToEnd:
         engine = CPUMonteCarloEngine()
         for wtype, config in configs.items():
             config.validate()
-            price = engine.run(config)
+            price, _ = engine.run(config)
             assert isinstance(price, float), f"{wtype} did not return float"
             assert price >= 0, f"{wtype} returned negative price: {price}"

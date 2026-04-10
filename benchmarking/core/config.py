@@ -24,7 +24,7 @@ import hashlib
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, List, Type
+from typing import Any, ClassVar, Dict, List, Type
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +87,7 @@ class WorkloadConfig(ABC):
 class EuropeanOptionConfig(WorkloadConfig):
     """Plain vanilla European call/put under GBM (closed-form benchmark available)."""
 
-    SCHEMA: List[Dict[str, Any]] = field(default_factory=lambda: [
+    SCHEMA: ClassVar[List[Dict[str, Any]]] = [
         {"key": "S0",          "label": "Initial Price (S₀)",  "type": "number", "default": 100.0, "min": 0.01},
         {"key": "K",           "label": "Strike (K)",           "type": "number", "default": 100.0, "min": 0.01},
         {"key": "r",           "label": "Risk-free Rate (r)",   "type": "number", "default": 0.05,  "min": 0.0, "max": 1.0},
@@ -96,7 +96,7 @@ class EuropeanOptionConfig(WorkloadConfig):
         {"key": "option_type", "label": "Option Type",          "type": "select", "default": "call", "options": ["call", "put"]},
         {"key": "M",           "label": "Paths (M)",            "type": "integer", "default": 10000, "min": 100},
         {"key": "seed",        "label": "Random Seed",          "type": "integer", "default": 42,    "min": 0},
-    ], repr=False, compare=False)
+    ]
 
     S0: float = 100.0
     K: float = 100.0
@@ -128,13 +128,12 @@ class EuropeanOptionConfig(WorkloadConfig):
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
-        d.pop("SCHEMA", None)
         d["workload_type"] = self.workload_type
         return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "EuropeanOptionConfig":
-        keys = {f.name for f in cls.__dataclass_fields__.values()} - {"SCHEMA"}
+        keys = {f.name for f in cls.__dataclass_fields__.values()}
         return cls(**{k: v for k, v in data.items() if k in keys})
 
 
@@ -146,7 +145,7 @@ class EuropeanOptionConfig(WorkloadConfig):
 class AsianOptionConfig(WorkloadConfig):
     """Arithmetic or geometric averaging Asian call/put (path-dependent, multi-step)."""
 
-    SCHEMA: List[Dict[str, Any]] = field(default_factory=lambda: [
+    SCHEMA: ClassVar[List[Dict[str, Any]]] = [
         {"key": "S0",          "label": "Initial Price (S₀)",   "type": "number",  "default": 100.0, "min": 0.01},
         {"key": "K",           "label": "Strike (K)",            "type": "number",  "default": 100.0, "min": 0.01},
         {"key": "r",           "label": "Risk-free Rate (r)",    "type": "number",  "default": 0.05,  "min": 0.0, "max": 1.0},
@@ -157,7 +156,7 @@ class AsianOptionConfig(WorkloadConfig):
         {"key": "N",           "label": "Time Steps (N)",        "type": "integer", "default": 252,   "min": 2},
         {"key": "M",           "label": "Paths (M)",             "type": "integer", "default": 10000, "min": 100},
         {"key": "seed",        "label": "Random Seed",           "type": "integer", "default": 42,    "min": 0},
-    ], repr=False, compare=False)
+    ]
 
     S0: float = 100.0
     K: float = 100.0
@@ -188,13 +187,12 @@ class AsianOptionConfig(WorkloadConfig):
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
-        d.pop("SCHEMA", None)
         d["workload_type"] = self.workload_type
         return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AsianOptionConfig":
-        keys = {f.name for f in cls.__dataclass_fields__.values()} - {"SCHEMA"}
+        keys = {f.name for f in cls.__dataclass_fields__.values()}
         return cls(**{k: v for k, v in data.items() if k in keys})
 
 
@@ -206,7 +204,7 @@ class AsianOptionConfig(WorkloadConfig):
 class BarrierOptionConfig(WorkloadConfig):
     """Knock-in / knock-out up/down barrier option (path-dependent, multi-step)."""
 
-    SCHEMA: List[Dict[str, Any]] = field(default_factory=lambda: [
+    SCHEMA: ClassVar[List[Dict[str, Any]]] = [
         {"key": "S0",           "label": "Initial Price (S₀)",  "type": "number",  "default": 100.0, "min": 0.01},
         {"key": "K",            "label": "Strike (K)",           "type": "number",  "default": 100.0, "min": 0.01},
         {"key": "B",            "label": "Barrier Level (B)",    "type": "number",  "default": 120.0, "min": 0.01},
@@ -219,7 +217,7 @@ class BarrierOptionConfig(WorkloadConfig):
         {"key": "N",            "label": "Time Steps (N)",       "type": "integer", "default": 252,   "min": 2},
         {"key": "M",            "label": "Paths (M)",            "type": "integer", "default": 10000, "min": 100},
         {"key": "seed",         "label": "Random Seed",          "type": "integer", "default": 42,    "min": 0},
-    ], repr=False, compare=False)
+    ]
 
     S0: float = 100.0
     K: float = 100.0
@@ -254,13 +252,12 @@ class BarrierOptionConfig(WorkloadConfig):
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
-        d.pop("SCHEMA", None)
         d["workload_type"] = self.workload_type
         return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "BarrierOptionConfig":
-        keys = {f.name for f in cls.__dataclass_fields__.values()} - {"SCHEMA"}
+        keys = {f.name for f in cls.__dataclass_fields__.values()}
         return cls(**{k: v for k, v in data.items() if k in keys})
 
 
@@ -272,7 +269,7 @@ class BarrierOptionConfig(WorkloadConfig):
 class BasketOptionConfig(WorkloadConfig):
     """Equal-weighted basket of correlated assets (multi-asset, multi-step)."""
 
-    SCHEMA: List[Dict[str, Any]] = field(default_factory=lambda: [
+    SCHEMA: ClassVar[List[Dict[str, Any]]] = [
         {"key": "n_assets",    "label": "Number of Assets",     "type": "integer", "default": 3,     "min": 2, "max": 10},
         {"key": "S0",          "label": "Initial Prices (S₀)",  "type": "number",  "default": 100.0, "min": 0.01, "note": "uniform across assets"},
         {"key": "K",           "label": "Strike (K)",           "type": "number",  "default": 100.0, "min": 0.01},
@@ -284,7 +281,7 @@ class BasketOptionConfig(WorkloadConfig):
         {"key": "N",           "label": "Time Steps (N)",       "type": "integer", "default": 52,    "min": 1},
         {"key": "M",           "label": "Paths (M)",            "type": "integer", "default": 10000, "min": 100},
         {"key": "seed",        "label": "Random Seed",          "type": "integer", "default": 42,    "min": 0},
-    ], repr=False, compare=False)
+    ]
 
     n_assets: int = 3       # Number of assets in the basket
     S0: float = 100.0       # Uniform initial price for all assets
@@ -316,13 +313,12 @@ class BasketOptionConfig(WorkloadConfig):
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
-        d.pop("SCHEMA", None)
         d["workload_type"] = self.workload_type
         return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "BasketOptionConfig":
-        keys = {f.name for f in cls.__dataclass_fields__.values()} - {"SCHEMA"}
+        keys = {f.name for f in cls.__dataclass_fields__.values()}
         return cls(**{k: v for k, v in data.items() if k in keys})
 
 
