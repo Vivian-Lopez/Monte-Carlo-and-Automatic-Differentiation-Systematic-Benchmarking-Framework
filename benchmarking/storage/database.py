@@ -14,6 +14,7 @@ runs
   mean_runtime_ms REAL
   std_runtime_ms  REAL
   ad_overhead_ratio REAL
+  greeks_json   TEXT               (JSON dict of Greeks, NULL when not computed)
   error_message TEXT               (NULL on success)
   created_at    TEXT               (ISO-8601)
   started_at    TEXT
@@ -83,6 +84,7 @@ class BenchmarkDB:
                     mean_runtime_ms   REAL,
                     std_runtime_ms    REAL,
                     ad_overhead_ratio REAL,
+                    greeks_json       TEXT,
                     error_message     TEXT,
                     created_at        TEXT NOT NULL,
                     started_at        TEXT,
@@ -92,6 +94,10 @@ class BenchmarkDB:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_status   ON runs(status)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_workload ON runs(workload_type)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_engine   ON runs(engine)")
+            # Migrate existing DBs that lack the greeks_json column
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(runs)").fetchall()]
+            if "greeks_json" not in cols:
+                conn.execute("ALTER TABLE runs ADD COLUMN greeks_json TEXT")
 
     # ------------------------------------------------------------------
     # Write operations
@@ -131,15 +137,18 @@ class BenchmarkDB:
         mean_runtime_ms: float,
         std_runtime_ms: float,
         ad_overhead_ratio: float,
+        greeks: dict | None = None,
     ) -> None:
+        greeks_str = json.dumps(greeks) if greeks else None
         with self._lock, self._conn() as conn:
             conn.execute(
                 """UPDATE runs
                    SET status=?, result_value=?, mean_runtime_ms=?,
-                       std_runtime_ms=?, ad_overhead_ratio=?, completed_at=?
+                       std_runtime_ms=?, ad_overhead_ratio=?,
+                       greeks_json=?, completed_at=?
                    WHERE id=?""",
                 ("completed", result_value, mean_runtime_ms,
-                 std_runtime_ms, ad_overhead_ratio, _now(), run_id),
+                 std_runtime_ms, ad_overhead_ratio, greeks_str, _now(), run_id),
             )
 
     def mark_failed(self, run_id: str, error_message: str) -> None:
@@ -227,4 +236,7 @@ def _row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
     # Parse config_json back to a dict for convenience
     if isinstance(d.get("config_json"), str):
         d["config"] = json.loads(d["config_json"])
+    # Parse greeks_json back to a dict
+    gj = d.pop("greeks_json", None)
+    d["greeks"] = json.loads(gj) if isinstance(gj, str) else None
     return d

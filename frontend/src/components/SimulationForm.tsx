@@ -90,8 +90,8 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
     // Only show engines that support the current workload
     const availableEngines = Object.keys(engines).length
         ? Object.keys(engines).filter((eng) =>
-              engines[eng].supported_workloads.includes(workloadType)
-          )
+            engines[eng].supported_workloads.includes(workloadType)
+        )
         : ["cpu", "jax"];
 
     function setConfigField(key: string, val: number | string) {

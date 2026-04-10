@@ -154,6 +154,13 @@ export default function ResultsPanel({ run, polling, error }: Props) {
                     )
                 }
             />
+            <Box display="flex" gap={1} px={2} pb={1} flexWrap="wrap">
+                <Chip label={run.workload_type} size="small" variant="outlined" />
+                <Chip label={run.engine.toUpperCase()} size="small" variant="outlined" color="primary" />
+                {run.ad_mode !== "none" && (
+                    <Chip label={`AD: ${run.ad_mode}`} size="small" variant="outlined" color="secondary" />
+                )}
+            </Box>
             <Divider />
             <CardContent>
                 {isFailed ? (
@@ -183,7 +190,7 @@ export default function ResultsPanel({ run, polling, error }: Props) {
                                 }
                                 unit="ms"
                             />
-                            {run.ad_overhead_ratio !== null && (
+                            {run.ad_overhead_ratio !== null && run.ad_mode !== "none" && (
                                 <MetricBox
                                     label="AD Overhead"
                                     value={run.ad_overhead_ratio.toFixed(2)}
@@ -191,6 +198,23 @@ export default function ResultsPanel({ run, polling, error }: Props) {
                                 />
                             )}
                         </Box>
+
+                        {run.greeks && Object.keys(run.greeks).length > 0 && (
+                            <Box mb={2}>
+                                <Typography variant="subtitle2" mb={1} color="text.secondary">
+                                    Greeks ({run.ad_mode}-mode AD)
+                                </Typography>
+                                <Box display="flex" flexWrap="wrap" gap={2}>
+                                    {Object.entries(run.greeks).map(([name, val]) => (
+                                        <MetricBox
+                                            key={name}
+                                            label={name.charAt(0).toUpperCase() + name.slice(1)}
+                                            value={val.toFixed(6)}
+                                        />
+                                    ))}
+                                </Box>
+                            </Box>
+                        )}
 
                         {bsError !== null && (
                             <Box

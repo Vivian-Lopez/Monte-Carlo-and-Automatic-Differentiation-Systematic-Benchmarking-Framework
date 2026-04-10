@@ -176,5 +176,88 @@ def test_jax_deterministic_seeding():
     assert result1 == result2, "Same seed should produce identical results"
 
 
+def test_forward_mode_uses_jvp():
+    """Forward-mode AD computes Greeks via jax.jvp, not jax.grad."""
+    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=50_000, seed=42)
+    engine = JAXMonteCarloEngine()
+
+    engine.run(config, ad_mode="forward")
+    fwd = engine.last_greeks
+    assert fwd is not None, "forward-mode should populate last_greeks"
+    assert set(fwd.keys()) == {"delta", "rho", "vega"}
+
+    engine.run(config, ad_mode="reverse")
+    rev = engine.last_greeks
+    assert rev is not None
+
+    # Forward and reverse should produce the same Greeks (within numerical tolerance)
+    for key in ("delta", "rho", "vega"):
+        assert abs(fwd[key] - rev[key]) < 0.05, (
+            f"{key}: forward={fwd[key]:.6f} vs reverse={rev[key]:.6f}"
+        )
+
+
+def test_greeks_vs_analytical():
+    """AD Greeks should be close to Black-Scholes analytical Greeks."""
+    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=200_000, seed=42)
+    analytical = compute_all_analytical_greeks(config)
+
+    engine = JAXMonteCarloEngine()
+    for mode in ("forward", "reverse"):
+        engine.run(config, ad_mode=mode)
+        g = engine.last_greeks
+        assert g is not None
+        assert abs(g["delta"] - analytical["dC/dS0"]) < 0.02, f"{mode} delta off"
+        assert abs(g["vega"] - analytical["dC/dsigma"]) < 2.0, f"{mode} vega off"
+        assert abs(g["rho"] - analytical["dC/dr"]) < 2.0, f"{mode} rho off"
+
+
+def test_no_ad_does_not_set_greeks():
+    """Running with ad_mode='none' should leave last_greeks as None."""
+    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    engine = JAXMonteCarloEngine()
+    engine.run(config, ad_mode="none")
+    assert engine.last_greeks is None
+
+
+def test_runner_captures_greeks():
+    """BenchmarkRunner should capture Greeks from the engine."""
+    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=1000, seed=42)
+    runner = BenchmarkRunner(JAXMonteCarloEngine(), name="greeks-test")
+    result = runner.run(config, num_warmup=1, num_runs=2, ad_mode="reverse")
+    assert result.greeks is not None
+    assert "delta" in result.greeks
+
+
+def test_db_stores_and_retrieves_greeks():
+    """BenchmarkDB should round-trip Greeks through greeks_json."""
+    import tempfile, pathlib
+    from benchmarking.storage.database import BenchmarkDB
+    with tempfile.TemporaryDirectory() as tmp:
+        db = BenchmarkDB(pathlib.Path(tmp) / "test.db")
+        rid = db.create_run({"workload_type": "european"}, engine="jax", ad_mode="reverse")
+        db.mark_running(rid)
+        db.mark_completed(rid, result_value=10.5, mean_runtime_ms=1.0,
+                          std_runtime_ms=0.1, ad_overhead_ratio=2.0,
+                          greeks={"delta": 0.63, "rho": 45.1, "vega": 37.8})
+        row = db.get_run(rid)
+        assert row is not None
+        assert row["greeks"] == {"delta": 0.63, "rho": 45.1, "vega": 37.8}
+
+
+def test_result_greeks_serialization():
+    """BenchmarkResult.to_dict / from_dict should round-trip Greeks."""
+    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    result = BenchmarkResult.from_runs(
+        config=config, result=10.5, runtimes=[0.01],
+        config_hash="abc", metadata={}, ad_mode="forward",
+        greeks={"delta": 0.63, "vega": 37.8, "rho": 45.1},
+    )
+    data = result.to_dict()
+    assert data["greeks"] == {"delta": 0.63, "vega": 37.8, "rho": 45.1}
+    r2 = BenchmarkResult.from_dict(data)
+    assert r2.greeks == {"delta": 0.63, "vega": 37.8, "rho": 45.1}
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -97,6 +97,7 @@ def _execute_run(run_id: str, config_dict: dict, engine_name: str, ad_mode: str)
             mean_runtime_ms=result.mean_runtime * 1000,
             std_runtime_ms=result.std_runtime * 1000,
             ad_overhead_ratio=result.ad_overhead_ratio,
+            greeks=result.greeks,
         )
         log.info("Run %s completed: price=%.4f  mean=%.2f ms",
                  run_id[:8], result.result, result.mean_runtime * 1000)
@@ -150,6 +151,7 @@ def _jsonify_run(row: dict) -> dict:
         "mean_runtime_ms":   row["mean_runtime_ms"],
         "std_runtime_ms":    row["std_runtime_ms"],
         "ad_overhead_ratio": row["ad_overhead_ratio"],
+        "greeks":            row.get("greeks"),
         "error_message":     row["error_message"],
         "created_at":        row["created_at"],
         "started_at":        row["started_at"],

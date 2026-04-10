@@ -128,7 +128,7 @@ function RuntimeBarChart({ runs }: { runs: RunStatus[] }) {
                         style: { fontSize: 11 },
                     }}
                 />
-<RechartTooltip formatter={(v) => typeof v === "number" ? [`${v.toFixed(2)} ms`] : []} />
+                <RechartTooltip formatter={(v) => typeof v === "number" ? [`${v.toFixed(2)} ms`] : []} />
                 <Legend />
                 {engines.map((eng) => (
                     <Bar
@@ -185,7 +185,7 @@ function PriceChart({ runs }: { runs: RunStatus[] }) {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="workload" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v.toFixed(2)}`} />
-<RechartTooltip formatter={(v) => typeof v === "number" ? [`$${v.toFixed(4)}`] : []} />
+                <RechartTooltip formatter={(v) => typeof v === "number" ? [`$${v.toFixed(4)}`] : []} />
                 <Legend />
                 {engines.map((eng) => (
                     <Bar
@@ -273,8 +273,8 @@ function RecentRunsTable({ runs }: { runs: RunStatus[] }) {
                                         r.ad_overhead_ratio !== null && r.ad_overhead_ratio > 3
                                             ? "error.main"
                                             : r.ad_overhead_ratio !== null
-                                            ? "success.main"
-                                            : "text.disabled",
+                                                ? "success.main"
+                                                : "text.disabled",
                                 }}
                             >
                                 {r.ad_overhead_ratio != null ? `${r.ad_overhead_ratio.toFixed(2)}×` : "—"}
@@ -301,7 +301,7 @@ export default function SummaryPage() {
                 setSummary(s);
                 setRuns(r);
             })
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setLoading(false));
     }, []);
 

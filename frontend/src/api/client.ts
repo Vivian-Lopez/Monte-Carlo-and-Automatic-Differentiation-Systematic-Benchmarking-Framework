@@ -24,6 +24,7 @@ export interface RunStatus {
     mean_runtime_ms: number | null;
     std_runtime_ms: number | null;
     ad_overhead_ratio: number | null;
+    greeks: Record<string, number> | null;
     error_message: string | null;
     created_at: string;
     started_at: string | null;
@@ -73,8 +74,15 @@ export async function pollRun(runId: string): Promise<RunStatus> {
     return res.data;
 }
 
-export async function fetchRuns(limit = 50): Promise<RunStatus[]> {
-    const res = await client.get<RunStatus[]>(`/runs?limit=${limit}`);
+export async function fetchRuns(
+    limit = 50,
+    filters?: { workload_type?: string; engine?: string; status?: string }
+): Promise<RunStatus[]> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (filters?.workload_type) params.set("workload", filters.workload_type);
+    if (filters?.engine) params.set("engine", filters.engine);
+    if (filters?.status) params.set("status", filters.status);
+    const res = await client.get<RunStatus[]>(`/runs?${params}`);
     return res.data;
 }
 

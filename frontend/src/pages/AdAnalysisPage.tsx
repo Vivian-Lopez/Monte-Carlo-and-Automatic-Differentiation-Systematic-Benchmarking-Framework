@@ -81,7 +81,7 @@ function OverheadChart({ runs }: { runs: RunStatus[] }) {
                     tick={{ fontSize: 11 }}
                     label={{ value: "Mean runtime (ms)", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 11 } }}
                 />
-<RechartTooltip
+                <RechartTooltip
                     formatter={(val) =>
                         typeof val === "number" ? [`${val.toFixed(2)} ms`, "Mean runtime"] : [val]
                     }
@@ -183,7 +183,7 @@ export default function AdAnalysisPage() {
         setLoading(true);
         fetchRuns(500)
             .then(setRuns)
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setLoading(false));
     }, []);
 

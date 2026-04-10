@@ -92,6 +92,11 @@ class BenchmarkRunner:
         # Run with the specified AD mode
         runtimes, result = self._run_with_timings(config, num_warmup, num_runs, ad_mode)
         
+        # Capture Greeks right after AD run (before baseline overwrites them)
+        greeks = None
+        if isinstance(self.engine, MonteCarloEngine) and hasattr(self.engine, 'last_greeks'):
+            greeks = self.engine.last_greeks
+        
         # If AD mode is enabled, also measure baseline (no-AD) to compute overhead
         baseline_runtimes = None
         if ad_mode != "none":
@@ -116,7 +121,8 @@ class BenchmarkRunner:
             config_hash=config_hash,
             metadata=metadata,
             ad_mode=ad_mode,
-            ad_overhead_ratio=ad_overhead_ratio
+            ad_overhead_ratio=ad_overhead_ratio,
+            greeks=greeks,
         )
     
     def _run_with_timings(

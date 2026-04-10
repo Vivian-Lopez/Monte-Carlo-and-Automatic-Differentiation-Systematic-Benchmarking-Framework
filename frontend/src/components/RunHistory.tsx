@@ -51,6 +51,9 @@ export default function RunHistory({ runs, loading }: Props) {
                                 <TableCell>Status</TableCell>
                                 <TableCell align="right">Price</TableCell>
                                 <TableCell align="right">Mean (ms)</TableCell>
+                                <TableCell align="right">Std (ms)</TableCell>
+                                <TableCell align="right">AD Overhead</TableCell>
+                                <TableCell>Error</TableCell>
                                 <TableCell>Submitted</TableCell>
                             </TableRow>
                         </TableHead>
@@ -82,10 +85,27 @@ export default function RunHistory({ runs, loading }: Props) {
                                             ? run.mean_runtime_ms.toFixed(1)
                                             : "—"}
                                     </TableCell>
+                                    <TableCell align="right">
+                                        {run.std_runtime_ms !== null
+                                            ? run.std_runtime_ms.toFixed(1)
+                                            : "—"}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                        {run.ad_overhead_ratio !== null && run.ad_mode !== "none"
+                                            ? `${run.ad_overhead_ratio.toFixed(2)}×`
+                                            : "—"}
+                                    </TableCell>
+                                    <TableCell>
+                                        {run.error_message ? (
+                                            <Typography variant="caption" color="error" noWrap sx={{ maxWidth: 150, display: "inline-block" }}>
+                                                {run.error_message.slice(0, 60)}
+                                            </Typography>
+                                        ) : "—"}
+                                    </TableCell>
                                     <TableCell>
                                         <Typography variant="caption" color="text.secondary">
                                             {run.created_at
-                                                ? new Date(run.created_at).toLocaleTimeString()
+                                                ? new Date(run.created_at).toLocaleString()
                                                 : "—"}
                                         </Typography>
                                     </TableCell>

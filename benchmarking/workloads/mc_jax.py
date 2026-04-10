@@ -20,16 +20,22 @@ class JAXMonteCarloEngine(MonteCarloEngine):
     JAX-based vectorised Monte Carlo engine with optional AD.
 
     Supported workloads: european, asian, barrier, basket.
-    AD (forward / reverse) is currently wired for European options only;
-    other workloads fall back to no-AD pricing and return the price.
+    AD (forward / reverse) is wired for European options;
+    other workloads fall back to no-AD pricing.
+
+    After a run with AD, the computed Greeks are stored in self.last_greeks.
     """
 
     SUPPORTED = {"european", "asian", "barrier", "basket"}
+
+    def __init__(self):
+        self.last_greeks: dict | None = None
 
     def supports(self, workload_type: str) -> bool:
         return workload_type in self.SUPPORTED
 
     def run(self, config: WorkloadConfig, ad_mode: str = "none") -> float:
+        self.last_greeks = None
         wtype = config.workload_type
         if wtype == "european":
             return self._run_european(config, ad_mode)
@@ -47,17 +53,24 @@ class JAXMonteCarloEngine(MonteCarloEngine):
     # ------------------------------------------------------------------
 
     def _run_european(self, config: EuropeanOptionConfig, ad_mode: str) -> float:
-        # Generate random numbers with the config's seed
         key = jax.random.PRNGKey(int(config.seed))
         Z = jax.random.normal(key, shape=(int(config.M),))
-        
+
         if ad_mode == "none":
             return float(self._price_european(
                 float(config.S0), float(config.K), float(config.r),
                 float(config.sigma), float(config.T), Z, config.option_type
             ))
-        elif ad_mode in ("forward", "reverse"):
-            self._compute_greeks(config)  # Compute greeks for potential future use
+        elif ad_mode == "reverse":
+            greeks = self._compute_greeks_reverse(config, Z)
+            self.last_greeks = greeks
+            return float(self._price_european(
+                float(config.S0), float(config.K), float(config.r),
+                float(config.sigma), float(config.T), Z, config.option_type
+            ))
+        elif ad_mode == "forward":
+            greeks = self._compute_greeks_forward(config, Z)
+            self.last_greeks = greeks
             return float(self._price_european(
                 float(config.S0), float(config.K), float(config.r),
                 float(config.sigma), float(config.T), Z, config.option_type
@@ -75,34 +88,33 @@ class JAXMonteCarloEngine(MonteCarloEngine):
             payoff = jnp.maximum(K - S_T, 0.0)
         return jnp.exp(-r * T) * jnp.mean(payoff)
 
-    def _compute_greeks(self, config: EuropeanOptionConfig) -> dict:
-        """Compute Delta, Vega, Rho via reverse-mode AD (grad on scalar output).
-        
-        Pre-generate random numbers outside the grad() context to avoid JAX
-        trying to differentiate through integer-seed RNG initialization.
-        """
-        # Generate random numbers once, outside the traced function
-        _M = int(config.M)
-        _seed = int(config.seed)
-        _K = float(config.K)
-        _T = float(config.T)
-        _opt = config.option_type
-        
-        key = jax.random.PRNGKey(_seed)
-        Z = jax.random.normal(key, shape=(_M,))
+    def _compute_greeks_reverse(self, config: EuropeanOptionConfig, Z) -> dict:
+        """Compute Delta, Vega, Rho via reverse-mode AD (jax.grad)."""
+        _K, _T, _opt = float(config.K), float(config.T), config.option_type
 
         def price_fn(S0, r, sigma):
-            """Price function that receives pre-generated Z; JAX will never see the seed."""
             return self._price_european(S0, _K, r, sigma, _T, Z, _opt)
 
-        d_S0 = grad(price_fn, argnums=0)(float(config.S0), float(config.r), float(config.sigma))
-        d_r  = grad(price_fn, argnums=1)(float(config.S0), float(config.r), float(config.sigma))
-        d_sig = grad(price_fn, argnums=2)(float(config.S0), float(config.r), float(config.sigma))
-        return {
-            "dC/dS0":    float(d_S0),
-            "dC/dr":     float(d_r),
-            "dC/dsigma": float(d_sig),
-        }
+        S0, r, sigma = float(config.S0), float(config.r), float(config.sigma)
+        d_S0 = float(grad(price_fn, argnums=0)(S0, r, sigma))
+        d_r   = float(grad(price_fn, argnums=1)(S0, r, sigma))
+        d_sig = float(grad(price_fn, argnums=2)(S0, r, sigma))
+        return {"delta": d_S0, "rho": d_r, "vega": d_sig}
+
+    def _compute_greeks_forward(self, config: EuropeanOptionConfig, Z) -> dict:
+        """Compute Delta, Vega, Rho via forward-mode AD (jax.jvp)."""
+        _K, _T, _opt = float(config.K), float(config.T), config.option_type
+        S0, r, sigma = float(config.S0), float(config.r), float(config.sigma)
+        primals = (S0, r, sigma)
+
+        def price_fn(S0_arg, r_arg, sigma_arg):
+            return self._price_european(S0_arg, _K, r_arg, sigma_arg, _T, Z, _opt)
+
+        # jvp: one tangent vector per Greek
+        _, d_S0 = jax.jvp(price_fn, primals, (1.0, 0.0, 0.0))
+        _, d_r   = jax.jvp(price_fn, primals, (0.0, 1.0, 0.0))
+        _, d_sig = jax.jvp(price_fn, primals, (0.0, 0.0, 1.0))
+        return {"delta": float(d_S0), "rho": float(d_r), "vega": float(d_sig)}
 
     # ------------------------------------------------------------------
     # Asian  (arithmetic / geometric, multi-step)

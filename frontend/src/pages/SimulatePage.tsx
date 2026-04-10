@@ -130,7 +130,7 @@ export default function SimulatePage({ onBackendStatus }: Props) {
             <ResultsPanel
                 run={currentRun}
                 polling={polling}
-                error={null}
+                error={runError}
             />
         </Box>
     );
