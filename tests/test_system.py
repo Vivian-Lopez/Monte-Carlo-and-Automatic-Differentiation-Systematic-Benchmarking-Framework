@@ -287,6 +287,27 @@ class TestJAXEngineEuropean:
             assert isinstance(price, float)
             assert price > 0
 
+    def test_jax_ad_on_exotic_workloads(self):
+        """Asian, Barrier, Basket all return Greeks when AD is enabled."""
+        engine = JAXMonteCarloEngine()
+        cases = [
+            AsianOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
+                              N=50, M=5000, seed=42),
+            BarrierOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
+                                B=130, N=50, M=5000, seed=42),
+            BasketOptionConfig(n_assets=3, S0=100, K=100, r=0.05, sigma=0.2,
+                               rho=0.5, T=1.0, N=12, M=5000, seed=42),
+        ]
+        for config in cases:
+            for mode in ("forward", "reverse"):
+                price, greeks = engine.run(config, ad_mode=mode)
+                wtype = config.workload_type
+                assert greeks is not None, f"{wtype}+{mode} returned None greeks"
+                assert set(greeks.keys()) == {"delta", "rho", "vega"}, \
+                    f"{wtype}+{mode} has wrong greek keys: {greeks.keys()}"
+                assert isinstance(price, float) and price > 0, \
+                    f"{wtype}+{mode} returned bad price: {price}"
+
     def test_jax_supported_ad_modes(self):
         engine = JAXMonteCarloEngine()
         modes = engine.supported_ad_modes()

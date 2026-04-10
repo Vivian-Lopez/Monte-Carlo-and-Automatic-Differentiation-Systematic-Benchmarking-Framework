@@ -2,13 +2,18 @@
 JAX-based Monte Carlo engine with automatic differentiation support.
 
 Dispatches on config.workload_type; adding a new workload requires only
-adding a new _price_<type> method here plus the config class in config.py.
+adding a new _price_<type>_kernel and _run_<type> method here.
+
+All pricing kernels accept scalar float arguments (S0, K, r, sigma, T, ...)
+so that JAX can differentiate through them.  The shared _compute_greeks()
+helper applies forward- or reverse-mode AD to any such function.
 """
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import grad
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 from benchmarking.core.config import (
     WorkloadConfig, EuropeanOptionConfig, AsianOptionConfig,
     BarrierOptionConfig, BasketOptionConfig,
@@ -18,11 +23,16 @@ from benchmarking.core.engine import MonteCarloEngine, ADMode
 
 class JAXMonteCarloEngine(MonteCarloEngine):
     """
-    JAX-based vectorised Monte Carlo engine with optional AD.
+    JAX-based vectorised Monte Carlo engine with full AD support.
 
-    Supported workloads: european, asian, barrier, basket.
-    AD (forward / reverse) is wired for European options;
-    other workloads fall back to no-AD pricing.
+    All four workloads (European, Asian, Barrier, Basket) support forward-
+    and reverse-mode AD.  Greeks computed are Delta (dP/dS0), Vega (dP/dσ),
+    and Rho (dP/dr).
+
+    Note on Barrier AD: the barrier condition uses jnp.where, which is
+    differentiable but produces zero gradient at paths that cross the
+    barrier.  This is equivalent to the pathwise estimator approach and
+    is well-defined for smooth payoffs away from the barrier.
     """
 
     SUPPORTED = {"european", "asian", "barrier", "basket"}
@@ -38,152 +48,160 @@ class JAXMonteCarloEngine(MonteCarloEngine):
         if wtype == "european":
             return self._run_european(config, ad_mode)
         elif wtype == "asian":
-            return (float(self._price_asian(config)), None)
+            return self._run_asian(config, ad_mode)
         elif wtype == "barrier":
-            return (float(self._price_barrier(config)), None)
+            return self._run_barrier(config, ad_mode)
         elif wtype == "basket":
-            return (float(self._price_basket(config)), None)
+            return self._run_basket(config, ad_mode)
         else:
             raise NotImplementedError(f"JAXMonteCarloEngine does not support '{wtype}'")
 
     # ------------------------------------------------------------------
-    # European  (with AD support)
+    # Shared AD helper
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _compute_greeks(
+        price_fn: Callable,
+        S0: float,
+        r: float,
+        sigma: float,
+        ad_mode: str,
+    ) -> dict:
+        """
+        Apply forward- or reverse-mode AD to price_fn(S0, r, sigma).
+
+        price_fn must be a pure JAX function of exactly (S0, r, sigma) — all
+        other parameters (Z, K, T, …) captured via closure.
+        """
+        if ad_mode == "reverse":
+            d_S0 = float(grad(price_fn, argnums=0)(S0, r, sigma))
+            d_r   = float(grad(price_fn, argnums=1)(S0, r, sigma))
+            d_sig = float(grad(price_fn, argnums=2)(S0, r, sigma))
+        else:  # forward
+            primals = (S0, r, sigma)
+            _, d_S0 = jax.jvp(price_fn, primals, (1.0, 0.0, 0.0))
+            _, d_r   = jax.jvp(price_fn, primals, (0.0, 1.0, 0.0))
+            _, d_sig = jax.jvp(price_fn, primals, (0.0, 0.0, 1.0))
+        return {"delta": float(d_S0), "rho": float(d_r), "vega": float(d_sig)}
+
+    # ------------------------------------------------------------------
+    # European
     # ------------------------------------------------------------------
 
     def _run_european(self, config: EuropeanOptionConfig, ad_mode: str) -> Tuple[float, Optional[dict]]:
         key = jax.random.PRNGKey(int(config.seed))
         Z = jax.random.normal(key, shape=(int(config.M),))
+        K, T, opt = float(config.K), float(config.T), config.option_type
+        S0, r, sigma = float(config.S0), float(config.r), float(config.sigma)
 
-        price = float(self._price_european(
-            float(config.S0), float(config.K), float(config.r),
-            float(config.sigma), float(config.T), Z, config.option_type
-        ))
+        def price_fn(S0_, r_, sigma_):
+            return self._price_european_kernel(S0_, K, r_, sigma_, T, Z, opt)
 
-        if ad_mode == "none":
-            return (price, None)
-        elif ad_mode == "reverse":
-            greeks = self._compute_greeks_reverse(config, Z)
-            return (price, greeks)
-        elif ad_mode == "forward":
-            greeks = self._compute_greeks_forward(config, Z)
-            return (price, greeks)
-        else:
-            raise ValueError(f"Unknown ad_mode: {ad_mode!r}")
+        price = float(price_fn(S0, r, sigma))
+        greeks = self._compute_greeks(price_fn, S0, r, sigma, ad_mode) if ad_mode != "none" else None
+        return (price, greeks)
 
     @staticmethod
-    def _price_european(S0, K, r, sigma, T, Z, option_type="call"):
-        """Price European option given pre-generated standard normals Z."""
+    def _price_european_kernel(S0, K, r, sigma, T, Z, option_type="call"):
         S_T = S0 * jnp.exp((r - 0.5 * sigma ** 2) * T + sigma * jnp.sqrt(T) * Z)
-        if option_type == "call":
-            payoff = jnp.maximum(S_T - K, 0.0)
-        else:
-            payoff = jnp.maximum(K - S_T, 0.0)
+        payoff = jnp.maximum(S_T - K, 0.0) if option_type == "call" else jnp.maximum(K - S_T, 0.0)
         return jnp.exp(-r * T) * jnp.mean(payoff)
-
-    def _compute_greeks_reverse(self, config: EuropeanOptionConfig, Z) -> dict:
-        """Compute Delta, Vega, Rho via reverse-mode AD (jax.grad)."""
-        _K, _T, _opt = float(config.K), float(config.T), config.option_type
-
-        def price_fn(S0, r, sigma):
-            return self._price_european(S0, _K, r, sigma, _T, Z, _opt)
-
-        S0, r, sigma = float(config.S0), float(config.r), float(config.sigma)
-        d_S0 = float(grad(price_fn, argnums=0)(S0, r, sigma))
-        d_r   = float(grad(price_fn, argnums=1)(S0, r, sigma))
-        d_sig = float(grad(price_fn, argnums=2)(S0, r, sigma))
-        return {"delta": d_S0, "rho": d_r, "vega": d_sig}
-
-    def _compute_greeks_forward(self, config: EuropeanOptionConfig, Z) -> dict:
-        """Compute Delta, Vega, Rho via forward-mode AD (jax.jvp)."""
-        _K, _T, _opt = float(config.K), float(config.T), config.option_type
-        S0, r, sigma = float(config.S0), float(config.r), float(config.sigma)
-        primals = (S0, r, sigma)
-
-        def price_fn(S0_arg, r_arg, sigma_arg):
-            return self._price_european(S0_arg, _K, r_arg, sigma_arg, _T, Z, _opt)
-
-        # jvp: one tangent vector per Greek
-        _, d_S0 = jax.jvp(price_fn, primals, (1.0, 0.0, 0.0))
-        _, d_r   = jax.jvp(price_fn, primals, (0.0, 1.0, 0.0))
-        _, d_sig = jax.jvp(price_fn, primals, (0.0, 0.0, 1.0))
-        return {"delta": float(d_S0), "rho": float(d_r), "vega": float(d_sig)}
 
     # ------------------------------------------------------------------
     # Asian  (arithmetic / geometric, multi-step)
     # ------------------------------------------------------------------
 
-    def _price_asian(self, config: AsianOptionConfig):
-        key = jax.random.PRNGKey(config.seed)
-        dt = config.T / config.N
-        Z = jax.random.normal(key, shape=(config.M, config.N))
-        log_ret = (config.r - 0.5 * config.sigma ** 2) * dt + \
-                  config.sigma * jnp.sqrt(dt) * Z
-        log_S = jnp.log(config.S0) + jnp.cumsum(log_ret, axis=1)
+    def _run_asian(self, config: AsianOptionConfig, ad_mode: str) -> Tuple[float, Optional[dict]]:
+        key = jax.random.PRNGKey(int(config.seed))
+        Z = jax.random.normal(key, shape=(int(config.M), int(config.N)))
+        K, T, N = float(config.K), float(config.T), int(config.N)
+        S0, r, sigma = float(config.S0), float(config.r), float(config.sigma)
+        averaging, opt = config.averaging, config.option_type
+
+        def price_fn(S0_, r_, sigma_):
+            return self._price_asian_kernel(S0_, K, r_, sigma_, T, N, averaging, opt, Z)
+
+        price = float(price_fn(S0, r, sigma))
+        greeks = self._compute_greeks(price_fn, S0, r, sigma, ad_mode) if ad_mode != "none" else None
+        return (price, greeks)
+
+    @staticmethod
+    def _price_asian_kernel(S0, K, r, sigma, T, N, averaging, option_type, Z):
+        dt = T / N
+        log_ret = (r - 0.5 * sigma ** 2) * dt + sigma * jnp.sqrt(dt) * Z
+        log_S = jnp.log(S0) + jnp.cumsum(log_ret, axis=1)
         S_paths = jnp.exp(log_S)
-        if config.averaging == "arithmetic":
-            avg = S_paths.mean(axis=1)
-        else:
-            avg = jnp.exp(jnp.log(S_paths).mean(axis=1))
-        if config.option_type == "call":
-            payoff = jnp.maximum(avg - config.K, 0.0)
-        else:
-            payoff = jnp.maximum(config.K - avg, 0.0)
-        return jnp.exp(-config.r * config.T) * jnp.mean(payoff)
+        avg = S_paths.mean(axis=1) if averaging == "arithmetic" \
+            else jnp.exp(jnp.log(S_paths).mean(axis=1))
+        payoff = jnp.maximum(avg - K, 0.0) if option_type == "call" else jnp.maximum(K - avg, 0.0)
+        return jnp.exp(-r * T) * jnp.mean(payoff)
 
     # ------------------------------------------------------------------
     # Barrier  (knock-in / knock-out, up / down, multi-step)
     # ------------------------------------------------------------------
 
-    def _price_barrier(self, config: BarrierOptionConfig):
-        key = jax.random.PRNGKey(config.seed)
-        dt = config.T / config.N
-        Z = jax.random.normal(key, shape=(config.M, config.N))
-        log_ret = (config.r - 0.5 * config.sigma ** 2) * dt + \
-                  config.sigma * jnp.sqrt(dt) * Z
-        log_S = jnp.log(config.S0) + jnp.cumsum(log_ret, axis=1)
+    def _run_barrier(self, config: BarrierOptionConfig, ad_mode: str) -> Tuple[float, Optional[dict]]:
+        key = jax.random.PRNGKey(int(config.seed))
+        Z = jax.random.normal(key, shape=(int(config.M), int(config.N)))
+        K, B, T, N = float(config.K), float(config.B), float(config.T), int(config.N)
+        S0, r, sigma = float(config.S0), float(config.r), float(config.sigma)
+        btype, bside, opt = config.barrier_type, config.barrier_side, config.option_type
+
+        def price_fn(S0_, r_, sigma_):
+            return self._price_barrier_kernel(S0_, K, B, r_, sigma_, T, N, btype, bside, opt, Z)
+
+        price = float(price_fn(S0, r, sigma))
+        greeks = self._compute_greeks(price_fn, S0, r, sigma, ad_mode) if ad_mode != "none" else None
+        return (price, greeks)
+
+    @staticmethod
+    def _price_barrier_kernel(S0, K, B, r, sigma, T, N, barrier_type, barrier_side, option_type, Z):
+        dt = T / N
+        log_ret = (r - 0.5 * sigma ** 2) * dt + sigma * jnp.sqrt(dt) * Z
+        log_S = jnp.log(S0) + jnp.cumsum(log_ret, axis=1)
         S_paths = jnp.exp(log_S)
         S_T = S_paths[:, -1]
 
-        if config.barrier_side == "up":
-            breached = (S_paths >= config.B).any(axis=1)
-        else:
-            breached = (S_paths <= config.B).any(axis=1)
-
-        if config.option_type == "call":
-            vanilla = jnp.maximum(S_T - config.K, 0.0)
-        else:
-            vanilla = jnp.maximum(config.K - S_T, 0.0)
-
-        if config.barrier_type == "knock_out":
-            payoff = jnp.where(breached, 0.0, vanilla)
-        else:
-            payoff = jnp.where(breached, vanilla, 0.0)
-
-        return jnp.exp(-config.r * config.T) * jnp.mean(payoff)
+        breached = (S_paths >= B).any(axis=1) if barrier_side == "up" \
+            else (S_paths <= B).any(axis=1)
+        vanilla = jnp.maximum(S_T - K, 0.0) if option_type == "call" \
+            else jnp.maximum(K - S_T, 0.0)
+        payoff = jnp.where(breached, 0.0, vanilla) if barrier_type == "knock_out" \
+            else jnp.where(breached, vanilla, 0.0)
+        return jnp.exp(-r * T) * jnp.mean(payoff)
 
     # ------------------------------------------------------------------
     # Basket  (equal-weight, correlated GBM, multi-step)
     # ------------------------------------------------------------------
 
-    def _price_basket(self, config: BasketOptionConfig):
-        import numpy as np  # Cholesky via numpy (one-time setup cost)
-        key = jax.random.PRNGKey(config.seed)
-        n = config.n_assets
-        dt = config.T / config.N
-        rho_matrix = config.rho * jnp.ones((n, n)) + (1 - config.rho) * jnp.eye(n)
-        L = jnp.array(np.linalg.cholesky(np.array(rho_matrix)))
-        Z_ind = jax.random.normal(key, shape=(config.M, config.N, n))
+    def _run_basket(self, config: BasketOptionConfig, ad_mode: str) -> Tuple[float, Optional[dict]]:
+        key = jax.random.PRNGKey(int(config.seed))
+        n = int(config.n_assets)
+        rho_matrix = config.rho * np.ones((n, n)) + (1 - config.rho) * np.eye(n)
+        L = jnp.array(np.linalg.cholesky(rho_matrix))  # precomputed — not differentiated
+        Z_ind = jax.random.normal(key, shape=(int(config.M), int(config.N), n))
         Z_corr = Z_ind @ L.T
-        log_ret = (config.r - 0.5 * config.sigma ** 2) * dt + \
-                  config.sigma * jnp.sqrt(dt) * Z_corr
-        log_S = jnp.log(config.S0) + jnp.cumsum(log_ret, axis=1)
+        K, T, N, opt = float(config.K), float(config.T), int(config.N), config.option_type
+        S0, r, sigma = float(config.S0), float(config.r), float(config.sigma)
+
+        def price_fn(S0_, r_, sigma_):
+            return self._price_basket_kernel(S0_, K, r_, sigma_, T, N, opt, Z_corr)
+
+        price = float(price_fn(S0, r, sigma))
+        greeks = self._compute_greeks(price_fn, S0, r, sigma, ad_mode) if ad_mode != "none" else None
+        return (price, greeks)
+
+    @staticmethod
+    def _price_basket_kernel(S0, K, r, sigma, T, N, option_type, Z_corr):
+        dt = T / N
+        log_ret = (r - 0.5 * sigma ** 2) * dt + sigma * jnp.sqrt(dt) * Z_corr
+        log_S = jnp.log(S0) + jnp.cumsum(log_ret, axis=1)
         S_T = jnp.exp(log_S[:, -1, :])
         basket = S_T.mean(axis=1)
-        if config.option_type == "call":
-            payoff = jnp.maximum(basket - config.K, 0.0)
-        else:
-            payoff = jnp.maximum(config.K - basket, 0.0)
-        return jnp.exp(-config.r * config.T) * jnp.mean(payoff)
+        payoff = jnp.maximum(basket - K, 0.0) if option_type == "call" \
+            else jnp.maximum(K - basket, 0.0)
+        return jnp.exp(-r * T) * jnp.mean(payoff)
 
 
 # ---------------------------------------------------------------------------
@@ -193,3 +211,4 @@ class JAXMonteCarloEngine(MonteCarloEngine):
 def monte_carlo_european_call_jax(config, ad_mode: str = "none") -> float:
     price, _ = JAXMonteCarloEngine().run(config, ad_mode)
     return price
+
