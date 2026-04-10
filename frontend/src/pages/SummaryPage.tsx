@@ -3,18 +3,12 @@ import {
     Box,
     Card,
     CardContent,
-    Chip,
     CircularProgress,
     Divider,
     Grid,
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableRow,
-    Tooltip,
     Typography,
 } from "@mui/material";
+import RunTable from "../components/RunTable";
 import {
     BarChart,
     Bar,
@@ -46,6 +40,20 @@ const WORKLOAD_LABELS: Record<string, string> = {
     barrier: "Barrier",
     basket: "Basket",
 };
+
+// ── Recent runs table ─────────────────────────────────────────────────────
+
+function RecentRunsTable({ runs }: { runs: RunStatus[] }) {
+    const recent = runs.slice(0, 20);
+    if (recent.length === 0) {
+        return (
+            <Typography variant="body2" color="text.secondary">
+                No runs yet.
+            </Typography>
+        );
+    }
+    return <RunTable runs={recent} variant="compact" />;
+}
 
 // ── Stat card ─────────────────────────────────────────────────────────────
 
@@ -202,90 +210,6 @@ function PriceChart({ runs }: { runs: RunStatus[] }) {
 }
 
 // ── Recent runs table ─────────────────────────────────────────────────────
-
-const STATUS_COLOUR: Record<string, "default" | "warning" | "success" | "error"> = {
-    pending: "warning",
-    running: "warning",
-    completed: "success",
-    failed: "error",
-};
-
-function RecentRunsTable({ runs }: { runs: RunStatus[] }) {
-    const recent = runs.slice(0, 20);
-    if (recent.length === 0) {
-        return (
-            <Typography variant="body2" color="text.secondary">
-                No runs yet.
-            </Typography>
-        );
-    }
-
-    return (
-        <Table size="small">
-            <TableHead>
-                <TableRow>
-                    {["Status", "Workload", "Engine", "AD", "Price", "Runtime (ms)", "σ (ms)", "AD ×"].map(
-                        (h) => (
-                            <TableCell key={h} sx={{ fontWeight: 700, fontSize: 12 }}>
-                                {h}
-                            </TableCell>
-                        )
-                    )}
-                </TableRow>
-            </TableHead>
-            <TableBody>
-                {recent.map((r) => (
-                    <TableRow key={r.id} hover>
-                        <TableCell>
-                            <Chip
-                                label={r.status}
-                                size="small"
-                                color={STATUS_COLOUR[r.status] ?? "default"}
-                                sx={{ fontSize: 10, height: 20 }}
-                            />
-                        </TableCell>
-                        <TableCell sx={{ fontSize: 12 }}>
-                            {WORKLOAD_LABELS[r.workload_type] ?? r.workload_type}
-                        </TableCell>
-                        <TableCell sx={{ textTransform: "uppercase", fontSize: 12 }}>
-                            {r.engine}
-                        </TableCell>
-                        <TableCell sx={{ fontSize: 12 }}>{r.ad_mode}</TableCell>
-                        <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
-                            {r.result_value != null ? `$${r.result_value.toFixed(4)}` : "—"}
-                        </TableCell>
-                        <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
-                            {r.mean_runtime_ms?.toFixed(2) ?? "—"}
-                        </TableCell>
-                        <TableCell sx={{ fontFamily: "monospace", fontSize: 12, color: "text.secondary" }}>
-                            {r.std_runtime_ms?.toFixed(2) ?? "—"}
-                        </TableCell>
-                        <Tooltip
-                            title="AD overhead ratio (1.0 = no overhead)"
-                            placement="left"
-                        >
-                            <TableCell
-                                sx={{
-                                    fontFamily: "monospace",
-                                    fontSize: 12,
-                                    fontWeight: r.ad_overhead_ratio ? 700 : 400,
-                                    color:
-                                        r.ad_overhead_ratio !== null && r.ad_overhead_ratio > 3
-                                            ? "error.main"
-                                            : r.ad_overhead_ratio !== null
-                                                ? "success.main"
-                                                : "text.disabled",
-                                }}
-                            >
-                                {r.ad_overhead_ratio != null ? `${r.ad_overhead_ratio.toFixed(2)}×` : "—"}
-                            </TableCell>
-                        </Tooltip>
-                    </TableRow>
-                ))}
-            </TableBody>
-        </Table>
-    );
-}
 
 // ── Page ──────────────────────────────────────────────────────────────────
 

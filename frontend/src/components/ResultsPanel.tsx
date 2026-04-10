@@ -13,6 +13,7 @@ import {
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
 import type { RunStatus } from "../api/client";
+import { fmtWorkload, fmtEngine } from "../utils/format";
 
 interface Props {
     run: RunStatus | null;
@@ -155,8 +156,8 @@ export default function ResultsPanel({ run, polling, error }: Props) {
                 }
             />
             <Box display="flex" gap={1} px={2} pb={1} flexWrap="wrap">
-                <Chip label={run.workload_type} size="small" variant="outlined" />
-                <Chip label={run.engine.toUpperCase()} size="small" variant="outlined" color="primary" />
+                <Chip label={fmtWorkload(run.workload_type)} size="small" variant="outlined" />
+                <Chip label={fmtEngine(run.engine)} size="small" variant="outlined" color="primary" />
                 {run.ad_mode !== "none" && (
                     <Chip label={`AD: ${run.ad_mode}`} size="small" variant="outlined" color="secondary" />
                 )}

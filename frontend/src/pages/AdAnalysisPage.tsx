@@ -26,6 +26,7 @@ import {
     ResponsiveContainer,
 } from "recharts";
 import { fetchRuns, type RunStatus } from "../api/client";
+import { fmtEngine, fmtPrice, fmtMs, fmtOverhead, fmtWorkload } from "../utils/format";
 
 const AD_COLOURS: Record<string, string> = {
     none: "#90a4ae",
@@ -116,7 +117,7 @@ function OverheadTable({ runs }: { runs: RunStatus[] }) {
         <Table size="small">
             <TableHead>
                 <TableRow>
-                    {["Engine", "AD Mode", "Workload", "Price", "Runtime (ms)", "AD Overhead ×"].map(
+                    {["Engine", "AD Mode", "Workload", "Price", "Runtime (ms)", "AD Overhead"].map(
                         (h) => (
                             <TableCell key={h} sx={{ fontWeight: 700, fontSize: 12 }}>
                                 {h}
@@ -128,8 +129,8 @@ function OverheadTable({ runs }: { runs: RunStatus[] }) {
             <TableBody>
                 {adRuns.slice(0, 30).map((r) => (
                     <TableRow key={r.id} hover>
-                        <TableCell sx={{ textTransform: "uppercase", fontSize: 12 }}>
-                            {r.engine}
+                        <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {fmtEngine(r.engine)}
                         </TableCell>
                         <TableCell>
                             <Chip
@@ -143,12 +144,12 @@ function OverheadTable({ runs }: { runs: RunStatus[] }) {
                                 }}
                             />
                         </TableCell>
-                        <TableCell sx={{ fontSize: 12 }}>{r.workload_type}</TableCell>
+                        <TableCell sx={{ fontSize: 12 }}>{fmtWorkload(r.workload_type)}</TableCell>
                         <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
-                            {r.result_value?.toFixed(4) ?? "—"}
+                            {fmtPrice(r.result_value)}
                         </TableCell>
                         <TableCell sx={{ fontFamily: "monospace", fontSize: 12 }}>
-                            {r.mean_runtime_ms?.toFixed(2) ?? "—"}
+                            {fmtMs(r.mean_runtime_ms)}
                         </TableCell>
                         <Tooltip
                             title="Ratio of AD runtime to no-AD runtime for the same config"
@@ -163,7 +164,7 @@ function OverheadTable({ runs }: { runs: RunStatus[] }) {
                                         (r.ad_overhead_ratio ?? 0) > 3 ? "error.main" : "success.main",
                                 }}
                             >
-                                {r.ad_overhead_ratio?.toFixed(2) ?? "—"}×
+                                {fmtOverhead(r.ad_overhead_ratio, r.ad_mode)}
                             </TableCell>
                         </Tooltip>
                     </TableRow>
