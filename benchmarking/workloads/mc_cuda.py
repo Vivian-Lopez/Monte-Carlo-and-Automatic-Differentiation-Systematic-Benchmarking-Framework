@@ -36,7 +36,7 @@ from benchmarking.core.engine import MonteCarloEngine, ADMode
 _KERNEL_SOURCE = r"""
 #include <curand_kernel.h>
 
-__global__ void mc_european(
+extern "C" __global__ void mc_european(
     const double  S0,
     const double  K,
     const double  r,
