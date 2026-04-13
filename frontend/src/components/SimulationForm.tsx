@@ -19,7 +19,7 @@ import {
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import type { WorkloadInfo, EngineInfo, SchemaField } from "../api/client";
+import type { WorkloadInfo, EngineInfo, SchemaField, Capabilities } from "../api/client";
 
 export interface FormValues {
     workload_type: string;
@@ -53,11 +53,12 @@ function validateConfig(
 interface Props {
     workloads: Record<string, WorkloadInfo>;
     engines: Record<string, EngineInfo>;
+    capabilities: Capabilities;
     loading: boolean;
     onSubmit: (values: FormValues) => void;
 }
 
-export default function SimulationForm({ workloads, engines, loading, onSubmit }: Props) {
+export default function SimulationForm({ workloads, engines, capabilities, loading, onSubmit }: Props) {
     const [workloadType, setWorkloadType] = useState("european");
     const [engine, setEngine] = useState("cpu");
     const [adMode, setAdMode] = useState("none");
@@ -201,11 +202,16 @@ export default function SimulationForm({ workloads, engines, loading, onSubmit }
                                     value={availableEngines.includes(engine) ? engine : (availableEngines[0] ?? "")}
                                     onChange={(e) => setEngine(e.target.value)}
                                 >
-                                    {availableEngines.map((eng) => (
-                                        <MenuItem key={eng} value={eng}>
-                                            {eng.toUpperCase()}
-                                        </MenuItem>
-                                    ))}
+                                    {availableEngines.map((eng) => {
+                                        const capKey = eng as keyof Capabilities;
+                                        const disabled = capKey in capabilities && !capabilities[capKey];
+                                        return (
+                                            <MenuItem key={eng} value={eng} disabled={disabled}>
+                                                {eng.toUpperCase()}
+                                                {disabled ? " (unavailable)" : ""}
+                                            </MenuItem>
+                                        );
+                                    })}
                                 </Select>
                             </FormControl>
                         </Grid>

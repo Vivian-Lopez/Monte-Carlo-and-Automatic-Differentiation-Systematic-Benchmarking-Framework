@@ -5,10 +5,12 @@ import ResultsPanel from "../components/ResultsPanel";
 import {
     fetchWorkloads,
     fetchEngines,
+    fetchCapabilities,
     submitRun,
     pollRun,
     type WorkloadInfo,
     type EngineInfo,
+    type Capabilities,
     type RunStatus,
     type SimulationRequest,
 } from "../api/client";
@@ -23,6 +25,7 @@ interface Props {
 export default function SimulatePage({ onBackendStatus }: Props) {
     const [workloads, setWorkloads] = useState<Record<string, WorkloadInfo>>({});
     const [engines, setEngines] = useState<Record<string, EngineInfo>>({});
+    const [capabilities, setCapabilities] = useState<Capabilities>({ cpu: true, jax: true, cpp: false, cuda: false });
     const [submitting, setSubmitting] = useState(false);
     const [polling, setPolling] = useState(false);
     const [currentRun, setCurrentRun] = useState<RunStatus | null>(null);
@@ -33,9 +36,10 @@ export default function SimulatePage({ onBackendStatus }: Props) {
     useEffect(() => {
         async function init() {
             try {
-                const [wl, eng] = await Promise.all([fetchWorkloads(), fetchEngines()]);
+                const [wl, eng, caps] = await Promise.all([fetchWorkloads(), fetchEngines(), fetchCapabilities()]);
                 setWorkloads(wl);
                 setEngines(eng);
+                setCapabilities(caps);
                 onBackendStatus("online");
             } catch {
                 onBackendStatus("offline");
@@ -123,6 +127,7 @@ export default function SimulatePage({ onBackendStatus }: Props) {
             <SimulationForm
                 workloads={workloads}
                 engines={engines}
+                capabilities={capabilities}
                 loading={submitting}
                 onSubmit={handleSubmit}
             />

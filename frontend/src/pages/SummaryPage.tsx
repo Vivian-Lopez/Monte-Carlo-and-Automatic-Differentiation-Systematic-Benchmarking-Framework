@@ -22,16 +22,23 @@ import {
 import {
     fetchSummary,
     fetchRuns,
+    fetchCapabilities,
     type SummaryResponse,
     type RunStatus,
+    type Capabilities,
 } from "../api/client";
 
 // ── Constants ─────────────────────────────────────────────────────────────
+
+/** Canonical engine order — always shown, regardless of run history. */
+export const ALL_ENGINES = ["cpu", "cpp", "jax", "cuda"] as const;
+export type EngineName = (typeof ALL_ENGINES)[number];
 
 const ENGINE_COLOURS: Record<string, string> = {
     cpu: "#1565c0",
     jax: "#2e7d32",
     cpp: "#b71c1c",
+    cuda: "#6a1b9a",
 };
 
 const WORKLOAD_LABELS: Record<string, string> = {
@@ -79,7 +86,7 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 
 // ── Engine × Workload grouped bar chart ───────────────────────────────────
 
-function RuntimeBarChart({ runs }: { runs: RunStatus[] }) {
+function RuntimeBarChart({ runs, engines }: { runs: RunStatus[]; engines: string[] }) {
     const completed = runs.filter(
         (r) => r.status === "completed" && r.mean_runtime_ms !== null
     );
@@ -104,12 +111,16 @@ function RuntimeBarChart({ runs }: { runs: RunStatus[] }) {
         acc[wl][eng].push(r.mean_runtime_ms as number);
     }
 
-    const engines = Array.from(new Set(completed.map((r) => r.engine)));
+    // Only render bars for engines that actually appear in completed runs
+    const activeEngines = engines.filter(
+        (eng) => Object.values(acc).some((engMap) => eng in engMap)
+    );
+
     const data = Object.entries(acc).map(([wl, engMap]) => {
         const row: Record<string, number | string> = {
             workload: WORKLOAD_LABELS[wl] ?? wl,
         };
-        for (const eng of engines) {
+        for (const eng of activeEngines) {
             const times = engMap[eng] ?? [];
             if (times.length > 0) {
                 row[eng] = parseFloat(
@@ -138,7 +149,7 @@ function RuntimeBarChart({ runs }: { runs: RunStatus[] }) {
                 />
                 <RechartTooltip formatter={(v) => typeof v === "number" ? [`${v.toFixed(2)} ms`] : []} />
                 <Legend />
-                {engines.map((eng) => (
+                {activeEngines.map((eng) => (
                     <Bar
                         key={eng}
                         dataKey={eng}
@@ -154,7 +165,7 @@ function RuntimeBarChart({ runs }: { runs: RunStatus[] }) {
 
 // ── Price comparison chart ────────────────────────────────────────────────
 
-function PriceChart({ runs }: { runs: RunStatus[] }) {
+function PriceChart({ runs, engines }: { runs: RunStatus[]; engines: string[] }) {
     const completed = runs.filter(
         (r) => r.status === "completed" && r.result_value !== null && r.ad_mode === "none"
     );
@@ -171,12 +182,15 @@ function PriceChart({ runs }: { runs: RunStatus[] }) {
         acc[wl][eng].push(r.result_value as number);
     }
 
-    const engines = Array.from(new Set(completed.map((r) => r.engine)));
+    const activeEngines = engines.filter(
+        (eng) => Object.values(acc).some((engMap) => eng in engMap)
+    );
+
     const data = Object.entries(acc).map(([wl, engMap]) => {
         const row: Record<string, number | string> = {
             workload: WORKLOAD_LABELS[wl] ?? wl,
         };
-        for (const eng of engines) {
+        for (const eng of activeEngines) {
             const prices = engMap[eng] ?? [];
             if (prices.length > 0) {
                 row[eng] = parseFloat(
@@ -195,7 +209,7 @@ function PriceChart({ runs }: { runs: RunStatus[] }) {
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v.toFixed(2)}`} />
                 <RechartTooltip formatter={(v) => typeof v === "number" ? [`$${v.toFixed(4)}`] : []} />
                 <Legend />
-                {engines.map((eng) => (
+                {activeEngines.map((eng) => (
                     <Bar
                         key={eng}
                         dataKey={eng}
@@ -217,17 +231,29 @@ export default function SummaryPage() {
     const [summary, setSummary] = useState<SummaryResponse | null>(null);
     const [runs, setRuns] = useState<RunStatus[]>([]);
     const [loading, setLoading] = useState(false);
+    const [capabilities, setCapabilities] = useState<Capabilities>({ cpu: true, jax: true, cpp: false, cuda: false });
 
     useEffect(() => {
         setLoading(true);
-        Promise.all([fetchSummary(), fetchRuns(500)])
-            .then(([s, r]) => {
+        Promise.all([fetchSummary(), fetchRuns(500), fetchCapabilities()])
+            .then(([s, r, caps]) => {
                 setSummary(s);
                 setRuns(r);
+                setCapabilities(caps);
             })
             .catch(() => { })
             .finally(() => setLoading(false));
     }, []);
+
+    // Canonical engine list ordered by ALL_ENGINES, filtered to those the
+    // backend reports as available. Any engine that appears in run history
+    // but isn't in the canonical list is appended at the end.
+    const activeEngines = [
+        ...ALL_ENGINES.filter((eng) => capabilities[eng as keyof Capabilities]),
+        ...Array.from(new Set(runs.map((r) => r.engine))).filter(
+            (eng) => !(ALL_ENGINES as readonly string[]).includes(eng)
+        ),
+    ];
 
     const completedRuns = runs.filter((r) => r.status === "completed");
     const uniqueWorkloads = Array.from(new Set(completedRuns.map((r) => r.workload_type))).length;
@@ -278,7 +304,7 @@ export default function SummaryPage() {
                                 Average mean runtime per engine across workloads (ms, lower is better)
                             </Typography>
                             <Divider sx={{ mb: 2 }} />
-                            <RuntimeBarChart runs={runs} />
+                            <RuntimeBarChart runs={runs} engines={activeEngines} />
                         </CardContent>
                     </Card>
 
@@ -293,7 +319,7 @@ export default function SummaryPage() {
                                     Average MC price (no-AD runs only) — engines should agree within MC error
                                 </Typography>
                                 <Divider sx={{ mb: 2 }} />
-                                <PriceChart runs={runs} />
+                                <PriceChart runs={runs} engines={activeEngines} />
                             </CardContent>
                         </Card>
                     )}
@@ -336,12 +362,12 @@ export default function SummaryPage() {
                                     <Typography variant="subtitle2" gutterBottom>
                                         Runs by Engine
                                     </Typography>
-                                    {!summary || Object.keys(summary.by_engine).length === 0 ? (
+                                    {!summary ? (
                                         <Typography variant="body2" color="text.secondary">
                                             No completed runs yet.
                                         </Typography>
                                     ) : (
-                                        Object.entries(summary.by_engine).map(([eng, n]) => (
+                                        activeEngines.map((eng) => (
                                             <Box
                                                 key={eng}
                                                 display="flex"
@@ -363,7 +389,7 @@ export default function SummaryPage() {
                                                     </Typography>
                                                 </Box>
                                                 <Typography variant="body2" fontWeight={600}>
-                                                    {n}
+                                                    {summary.by_engine[eng] ?? 0}
                                                 </Typography>
                                             </Box>
                                         ))

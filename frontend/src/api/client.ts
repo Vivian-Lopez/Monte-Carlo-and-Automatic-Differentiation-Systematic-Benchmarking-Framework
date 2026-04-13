@@ -23,6 +23,7 @@ export interface RunStatus {
     result_value: number | null;
     mean_runtime_ms: number | null;
     std_runtime_ms: number | null;
+    throughput_paths_per_sec: number | null;
     ad_overhead_ratio: number | null;
     greeks: Record<string, number> | null;
     error_message: string | null;
@@ -99,5 +100,17 @@ export interface SummaryResponse {
 
 export async function fetchSummary(): Promise<SummaryResponse> {
     const res = await client.get<SummaryResponse>("/summary");
+    return res.data;
+}
+
+export interface Capabilities {
+    cpu: boolean;
+    jax: boolean;
+    cpp: boolean;
+    cuda: boolean;
+}
+
+export async function fetchCapabilities(): Promise<Capabilities> {
+    const res = await client.get<Capabilities>("/capabilities");
     return res.data;
 }

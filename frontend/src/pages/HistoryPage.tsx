@@ -13,7 +13,7 @@ import RunHistory from "../components/RunHistory";
 import { fetchRuns, type RunStatus } from "../api/client";
 
 const WORKLOAD_OPTIONS = ["", "european", "asian", "barrier", "basket"];
-const ENGINE_OPTIONS = ["", "cpu", "jax", "cpp"];
+const ENGINE_OPTIONS = ["", "cpu", "jax", "cpp", "cuda"];
 const STATUS_OPTIONS = ["", "pending", "running", "completed", "failed"];
 
 export default function HistoryPage() {

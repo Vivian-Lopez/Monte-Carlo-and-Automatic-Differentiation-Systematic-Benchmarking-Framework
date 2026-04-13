@@ -51,6 +51,23 @@ except Exception as _cpp_err:
     CPPMonteCarloEngine = None  # type: ignore[assignment,misc]
     _CPP_AVAILABLE = False
 
+try:
+    from benchmarking.workloads.mc_cuda import CUDAMonteCarloEngine as _CUDAClass
+    # Probe: compile kernel + run 128 paths to confirm the GPU is usable at startup.
+    from benchmarking.core.config import EuropeanOptionConfig as _EurCfg
+    _CUDAClass().run(_EurCfg(M=128, seed=0))
+    _CUDA_AVAILABLE = True
+    log.info("CUDA engine available.")
+except Exception as _cuda_err:
+    log.warning("CUDA engine unavailable: %s", _cuda_err)
+    _CUDAClass = None  # type: ignore[assignment,misc]
+    _CUDA_AVAILABLE = False
+
+
+def _cuda_available() -> bool:
+    """Return True if PyCUDA initialised successfully at server startup."""
+    return _CUDA_AVAILABLE
+
 app = Flask(__name__)
 CORS(app)
 
@@ -64,6 +81,7 @@ ENGINES = {
     "cpu": CPUMonteCarloEngine,
     "jax": JAXMonteCarloEngine,
     **({"cpp": CPPMonteCarloEngine} if _CPP_AVAILABLE else {}),
+    **({"cuda": _CUDAClass} if _CUDA_AVAILABLE else {}),
 }
 
 
@@ -138,6 +156,17 @@ def _schema_for(workload_type: str) -> list:
     return instance.SCHEMA
 
 
+def _throughput(row: dict) -> float | None:
+    """Paths per second = M / mean_runtime_s.  Returns None when unavailable."""
+    ms = row.get("mean_runtime_ms")
+    if not ms:
+        return None
+    M = (row.get("config") or {}).get("M")
+    if not M:
+        return None
+    return round(M / (ms / 1000.0), 1)
+
+
 def _jsonify_run(row: dict) -> dict:
     """Strip internal fields and add friendly display values."""
     return {
@@ -150,6 +179,7 @@ def _jsonify_run(row: dict) -> dict:
         "result_value":      row["result_value"],
         "mean_runtime_ms":   row["mean_runtime_ms"],
         "std_runtime_ms":    row["std_runtime_ms"],
+        "throughput_paths_per_sec": _throughput(row),
         "ad_overhead_ratio": row["ad_overhead_ratio"],
         "greeks":            row.get("greeks"),
         "error_message":     row["error_message"],
@@ -260,6 +290,23 @@ def get_run(run_id: str):
     if not row:
         abort(404, f"Run {run_id!r} not found")
     return jsonify(_jsonify_run(row))
+
+
+@app.get("/api/capabilities")
+def capabilities():
+    """
+    Report which compute backends are available on this machine.
+
+    Response example::
+
+        {"cpu": true, "cpp": true, "jax": true, "cuda": false}
+    """
+    return jsonify({
+        "cpu":  True,
+        "jax":  True,
+        "cpp":  _CPP_AVAILABLE,
+        "cuda": _CUDA_AVAILABLE,
+    })
 
 
 @app.get("/api/summary")
