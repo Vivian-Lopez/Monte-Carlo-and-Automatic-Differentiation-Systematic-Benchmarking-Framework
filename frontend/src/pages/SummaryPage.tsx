@@ -6,6 +6,11 @@ import {
     CircularProgress,
     Divider,
     Grid,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableRow,
     Typography,
 } from "@mui/material";
 import RunTable from "../components/RunTable";
@@ -223,6 +228,170 @@ function PriceChart({ runs, engines }: { runs: RunStatus[]; engines: string[] })
     );
 }
 
+// ── Throughput bar chart ──────────────────────────────────────────────────
+
+function ThroughputBarChart({ runs, engines }: { runs: RunStatus[]; engines: string[] }) {
+    const completed = runs.filter((r) => r.status === "completed" && r.mean_runtime_ms !== null);
+    if (completed.length === 0) return null;
+
+    // Prefer pre-computed field; fall back to M / runtime_s
+    function tp(r: RunStatus): number | null {
+        if (r.throughput_paths_per_sec !== null) return r.throughput_paths_per_sec;
+        const M = Number((r.config as Record<string, unknown>)?.M);
+        return M && r.mean_runtime_ms ? M / (r.mean_runtime_ms / 1000) : null;
+    }
+
+    const acc: Record<string, Record<string, number[]>> = {};
+    for (const r of completed) {
+        const t = tp(r);
+        if (t === null) continue;
+        const wl = r.workload_type;
+        const eng = r.engine;
+        if (!acc[wl]) acc[wl] = {};
+        if (!acc[wl][eng]) acc[wl][eng] = [];
+        acc[wl][eng].push(t);
+    }
+
+    const activeEngines = engines.filter(
+        (eng) => Object.values(acc).some((m) => eng in m)
+    );
+    if (activeEngines.length === 0) return null;
+
+    const data = Object.entries(acc).map(([wl, engMap]) => {
+        const row: Record<string, number | string> = { workload: WORKLOAD_LABELS[wl] ?? wl };
+        for (const eng of activeEngines) {
+            const vals = engMap[eng] ?? [];
+            if (vals.length > 0)
+                row[eng] = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+        }
+        return row;
+    });
+
+    return (
+        <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="workload" tick={{ fontSize: 12 }} />
+                <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v: number) =>
+                        v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M`
+                            : v >= 1_000 ? `${(v / 1_000).toFixed(0)}k`
+                                : String(v)
+                    }
+                    label={{ value: "Throughput (paths/s)", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 11 } }}
+                />
+                <RechartTooltip formatter={(v) => typeof v === "number" ? [`${v.toLocaleString()} paths/s`] : []} />
+                <Legend />
+                {activeEngines.map((eng) => (
+                    <Bar key={eng} dataKey={eng} name={eng.toUpperCase()}
+                        fill={ENGINE_COLOURS[eng] ?? "#546e7a"} radius={[3, 3, 0, 0]} />
+                ))}
+            </BarChart>
+        </ResponsiveContainer>
+    );
+}
+
+// ── Engine comparison table ───────────────────────────────────────────────
+// Filters to European / no-AD only — the workload shared by all engines.
+
+function EngineComparisonTable({ runs, engines }: { runs: RunStatus[]; engines: string[] }) {
+    const relevant = runs.filter(
+        (r) =>
+            r.status === "completed" &&
+            r.workload_type === "european" &&
+            r.ad_mode === "none" &&
+            r.result_value !== null,
+    );
+
+    if (relevant.length === 0) return (
+        <Typography variant="body2" color="text.secondary">
+            No completed European (no-AD) runs yet.
+        </Typography>
+    );
+
+    function mean(arr: number[]): number | null {
+        return arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+    }
+    function tp(r: RunStatus): number | null {
+        if (r.throughput_paths_per_sec !== null) return r.throughput_paths_per_sec;
+        const M = Number((r.config as Record<string, unknown>)?.M);
+        return M && r.mean_runtime_ms ? M / (r.mean_runtime_ms / 1000) : null;
+    }
+
+    const stats: Record<string, { prices: number[]; runtimes: number[]; throughputs: number[] }> = {};
+    for (const r of relevant) {
+        const eng = r.engine;
+        if (!stats[eng]) stats[eng] = { prices: [], runtimes: [], throughputs: [] };
+        stats[eng].prices.push(r.result_value as number);
+        if (r.mean_runtime_ms !== null) stats[eng].runtimes.push(r.mean_runtime_ms);
+        const t = tp(r);
+        if (t !== null) stats[eng].throughputs.push(t);
+    }
+
+    const cpuPrice = mean(stats["cpu"]?.prices ?? []);
+
+    const rows = engines
+        .filter((eng) => eng in stats)
+        .map((eng) => {
+            const s = stats[eng];
+            const price = mean(s.prices);
+            const runtime = mean(s.runtimes);
+            const throughput = mean(s.throughputs);
+            const relErr =
+                cpuPrice !== null && price !== null && cpuPrice !== 0
+                    ? Math.abs(price - cpuPrice) / cpuPrice
+                    : null;
+            return { eng, price, runtime, throughput, relErr };
+        });
+
+    if (rows.length === 0) return null;
+
+    return (
+        <Table size="small">
+            <TableHead>
+                <TableRow>
+                    <TableCell sx={{ fontWeight: 700 }}>Engine</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Mean Price</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Runtime (ms)</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Throughput (paths/s)</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }} align="right">Rel. Error vs CPU</TableCell>
+                </TableRow>
+            </TableHead>
+            <TableBody>
+                {rows.map(({ eng, price, runtime, throughput, relErr }) => (
+                    <TableRow key={eng} hover>
+                        <TableCell>
+                            <Box display="flex" alignItems="center" gap={1}>
+                                <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: ENGINE_COLOURS[eng] ?? "#546e7a" }} />
+                                <Typography variant="body2">{eng.toUpperCase()}</Typography>
+                            </Box>
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {price !== null ? `$${price.toFixed(4)}` : "—"}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {runtime !== null ? runtime.toFixed(2) : "—"}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {throughput !== null
+                                ? throughput.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                                : "—"}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: "monospace", fontSize: 12 }}>
+                            {eng === "cpu"
+                                ? "baseline"
+                                : relErr !== null
+                                    ? `${(relErr * 100).toFixed(3)}%`
+                                    : "—"}
+                        </TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
+    );
+}
+
 // ── Recent runs table ─────────────────────────────────────────────────────
 
 // ── Page ──────────────────────────────────────────────────────────────────
@@ -323,6 +492,34 @@ export default function SummaryPage() {
                             </CardContent>
                         </Card>
                     )}
+
+                    {/* Throughput comparison */}
+                    <Card variant="outlined">
+                        <CardContent>
+                            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                                Throughput by Engine (paths / second)
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                                Average paths per second per engine across workloads — higher is better
+                            </Typography>
+                            <Divider sx={{ mb: 2 }} />
+                            <ThroughputBarChart runs={runs} engines={activeEngines} />
+                        </CardContent>
+                    </Card>
+
+                    {/* Engine comparison table (European / no-AD only) */}
+                    <Card variant="outlined">
+                        <CardContent>
+                            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                                Engine Comparison — European Call (no AD)
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                                Price, runtime, throughput, and relative error vs CPU baseline
+                            </Typography>
+                            <Divider sx={{ mb: 2 }} />
+                            <EngineComparisonTable runs={runs} engines={activeEngines} />
+                        </CardContent>
+                    </Card>
 
                     {/* Run counts by workload / by engine side-by-side */}
                     <Grid container spacing={2}>
