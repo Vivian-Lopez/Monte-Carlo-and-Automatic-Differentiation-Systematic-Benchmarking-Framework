@@ -4,12 +4,10 @@ import { ThemeProvider, createTheme } from "@mui/material/styles";
 import Sidebar, { DRAWER_WIDTH } from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import SimulatePage from "./pages/SimulatePage";
+import ComparePage from "./pages/ComparePage";
 import HistoryPage from "./pages/HistoryPage";
 import SummaryPage from "./pages/SummaryPage";
-import AdAnalysisPage from "./pages/AdAnalysisPage";
-import GpuPage from "./pages/GpuPage";
-import ScalingPage from "./pages/ScalingPage";
-import CloudPage from "./pages/CloudPage";
+import AnalysisPage from "./pages/AnalysisPage";
 
 const theme = createTheme({
     palette: {
@@ -30,12 +28,10 @@ const theme = createTheme({
 
 const PAGE_TITLES: Record<string, string> = {
     simulate: "Run Simulation",
+    compare: "Engine Comparison",
     history: "Run History",
     summary: "Dashboard",
-    ad: "AD Analysis",
-    gpu: "GPU Implementation",
-    scaling: "Parallelism & Scaling",
-    cloud: "Cloud Profiling",
+    analysis: "Analysis",
 };
 
 export default function App() {
@@ -51,18 +47,14 @@ export default function App() {
         switch (page) {
             case "simulate":
                 return <SimulatePage onBackendStatus={handleBackendStatus} />;
+            case "compare":
+                return <ComparePage />;
             case "history":
                 return <HistoryPage />;
             case "summary":
                 return <SummaryPage />;
-            case "ad":
-                return <AdAnalysisPage />;
-            case "gpu":
-                return <GpuPage />;
-            case "scaling":
-                return <ScalingPage />;
-            case "cloud":
-                return <CloudPage />;
+            case "analysis":
+                return <AnalysisPage />;
             default:
                 return null;
         }

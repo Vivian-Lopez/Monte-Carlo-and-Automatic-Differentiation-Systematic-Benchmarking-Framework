@@ -1,6 +1,5 @@
 import React from "react";
 import {
-    Chip,
     Drawer,
     List,
     ListItem,
@@ -15,10 +14,8 @@ import {
 import BarChartIcon from "@mui/icons-material/BarChart";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import HistoryIcon from "@mui/icons-material/History";
-import FunctionsIcon from "@mui/icons-material/Functions";
-import MemoryIcon from "@mui/icons-material/Memory";
-import ScaleIcon from "@mui/icons-material/Scale";
-import CloudIcon from "@mui/icons-material/Cloud";
+import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import AnalyticsIcon from "@mui/icons-material/Analytics";
 
 export const DRAWER_WIDTH = 240;
 
@@ -28,13 +25,11 @@ interface Props {
 }
 
 const NAV_ITEMS = [
-    { id: "simulate", label: "Run Simulation", icon: <PlayArrowIcon />, status: "active" },
-    { id: "history", label: "Run History", icon: <HistoryIcon />, status: "active" },
-    { id: "summary", label: "Dashboard", icon: <BarChartIcon />, status: "active" },
-    { id: "ad", label: "AD Analysis", icon: <FunctionsIcon />, status: "active" },
-    { id: "gpu", label: "GPU", icon: <MemoryIcon />, status: "soon" },
-    { id: "scaling", label: "Scaling", icon: <ScaleIcon />, status: "soon" },
-    { id: "cloud", label: "Cloud", icon: <CloudIcon />, status: "soon" },
+    { id: "simulate", label: "Run Simulation", icon: <PlayArrowIcon /> },
+    { id: "compare", label: "Compare", icon: <CompareArrowsIcon /> },
+    { id: "history", label: "Run History", icon: <HistoryIcon /> },
+    { id: "summary", label: "Dashboard", icon: <BarChartIcon /> },
+    { id: "analysis", label: "Analysis", icon: <AnalyticsIcon /> },
 ];
 
 export default function Sidebar({ currentPage, onNavigate }: Props) {
@@ -85,13 +80,6 @@ export default function Sidebar({ currentPage, onNavigate }: Props) {
                                 primary={item.label}
                                 primaryTypographyProps={{ fontSize: 14 }}
                             />
-                            {item.status === "soon" && (
-                                <Chip
-                                    label="Soon"
-                                    size="small"
-                                    sx={{ height: 16, fontSize: 9, ml: 0.5 }}
-                                />
-                            )}
                         </ListItemButton>
                     </ListItem>
                 ))}

@@ -470,28 +470,13 @@ export default function SummaryPage() {
                                 Engine Runtime Comparison
                             </Typography>
                             <Typography variant="caption" color="text.secondary" display="block" mb={1}>
-                                Average mean runtime per engine across workloads (ms, lower is better)
+                                Average mean runtime per engine across workloads (ms, lower is better) — averaged across all configs. Use{" "}
+                                <strong>Compare</strong> for controlled same-config comparisons.
                             </Typography>
                             <Divider sx={{ mb: 2 }} />
                             <RuntimeBarChart runs={runs} engines={activeEngines} />
                         </CardContent>
                     </Card>
-
-                    {/* Price comparison */}
-                    {completedRuns.some((r) => r.result_value !== null) && (
-                        <Card variant="outlined">
-                            <CardContent>
-                                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                                    Option Price by Workload &amp; Engine
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
-                                    Average MC price (no-AD runs only) — engines should agree within MC error
-                                </Typography>
-                                <Divider sx={{ mb: 2 }} />
-                                <PriceChart runs={runs} engines={activeEngines} />
-                            </CardContent>
-                        </Card>
-                    )}
 
                     {/* Throughput comparison */}
                     <Card variant="outlined">

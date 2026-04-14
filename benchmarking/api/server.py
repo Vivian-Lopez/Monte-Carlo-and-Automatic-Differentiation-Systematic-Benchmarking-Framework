@@ -9,6 +9,7 @@ POST /api/runs               – submit a new benchmark run
 GET  /api/runs               – list runs (optional ?workload=, ?engine=, ?status=)
 GET  /api/runs/<id>          – get a single run (poll for status)
 GET  /api/summary            – aggregate statistics
+GET  /api/compare_matrix     – benchmark matrix aggregated by (engine, ad_mode, config)
 
 Background execution
 --------------------
@@ -19,10 +20,13 @@ Scale to a thread pool later by replacing _worker_loop with a thread pool.
 
 from __future__ import annotations
 
+import json
+import math
 import sys
 import threading
 import time
 import logging
+from collections import defaultdict
 from pathlib import Path
 
 # ---- make the project importable when running `python -m benchmarking.api.server`
@@ -312,6 +316,165 @@ def capabilities():
 @app.get("/api/summary")
 def summary():
     return jsonify(db.summary())
+
+
+# ------------------------------------------------------------------
+# Benchmark matrix
+# ------------------------------------------------------------------
+
+_EXCLUDE_FROM_COL_KEY = {"seed", "workload_type"}
+
+
+def _col_key(run: dict) -> str:
+    """
+    Stable string key that uniquely identifies a (config, ad_mode) column.
+    We exclude seed and workload_type because they don't affect the physics,
+    and we include ad_mode so forward/reverse are separate columns.
+    """
+    cfg = {
+        k: v
+        for k, v in (run.get("config") or {}).items()
+        if k not in _EXCLUDE_FROM_COL_KEY
+    }
+    cfg["ad_mode"] = run["ad_mode"]
+    return json.dumps(cfg, sort_keys=True)
+
+
+def _mean(vals: list) -> float | None:
+    vals = [v for v in vals if v is not None]
+    return sum(vals) / len(vals) if vals else None
+
+
+def _variance(vals: list) -> float | None:
+    vals = [v for v in vals if v is not None]
+    if len(vals) < 2:
+        return None
+    m = sum(vals) / len(vals)
+    return sum((v - m) ** 2 for v in vals) / (len(vals) - 1)
+
+
+def _aggregate_cell(runs: list) -> dict:
+    rts = [r["mean_runtime_ms"] for r in runs if r.get("mean_runtime_ms") is not None]
+    tps = [_throughput(r) for r in runs]
+    prices = [r["result_value"] for r in runs if r.get("result_value") is not None]
+    overheads = [r["ad_overhead_ratio"] for r in runs if r.get("ad_overhead_ratio") is not None]
+    var = _variance(rts)
+    return {
+        "mean_runtime_ms": _mean(rts),
+        "std_runtime_ms": math.sqrt(var) if var is not None else None,
+        "variance_runtime_ms": var,
+        "throughput_paths_per_sec": _mean(tps),
+        "result_value": _mean(prices),
+        "ad_overhead_ratio": _mean(overheads),
+        "memory_mb": None,  # reserved for future instrumentation
+        "run_count": len(runs),
+    }
+
+
+@app.get("/api/compare_matrix")
+def compare_matrix():
+    """
+    Build a benchmark matrix: rows = (engine, ad_mode), columns = unique configs.
+
+    Query params
+    ------------
+    workload  : str   required  – workload_type to filter by
+    engines   : str   optional  – comma-separated engine names (default: all available)
+    baseline  : str   optional  – "engine/ad_mode" string for speedup reference
+                                  (default: "cpu/none")
+
+    Response
+    --------
+    {
+      "workload": "european",
+      "baseline": "cpu/none",
+      "columns": [
+        { "col_key": "...", "ad_mode": "none", "config": { "M": 1000, ... } },
+        ...
+      ],
+      "rows": [
+        {
+          "engine": "cpu",
+          "ad_mode": "none",
+          "cells": [ { cell } | null, ... ]   // one entry per column, null if no data
+        },
+        ...
+      ]
+    }
+    """
+    workload = request.args.get("workload")
+    if not workload:
+        abort(400, "workload query parameter is required")
+
+    engine_filter_raw = request.args.get("engines", "")
+    engine_filter = set(engine_filter_raw.split(",")) if engine_filter_raw else None
+
+    baseline = request.args.get("baseline", "cpu/none")
+
+    # Fetch all completed runs for this workload
+    all_runs = db.get_all_runs(limit=5000, workload_type=workload, status="completed")
+
+    # Optionally filter by engine
+    if engine_filter:
+        all_runs = [r for r in all_runs if r["engine"] in engine_filter]
+
+    # Group: (engine, ad_mode) → col_key → [runs]
+    # Using defaultdict of defaultdict of list
+    groups: dict = defaultdict(lambda: defaultdict(list))
+    col_meta: dict = {}  # col_key → {config, ad_mode}
+
+    for r in all_runs:
+        ck = _col_key(r)
+        row_key = (r["engine"], r["ad_mode"])
+        groups[row_key][ck].append(r)
+
+        if ck not in col_meta:
+            cfg = {
+                k: v
+                for k, v in (r.get("config") or {}).items()
+                if k not in _EXCLUDE_FROM_COL_KEY
+            }
+            col_meta[ck] = {"ad_mode": r["ad_mode"], "config": cfg}
+
+    # Sort columns: primarily by M (if present), then by ad_mode, then by key
+    def col_sort_key(ck: str) -> tuple:
+        meta = col_meta[ck]
+        M = meta["config"].get("M", 0)
+        ad_order = {"none": 0, "forward": 1, "reverse": 2}
+        return (int(M), ad_order.get(meta["ad_mode"], 99), ck)
+
+    ordered_cols = sorted(col_meta.keys(), key=col_sort_key)
+
+    columns = [
+        {"col_key": ck, **col_meta[ck]}
+        for ck in ordered_cols
+    ]
+
+    # Sort rows: engine canonical order, then ad_mode
+    ENGINE_ORDER = ["cpu", "cpp", "jax", "cuda"]
+    AD_ORDER = {"none": 0, "forward": 1, "reverse": 2}
+
+    def row_sort_key(rk: tuple) -> tuple:
+        eng, ad = rk
+        return (ENGINE_ORDER.index(eng) if eng in ENGINE_ORDER else 99, AD_ORDER.get(ad, 99))
+
+    ordered_row_keys = sorted(groups.keys(), key=row_sort_key)
+
+    rows = []
+    for (engine, ad_mode) in ordered_row_keys:
+        col_map = groups[(engine, ad_mode)]
+        cells = [
+            _aggregate_cell(col_map[ck]) if ck in col_map else None
+            for ck in ordered_cols
+        ]
+        rows.append({"engine": engine, "ad_mode": ad_mode, "cells": cells})
+
+    return jsonify({
+        "workload": workload,
+        "baseline": baseline,
+        "columns": columns,
+        "rows": rows,
+    })
 
 
 # ------------------------------------------------------------------

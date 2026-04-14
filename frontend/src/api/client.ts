@@ -114,3 +114,64 @@ export async function fetchCapabilities(): Promise<Capabilities> {
     const res = await client.get<Capabilities>("/capabilities");
     return res.data;
 }
+
+/**
+ * Submit one run per engine for the same workload+config+ad_mode.
+ * Returns a map of engine → run id.
+ */
+export async function submitRunsForEngines(
+    engines: string[],
+    base: Omit<SimulationRequest, "engine">
+): Promise<Record<string, string>> {
+    const results = await Promise.all(
+        engines.map(async (engine) => {
+            const res = await submitRun({ ...base, engine });
+            return [engine, res.id] as const;
+        })
+    );
+    return Object.fromEntries(results);
+}
+
+// ── Benchmark matrix ──────────────────────────────────────────────────────
+
+export interface MatrixCell {
+    mean_runtime_ms: number | null;
+    std_runtime_ms: number | null;
+    variance_runtime_ms: number | null;
+    throughput_paths_per_sec: number | null;
+    result_value: number | null;
+    ad_overhead_ratio: number | null;
+    memory_mb: null;
+    run_count: number;
+}
+
+export interface MatrixColumn {
+    col_key: string;
+    ad_mode: string;
+    config: Record<string, number | string>;
+}
+
+export interface MatrixRow {
+    engine: string;
+    ad_mode: string;
+    cells: (MatrixCell | null)[];
+}
+
+export interface BenchmarkMatrix {
+    workload: string;
+    baseline: string;
+    columns: MatrixColumn[];
+    rows: MatrixRow[];
+}
+
+export async function fetchCompareMatrix(params: {
+    workload: string;
+    engines?: string[];
+    baseline?: string;
+}): Promise<BenchmarkMatrix> {
+    const query = new URLSearchParams({ workload: params.workload });
+    if (params.engines?.length) query.set("engines", params.engines.join(","));
+    if (params.baseline) query.set("baseline", params.baseline);
+    const res = await client.get<BenchmarkMatrix>(`/compare_matrix?${query}`);
+    return res.data;
+}

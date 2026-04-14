@@ -3,7 +3,7 @@ CUDA Monte Carlo engine for European option pricing via PyCUDA.
 
 One CUDA thread = one Monte Carlo path.
 Randomness is handled by the cuRAND device API (one curandState per thread).
-No automatic differentiation is supported in this engine.
+Forward-mode AD (Delta via pathwise differentiation) is supported.
 
 Build requirements
 ------------------
@@ -70,6 +70,56 @@ extern "C" __global__ void mc_european(
     const double raw    = is_call ? (S_T - K) : (K - S_T);
     payoffs[idx] = (raw > 0.0) ? raw : 0.0;
 }
+
+/* -------------------------------------------------------------------------
+ * Forward-mode AD kernel: pathwise differentiation for Delta (dPrice/dS0).
+ *
+ * Mathematical derivation (pathwise derivative):
+ *   S_T = S0 * exp((r - 0.5σ²)T + σ√T Z)   =>  dS_T/dS0 = S_T / S0
+ *
+ *   Call payoff = max(S_T - K, 0)
+ *     d(payoff)/dS0 = 1{S_T > K} * (S_T / S0)
+ *
+ *   Put payoff  = max(K - S_T, 0)
+ *     d(payoff)/dS0 = 1{S_T < K} * (-S_T / S0)
+ *
+ *   Delta = exp(-rT) * E[d(payoff)/dS0]
+ * ------------------------------------------------------------------------- */
+extern "C" __global__ void mc_european_ad(
+    const double  S0,
+    const double  K,
+    const double  r,
+    const double  sigma,
+    const double  T,
+    const int     is_call,
+    const int     M,
+    const unsigned long long seed,
+    double * __restrict__ payoffs,  /* output: undiscounted payoff per path */
+    double * __restrict__ deltas    /* output: pathwise dPayoff/dS0 per path */
+) {
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= M) return;
+
+    curandState_t state;
+    curand_init(seed, (unsigned long long)idx, 0ULL, &state);
+
+    const double Z   = curand_normal_double(&state);
+    const double S_T = S0 * exp(
+                           (r - 0.5 * sigma * sigma) * T
+                           + sigma * sqrt(T) * Z
+                       );
+
+    /* ---- payoff --------------------------------------------------------- */
+    const double raw = is_call ? (S_T - K) : (K - S_T);
+    payoffs[idx] = (raw > 0.0) ? raw : 0.0;
+
+    /* ---- pathwise derivative ------------------------------------------- */
+    if (is_call) {
+        deltas[idx] = (S_T > K) ? (S_T / S0) : 0.0;
+    } else {
+        deltas[idx] = (S_T < K) ? (-S_T / S0) : 0.0;
+    }
+}
 """
 
 # CUDA block size — 256 is a standard choice that occupies a warp multiple
@@ -103,14 +153,15 @@ class CUDAMonteCarloEngine(MonteCarloEngine):
         return workload_type == "european"
 
     def supported_ad_modes(self) -> Tuple[ADMode, ...]:
-        return ("none",)
+        return ("none", "forward")
 
     def run(
         self, config: WorkloadConfig, ad_mode: ADMode = "none"
     ) -> Tuple[float, Optional[dict]]:
-        if ad_mode != "none":
+        if ad_mode not in ("none", "forward"):
             raise NotImplementedError(
-                f"CUDAMonteCarloEngine does not support ad_mode={ad_mode!r}."
+                f"CUDAMonteCarloEngine does not support ad_mode={ad_mode!r}. "
+                "Supported modes: 'none', 'forward'."
             )
         if not isinstance(config, EuropeanOptionConfig):
             raise NotImplementedError(
@@ -118,8 +169,9 @@ class CUDAMonteCarloEngine(MonteCarloEngine):
                 f"got {type(config).__name__}"
             )
 
-        price = self._price_european(config)
-        return (price, None)
+        if ad_mode == "forward":
+            return self._price_european_ad(config)
+        return (self._price_european(config), None)
 
     # ------------------------------------------------------------------
     # Internal implementation
@@ -148,6 +200,7 @@ class CUDAMonteCarloEngine(MonteCarloEngine):
         return self._module
 
     def _price_european(self, config: EuropeanOptionConfig) -> float:
+        """Pricing only (ad_mode='none').  Behaviour is unchanged from v1."""
         import pycuda.driver as cuda
 
         kernel = self._get_kernel().get_function("mc_european")
@@ -166,25 +219,76 @@ class CUDAMonteCarloEngine(MonteCarloEngine):
         grid_x = math.ceil(M / _BLOCK_SIZE)
 
         # ---- launch kernel ----------------------------------------------
-        # All scalar args are passed by value; pycuda marshals Python/numpy
-        # scalars to the correct C types.
-        kernel(
-            np.float64(config.S0),
-            np.float64(config.K),
-            np.float64(config.r),
-            np.float64(config.sigma),
-            np.float64(config.T),
-            is_call,
-            np.int32(M),
-            seed,
-            payoffs_gpu,
-            block=(_BLOCK_SIZE, 1, 1),
-            grid=(grid_x, 1, 1),
-        )
-
-        # ---- copy results back to CPU and reduce ------------------------
-        payoffs_cpu = np.empty(M, dtype=np.float64)
-        cuda.memcpy_dtoh(payoffs_cpu, payoffs_gpu)
+        try:
+            kernel(
+                np.float64(config.S0),
+                np.float64(config.K),
+                np.float64(config.r),
+                np.float64(config.sigma),
+                np.float64(config.T),
+                is_call,
+                np.int32(M),
+                seed,
+                payoffs_gpu,
+                block=(_BLOCK_SIZE, 1, 1),
+                grid=(grid_x, 1, 1),
+            )
+            payoffs_cpu = np.empty(M, dtype=np.float64)
+            cuda.memcpy_dtoh(payoffs_cpu, payoffs_gpu)
+        finally:
+            payoffs_gpu.free()
 
         discount = math.exp(-config.r * config.T)
         return float(discount * payoffs_cpu.mean())
+
+    def _price_european_ad(
+        self, config: EuropeanOptionConfig
+    ) -> Tuple[float, dict]:
+        """
+        Forward-mode AD: returns price AND Delta via pathwise differentiation.
+
+        Launches ``mc_european_ad`` which writes one payoff and one pathwise
+        dPayoff/dS0 value per path.  The host averages both arrays and applies
+        the discount factor.
+        """
+        import pycuda.driver as cuda
+
+        kernel   = self._get_kernel().get_function("mc_european_ad")
+
+        M        = config.M
+        is_call  = np.int32(1 if config.option_type == "call" else 0)
+        seed     = np.uint64(config.seed)
+        itemsize = np.dtype(np.float64).itemsize
+
+        payoffs_gpu = cuda.mem_alloc(M * itemsize)
+        deltas_gpu  = cuda.mem_alloc(M * itemsize)
+
+        grid_x = math.ceil(M / _BLOCK_SIZE)
+
+        try:
+            kernel(
+                np.float64(config.S0),
+                np.float64(config.K),
+                np.float64(config.r),
+                np.float64(config.sigma),
+                np.float64(config.T),
+                is_call,
+                np.int32(M),
+                seed,
+                payoffs_gpu,
+                deltas_gpu,
+                block=(_BLOCK_SIZE, 1, 1),
+                grid=(grid_x, 1, 1),
+            )
+            payoffs_cpu = np.empty(M, dtype=np.float64)
+            deltas_cpu  = np.empty(M, dtype=np.float64)
+            cuda.memcpy_dtoh(payoffs_cpu, payoffs_gpu)
+            cuda.memcpy_dtoh(deltas_cpu,  deltas_gpu)
+        finally:
+            payoffs_gpu.free()
+            deltas_gpu.free()
+
+        discount = math.exp(-config.r * config.T)
+        price    = float(discount * payoffs_cpu.mean())
+        delta    = float(discount * deltas_cpu.mean())
+        return (price, {"delta": delta})
