@@ -79,6 +79,13 @@ dist-ssr/
 Thumbs.db
 
 # =========================
+# Runtime artifacts
+# =========================
+results/*.json
+results/*.db
+frontend/results/*.json
+
+# =========================
 # Logs / temp
 # =========================
 *.log
