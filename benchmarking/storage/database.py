@@ -1,26 +1,13 @@
 """
 SQLite persistence layer for benchmark runs.
 
-Schema
-------
-runs
-  id            TEXT PRIMARY KEY   (UUID)
-  workload_type TEXT               (european | asian | barrier | basket)
-  engine        TEXT               (cpu | jax | cpp | gpu)
-  ad_mode       TEXT               (none | forward | reverse)
-  status        TEXT               (pending | running | completed | failed)
-  config_json   TEXT               (full WorkloadConfig serialised as JSON)
-  result_value  REAL               (option price, NULL until completed)
-  mean_runtime_ms REAL
-  std_runtime_ms  REAL
-  ad_overhead_ratio REAL
-  greeks_json   TEXT               (JSON dict of Greeks, NULL when not computed)
-  error_message TEXT               (NULL on success)
-  created_at    TEXT               (ISO-8601)
-  started_at    TEXT
-  completed_at  TEXT
+Schema (runs table)
+-------------------
+See _FULL_SCHEMA_COLUMNS below for the authoritative column list.
 
 All timestamps are UTC ISO-8601 strings.
+New columns are added via ALTER TABLE migrations so existing databases
+continue to work without manual intervention.
 """
 
 from __future__ import annotations
@@ -35,6 +22,94 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 _DB_PATH = Path(__file__).parent.parent.parent / "results" / "benchmarks.db"
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Authoritative column list for the runs table.
+# Format: (name, sql_type_and_constraints)
+# ---------------------------------------------------------------------------
+_FULL_SCHEMA_COLUMNS: list[tuple[str, str]] = [
+    # Identity / grouping
+    ("id",                    "TEXT PRIMARY KEY"),
+    ("experiment_id",         "TEXT"),
+    ("experiment_type",       "TEXT"),
+    ("config_hash",           "TEXT"),
+    # Status lifecycle
+    ("status",                "TEXT NOT NULL DEFAULT 'pending'"),
+    ("error_message",         "TEXT"),
+    ("created_at",            "TEXT NOT NULL"),
+    ("started_at",            "TEXT"),
+    ("completed_at",          "TEXT"),
+    # Workload definition
+    ("workload_type",         "TEXT NOT NULL"),
+    ("M",                     "INTEGER"),
+    ("N",                     "INTEGER"),
+    ("seed",                  "INTEGER"),
+    ("config_json",           "TEXT NOT NULL"),
+    # Engine / implementation
+    ("engine",                "TEXT NOT NULL"),
+    ("language",              "TEXT"),
+    ("backend",               "TEXT"),
+    # Parallelism / scalability (nullable for now)
+    ("num_threads",           "INTEGER"),
+    ("vectorization_flag",    "TEXT"),
+    ("batch_size",            "INTEGER"),
+    # Runtime / performance
+    ("mean_runtime_ms",       "REAL"),
+    ("std_runtime_ms",        "REAL"),
+    ("min_runtime_ms",        "REAL"),
+    ("max_runtime_ms",        "REAL"),
+    ("throughput_paths_per_sec", "REAL"),
+    # AD metadata
+    ("ad_mode",               "TEXT NOT NULL DEFAULT 'none'"),
+    ("baseline_mean_ms",      "REAL"),
+    ("ad_overhead_ratio",     "REAL"),
+    # Numerical results
+    ("result_value",          "REAL"),
+    ("greek_delta",           "REAL"),
+    ("greek_vega",            "REAL"),
+    ("greek_rho",             "REAL"),
+    # Analytical reference (European closed-form)
+    ("analytical_price",      "REAL"),
+    ("analytical_delta",      "REAL"),
+    ("analytical_vega",       "REAL"),
+    ("analytical_rho",        "REAL"),
+    # Error metrics
+    ("abs_price_error",       "REAL"),
+    ("rel_price_error",       "REAL"),
+    ("abs_delta_error",       "REAL"),
+    ("rel_delta_error",       "REAL"),
+    ("abs_vega_error",        "REAL"),
+    ("rel_vega_error",        "REAL"),
+    ("abs_rho_error",         "REAL"),
+    ("rel_rho_error",         "REAL"),
+    # Resource utilisation
+    ("memory_peak_mb",        "REAL"),
+    # Environment / hardware
+    ("cpu_model",             "TEXT"),
+    ("cpu_architecture",      "TEXT"),
+    ("cpu_count",             "INTEGER"),
+    ("memory_gb",             "REAL"),
+    ("platform",              "TEXT"),
+    ("python_version",        "TEXT"),
+    ("numpy_version",         "TEXT"),
+    ("jax_version",           "TEXT"),
+    ("blas_backend",          "TEXT"),
+    # Cloud fields (nullable)
+    ("cloud_provider",        "TEXT"),
+    ("instance_type",         "TEXT"),
+    ("cost_per_run",          "REAL"),
+    # Legacy: greeks_json kept for backward-compat with old rows / API
+    ("greeks_json",           "TEXT"),
+]
+
+# Columns that must exist for legacy callers (non-nullable in old code)
+_REQUIRED_COLS = {"id", "workload_type", "engine", "ad_mode", "status",
+                  "config_json", "created_at"}
 
 
 def _now() -> str:
@@ -71,33 +146,36 @@ class BenchmarkDB:
             conn.close()
 
     def _init_schema(self) -> None:
+        # Build CREATE TABLE statement from the authoritative column list.
+        col_defs = ",\n                    ".join(
+            f"{name} {defn}" for name, defn in _FULL_SCHEMA_COLUMNS
+        )
         with self._lock, self._conn() as conn:
-            conn.execute("""
+            conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS runs (
-                    id                TEXT PRIMARY KEY,
-                    workload_type     TEXT NOT NULL,
-                    engine            TEXT NOT NULL,
-                    ad_mode           TEXT NOT NULL DEFAULT 'none',
-                    status            TEXT NOT NULL DEFAULT 'pending',
-                    config_json       TEXT NOT NULL,
-                    result_value      REAL,
-                    mean_runtime_ms   REAL,
-                    std_runtime_ms    REAL,
-                    ad_overhead_ratio REAL,
-                    greeks_json       TEXT,
-                    error_message     TEXT,
-                    created_at        TEXT NOT NULL,
-                    started_at        TEXT,
-                    completed_at      TEXT
+                    {col_defs}
                 )
             """)
+            # Always-safe indexes (columns guaranteed to exist from original schema)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_status   ON runs(status)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_workload ON runs(workload_type)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_engine   ON runs(engine)")
-            # Migrate existing DBs that lack the greeks_json column
-            cols = [r[1] for r in conn.execute("PRAGMA table_info(runs)").fetchall()]
-            if "greeks_json" not in cols:
-                conn.execute("ALTER TABLE runs ADD COLUMN greeks_json TEXT")
+            # Migrate existing DBs: add any missing columns one by one.
+            existing = {r[1] for r in conn.execute("PRAGMA table_info(runs)").fetchall()}
+            for col_name, col_def in _FULL_SCHEMA_COLUMNS:
+                if col_name not in existing and col_name != "id":
+                    # Skip NOT NULL constraints on ALTER TABLE (SQLite restriction)
+                    safe_def = col_def.replace(" NOT NULL", "").replace(" PRIMARY KEY", "")
+                    try:
+                        conn.execute(f"ALTER TABLE runs ADD COLUMN {col_name} {safe_def}")
+                        existing.add(col_name)
+                    except sqlite3.OperationalError:
+                        pass  # column already exists (race between threads)
+            # Index on experiment_id — safe now that migration has run
+            if "experiment_id" in existing:
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_experiment ON runs(experiment_id)"
+                )
 
     # ------------------------------------------------------------------
     # Write operations
@@ -157,6 +235,146 @@ class BenchmarkDB:
                 "UPDATE runs SET status=?, error_message=?, completed_at=? WHERE id=?",
                 ("failed", error_message[:2000], _now(), run_id),
             )
+
+    def store_run_full(
+        self,
+        config_dict: Dict[str, Any],
+        engine: str,
+        ad_mode: str = "none",
+        *,
+        experiment_id: Optional[str] = None,
+        experiment_type: Optional[str] = None,
+        # runtime
+        mean_runtime_ms: Optional[float] = None,
+        std_runtime_ms: Optional[float] = None,
+        min_runtime_ms: Optional[float] = None,
+        max_runtime_ms: Optional[float] = None,
+        throughput_paths_per_sec: Optional[float] = None,
+        # AD
+        baseline_mean_ms: Optional[float] = None,
+        ad_overhead_ratio: Optional[float] = None,
+        # result
+        result_value: Optional[float] = None,
+        greek_delta: Optional[float] = None,
+        greek_vega: Optional[float] = None,
+        greek_rho: Optional[float] = None,
+        # analytical reference
+        analytical_price: Optional[float] = None,
+        analytical_delta: Optional[float] = None,
+        analytical_vega: Optional[float] = None,
+        analytical_rho: Optional[float] = None,
+        # error metrics
+        abs_price_error: Optional[float] = None,
+        rel_price_error: Optional[float] = None,
+        abs_delta_error: Optional[float] = None,
+        rel_delta_error: Optional[float] = None,
+        abs_vega_error: Optional[float] = None,
+        rel_vega_error: Optional[float] = None,
+        abs_rho_error: Optional[float] = None,
+        rel_rho_error: Optional[float] = None,
+        # resource
+        memory_peak_mb: Optional[float] = None,
+        # environment
+        language: Optional[str] = None,
+        backend: Optional[str] = None,
+        cpu_model: Optional[str] = None,
+        cpu_architecture: Optional[str] = None,
+        cpu_count: Optional[int] = None,
+        memory_gb: Optional[float] = None,
+        platform: Optional[str] = None,
+        python_version: Optional[str] = None,
+        numpy_version: Optional[str] = None,
+        jax_version: Optional[str] = None,
+        blas_backend: Optional[str] = None,
+        # cloud (future)
+        cloud_provider: Optional[str] = None,
+        instance_type: Optional[str] = None,
+        cost_per_run: Optional[float] = None,
+    ) -> str:
+        """
+        Insert a fully-populated completed run in one shot.
+
+        This is the preferred method for CLI scripts.  It creates the row,
+        marks it running, and marks it completed atomically.  Returns the run UUID.
+        """
+        run_id = str(uuid.uuid4())
+        workload_type = config_dict.get("workload_type", "european")
+        config_hash = config_dict.get("config_hash", "")
+        M = config_dict.get("M")
+        N = config_dict.get("N")
+        seed = config_dict.get("seed")
+        greeks_dict = {}
+        if greek_delta is not None:
+            greeks_dict["delta"] = greek_delta
+        if greek_vega is not None:
+            greeks_dict["vega"] = greek_vega
+        if greek_rho is not None:
+            greeks_dict["rho"] = greek_rho
+        greeks_json = json.dumps(greeks_dict) if greeks_dict else None
+        ts = _now()
+        with self._lock, self._conn() as conn:
+            conn.execute(
+                """INSERT INTO runs (
+                    id, experiment_id, experiment_type, config_hash,
+                    status, created_at, started_at, completed_at,
+                    workload_type, M, N, seed, config_json,
+                    engine, language, backend,
+                    mean_runtime_ms, std_runtime_ms, min_runtime_ms, max_runtime_ms,
+                    throughput_paths_per_sec,
+                    ad_mode, baseline_mean_ms, ad_overhead_ratio,
+                    result_value, greek_delta, greek_vega, greek_rho,
+                    analytical_price, analytical_delta, analytical_vega, analytical_rho,
+                    abs_price_error, rel_price_error,
+                    abs_delta_error, rel_delta_error,
+                    abs_vega_error, rel_vega_error,
+                    abs_rho_error, rel_rho_error,
+                    memory_peak_mb,
+                    cpu_model, cpu_architecture, cpu_count, memory_gb,
+                    platform, python_version, numpy_version, jax_version, blas_backend,
+                    cloud_provider, instance_type, cost_per_run,
+                    greeks_json
+                ) VALUES (
+                    ?,?,?,?,
+                    ?,?,?,?,
+                    ?,?,?,?,?,
+                    ?,?,?,
+                    ?,?,?,?,
+                    ?,
+                    ?,?,?,
+                    ?,?,?,?,
+                    ?,?,?,?,
+                    ?,?,
+                    ?,?,
+                    ?,?,
+                    ?,?,
+                    ?,
+                    ?,?,?,?,
+                    ?,?,?,?,?,
+                    ?,?,?,
+                    ?
+                )""",
+                (
+                    run_id, experiment_id, experiment_type, config_hash,
+                    "completed", ts, ts, ts,
+                    workload_type, M, N, seed, json.dumps(config_dict),
+                    engine, language, backend,
+                    mean_runtime_ms, std_runtime_ms, min_runtime_ms, max_runtime_ms,
+                    throughput_paths_per_sec,
+                    ad_mode, baseline_mean_ms, ad_overhead_ratio,
+                    result_value, greek_delta, greek_vega, greek_rho,
+                    analytical_price, analytical_delta, analytical_vega, analytical_rho,
+                    abs_price_error, rel_price_error,
+                    abs_delta_error, rel_delta_error,
+                    abs_vega_error, rel_vega_error,
+                    abs_rho_error, rel_rho_error,
+                    memory_peak_mb,
+                    cpu_model, cpu_architecture, cpu_count, memory_gb,
+                    platform, python_version, numpy_version, jax_version, blas_backend,
+                    cloud_provider, instance_type, cost_per_run,
+                    greeks_json,
+                ),
+            )
+        return run_id
 
     # ------------------------------------------------------------------
     # Read operations

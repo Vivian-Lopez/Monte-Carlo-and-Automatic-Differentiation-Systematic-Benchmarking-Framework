@@ -27,8 +27,10 @@ class BenchmarkResult:
     ad_mode: str = "none"  # none, forward, or reverse
     ad_overhead_ratio: float = 1.0  # gradient_time / baseline_time
     gradient_time_ms: float = 0.0  # milliseconds
+    baseline_mean_ms: float = 0.0  # baseline (no-AD) mean runtime in ms
     memory_peak_mb: float = 0.0  # megabytes
     ad_accuracy_error: float = 0.0  # relative error vs. analytical
+    throughput_paths_per_sec: float = 0.0  # paths per second
     greeks: Optional[Dict[str, float]] = None
     
     @staticmethod
@@ -41,8 +43,10 @@ class BenchmarkResult:
         ad_mode: str = "none",
         ad_overhead_ratio: float = 1.0,
         gradient_time_ms: float = 0.0,
+        baseline_mean_ms: float = 0.0,
         memory_peak_mb: float = 0.0,
         ad_accuracy_error: float = 0.0,
+        throughput_paths_per_sec: float = 0.0,
         greeks: Dict[str, float] = None,
     ) -> "BenchmarkResult":
         """Construct result from raw run data, computing statistics."""
@@ -62,8 +66,10 @@ class BenchmarkResult:
             ad_mode=ad_mode,
             ad_overhead_ratio=ad_overhead_ratio,
             gradient_time_ms=gradient_time_ms,
+            baseline_mean_ms=baseline_mean_ms,
             memory_peak_mb=memory_peak_mb,
             ad_accuracy_error=ad_accuracy_error,
+            throughput_paths_per_sec=throughput_paths_per_sec,
             greeks=greeks,
         )
     
