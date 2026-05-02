@@ -127,7 +127,7 @@ tests/
 
 Three files to touch — nothing else changes.
 
-**1. `benchmarking/core/config.py`** — add a `@dataclass` subclassing `WorkloadConfig` (copy `AsianOptionConfig` as a template: `workload_type` property, `SCHEMA`, `validate()`, `to_dict()`, `from_dict()`), then add one line to `WORKLOAD_REGISTRY` at the bottom.
+**1. `benchmarking/core/config.py`** — add a `@dataclass` subclassing `WorkloadConfig` (`workload_type` property, `SCHEMA`, `validate()`, `to_dict()`, `from_dict()`), then add one line to `WORKLOAD_REGISTRY` at the bottom.
 
 **2. `benchmarking/workloads/mc_cpu.py`** — add the type string to `SUPPORTED`, a branch in `run()`, and a `_price_<type>()` method.
 
@@ -161,16 +161,11 @@ pytest -q
 
 ---
 
-## Active vs dormant scope
+## Active scope
 
 | Workload | Status | Engines |
 |---|---|---|
 | European (call/put) | **Active** | NumPy, JAX, C++ |
-| Asian (arithmetic/geometric) | Dormant — implemented, not in default scripts | NumPy, JAX |
-| Barrier (knock-in/knock-out) | Dormant | NumPy, JAX |
-| Basket (correlated GBM) | Dormant | NumPy, JAX |
-
-All dormant workload code is intact. To include one in an experiment, import its config class and pass it to the runner — the engines already handle it.
 
 ---
 

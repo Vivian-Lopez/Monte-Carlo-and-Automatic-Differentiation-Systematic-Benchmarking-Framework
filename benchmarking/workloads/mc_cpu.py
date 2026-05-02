@@ -4,8 +4,7 @@ import numpy as np
 from scipy.stats import norm
 from typing import Optional, Tuple
 from benchmarking.core.config import (
-    WorkloadConfig, EuropeanOptionConfig, AsianOptionConfig,
-    BarrierOptionConfig, BasketOptionConfig,
+    WorkloadConfig, EuropeanOptionConfig,
 )
 from benchmarking.core.engine import MonteCarloEngine, ADMode
 
@@ -18,7 +17,7 @@ class CPUMonteCarloEngine(MonteCarloEngine):
     workload only requires adding a new _price_<type> method here.
     """
 
-    SUPPORTED = {"european", "asian", "barrier", "basket"}
+    SUPPORTED = {"european"}
 
     def supports(self, workload_type: str) -> bool:
         return workload_type in self.SUPPORTED
@@ -32,17 +31,10 @@ class CPUMonteCarloEngine(MonteCarloEngine):
                 f"CPUMonteCarloEngine does not support ad_mode={ad_mode!r}. "
                 "Use the JAX engine for automatic differentiation."
             )
-        wtype = config.workload_type
-        if wtype == "european":
+        if config.workload_type == "european":
             return (self._price_european(config), None)
-        elif wtype == "asian":
-            return (self._price_asian(config), None)
-        elif wtype == "barrier":
-            return (self._price_barrier(config), None)
-        elif wtype == "basket":
-            return (self._price_basket(config), None)
         else:
-            raise NotImplementedError(f"CPUMonteCarloEngine does not support workload '{wtype}'")
+            raise NotImplementedError(f"CPUMonteCarloEngine does not support workload '{config.workload_type}'")
 
     # ------------------------------------------------------------------
     # European option  (GBM, single-step exact)
@@ -59,87 +51,6 @@ class CPUMonteCarloEngine(MonteCarloEngine):
             payoff = np.maximum(S_T - config.K, 0.0)
         else:
             payoff = np.maximum(config.K - S_T, 0.0)
-        return float(math.exp(-config.r * config.T) * payoff.mean())
-
-    # ------------------------------------------------------------------
-    # Asian option  (arithmetic / geometric average, multi-step)
-    # ------------------------------------------------------------------
-
-    def _price_asian(self, config: AsianOptionConfig) -> float:
-        rng = np.random.default_rng(config.seed)
-        dt = config.T / config.N
-        Z = rng.standard_normal((config.M, config.N))
-        # Build path matrix  (M × N)
-        log_returns = (config.r - 0.5 * config.sigma ** 2) * dt + \
-                      config.sigma * math.sqrt(dt) * Z
-        log_S = np.log(config.S0) + np.cumsum(log_returns, axis=1)
-        S_paths = np.exp(log_S)
-        # Average
-        if config.averaging == "arithmetic":
-            avg = S_paths.mean(axis=1)
-        else:
-            avg = np.exp(np.log(S_paths).mean(axis=1))  # geometric
-        if config.option_type == "call":
-            payoff = np.maximum(avg - config.K, 0.0)
-        else:
-            payoff = np.maximum(config.K - avg, 0.0)
-        return float(math.exp(-config.r * config.T) * payoff.mean())
-
-    # ------------------------------------------------------------------
-    # Barrier option  (knock-in / knock-out, up / down, multi-step)
-    # ------------------------------------------------------------------
-
-    def _price_barrier(self, config: BarrierOptionConfig) -> float:
-        rng = np.random.default_rng(config.seed)
-        dt = config.T / config.N
-        Z = rng.standard_normal((config.M, config.N))
-        log_returns = (config.r - 0.5 * config.sigma ** 2) * dt + \
-                      config.sigma * math.sqrt(dt) * Z
-        log_S = np.log(config.S0) + np.cumsum(log_returns, axis=1)
-        S_paths = np.exp(log_S)
-        S_T = S_paths[:, -1]
-
-        if config.barrier_side == "up":
-            breached = (S_paths >= config.B).any(axis=1)
-        else:
-            breached = (S_paths <= config.B).any(axis=1)
-
-        if config.option_type == "call":
-            vanilla = np.maximum(S_T - config.K, 0.0)
-        else:
-            vanilla = np.maximum(config.K - S_T, 0.0)
-
-        if config.barrier_type == "knock_out":
-            payoff = np.where(breached, 0.0, vanilla)
-        else:  # knock_in
-            payoff = np.where(breached, vanilla, 0.0)
-
-        return float(math.exp(-config.r * config.T) * payoff.mean())
-
-    # ------------------------------------------------------------------
-    # Basket option  (equal-weight, correlated GBM, multi-step)
-    # ------------------------------------------------------------------
-
-    def _price_basket(self, config: BasketOptionConfig) -> float:
-        rng = np.random.default_rng(config.seed)
-        n = config.n_assets
-        dt = config.T / config.N
-        # Build correlation matrix
-        rho_matrix = config.rho * np.ones((n, n)) + (1 - config.rho) * np.eye(n)
-        L = np.linalg.cholesky(rho_matrix)
-        # Z: (M, N, n)  — correlated normals
-        Z_ind = rng.standard_normal((config.M, config.N, n))
-        Z_corr = Z_ind @ L.T
-        log_ret = (config.r - 0.5 * config.sigma ** 2) * dt + \
-                  config.sigma * math.sqrt(dt) * Z_corr
-        # S_paths: (M, N+1, n)
-        log_S = np.log(config.S0) + np.cumsum(log_ret, axis=1)
-        S_T = np.exp(log_S[:, -1, :])           # final prices  (M, n)
-        basket_price = S_T.mean(axis=1)         # equal-weight basket
-        if config.option_type == "call":
-            payoff = np.maximum(basket_price - config.K, 0.0)
-        else:
-            payoff = np.maximum(config.K - basket_price, 0.0)
         return float(math.exp(-config.r * config.T) * payoff.mean())
 
 # ---------------------------------------------------------------------------

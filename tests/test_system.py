@@ -24,9 +24,6 @@ import pytest
 from benchmarking.core.config import (
     WorkloadConfig,
     EuropeanOptionConfig,
-    AsianOptionConfig,
-    BarrierOptionConfig,
-    BasketOptionConfig,
     WORKLOAD_REGISTRY,
     config_from_dict,
     MCConfig,
@@ -55,40 +52,12 @@ class TestConfigValidation:
         with pytest.raises(ValueError):
             c.validate()
 
-    def test_asian_needs_N_gte_2(self):
-        c = AsianOptionConfig(N=1)
-        with pytest.raises(ValueError):
-            c.validate()
-
-    def test_asian_rejects_bad_averaging(self):
-        c = AsianOptionConfig(averaging="harmonic")
-        with pytest.raises(ValueError):
-            c.validate()
-
-    def test_barrier_rejects_bad_barrier_type(self):
-        c = BarrierOptionConfig(barrier_type="knock_sideways")
-        with pytest.raises(ValueError):
-            c.validate()
-
-    def test_basket_rejects_one_asset(self):
-        c = BasketOptionConfig(n_assets=1)
-        with pytest.raises(ValueError):
-            c.validate()
-
-    def test_basket_rejects_rho_out_of_range(self):
-        c = BasketOptionConfig(rho=1.5)
-        with pytest.raises(ValueError):
-            c.validate()
-
 
 class TestConfigSerialization:
     """to_dict / from_dict round-trip for every workload type."""
 
     @pytest.mark.parametrize("cls,extras", [
         (EuropeanOptionConfig, {}),
-        (AsianOptionConfig, {"averaging": "geometric"}),
-        (BarrierOptionConfig, {"B": 130.0, "barrier_type": "knock_in", "barrier_side": "down"}),
-        (BasketOptionConfig, {"n_assets": 5, "rho": 0.3}),
     ])
     def test_round_trip(self, cls, extras):
         original = cls(**extras)
@@ -99,11 +68,10 @@ class TestConfigSerialization:
         assert restored.to_dict() == d
 
     def test_config_from_dict_dispatches(self):
-        d = {"workload_type": "asian", "S0": 50.0, "averaging": "geometric"}
+        d = {"workload_type": "european", "S0": 50.0}
         c = config_from_dict(d)
-        assert isinstance(c, AsianOptionConfig)
+        assert isinstance(c, EuropeanOptionConfig)
         assert c.S0 == 50.0
-        assert c.averaging == "geometric"
 
     def test_config_from_dict_unknown_type(self):
         with pytest.raises(ValueError, match="Unknown workload_type"):
@@ -130,10 +98,10 @@ class TestConfigHash:
 
 
 class TestWorkloadRegistry:
-    """Registry contains all four workload types."""
+    """Registry contains the European workload type."""
 
     def test_registry_keys(self):
-        assert set(WORKLOAD_REGISTRY.keys()) == {"european", "asian", "barrier", "basket"}
+        assert set(WORKLOAD_REGISTRY.keys()) == {"european"}
 
     def test_all_have_schema(self):
         for wtype, cls in WORKLOAD_REGISTRY.items():
@@ -184,78 +152,6 @@ class TestCPUEngineEuropean:
         assert p1 == p2
 
 
-class TestCPUEngineExotics:
-    """CPU engine prices exotic workloads without error and with sensible values."""
-
-    @pytest.fixture()
-    def engine(self):
-        return CPUMonteCarloEngine()
-
-    def test_asian_arithmetic(self, engine):
-        c = AsianOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
-                              N=50, M=10_000, seed=42, averaging="arithmetic")
-        price, _ = engine.run(c)
-        assert 0 < price < 20  # reasonable range for ATM asian
-
-    def test_asian_geometric(self, engine):
-        c = AsianOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
-                              N=50, M=10_000, seed=42, averaging="geometric")
-        price, _ = engine.run(c)
-        assert 0 < price < 20
-
-    def test_asian_cheaper_than_european(self, engine):
-        """Averaging reduces volatility → Asian call ≤ European call."""
-        eu = EuropeanOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=50_000, seed=42)
-        asian = AsianOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
-                                  N=252, M=50_000, seed=42, averaging="arithmetic")
-        eu_price, _ = engine.run(eu)
-        asian_price, _ = engine.run(asian)
-        assert asian_price < eu_price
-
-    def test_barrier_knock_out_leq_vanilla(self, engine):
-        """Knock-out ≤ vanilla because some paths are eliminated."""
-        eu = EuropeanOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=50_000, seed=42)
-        barrier = BarrierOptionConfig(
-            S0=100, K=100, r=0.05, sigma=0.2, T=1.0, B=130, N=252,
-            barrier_type="knock_out", barrier_side="up", M=50_000, seed=42,
-        )
-        eu_price, _ = engine.run(eu)
-        barrier_price, _ = engine.run(barrier)
-        assert barrier_price <= eu_price * 1.01  # 1% tolerance for MC noise
-
-    def test_barrier_knock_in_plus_knock_out_eq_vanilla(self, engine):
-        """In-out parity: knock_in + knock_out ≈ vanilla."""
-        seed, M, N = 42, 50_000, 252
-        base = dict(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, B=120,
-                    barrier_side="up", M=M, seed=seed, N=N)
-        ki = BarrierOptionConfig(barrier_type="knock_in", **base)
-        ko = BarrierOptionConfig(barrier_type="knock_out", **base)
-        eu = EuropeanOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=M, seed=seed)
-        ki_price, _ = engine.run(ki)
-        ko_price, _ = engine.run(ko)
-        eu_price, _ = engine.run(eu)
-        assert abs((ki_price + ko_price) - eu_price) / eu_price < 0.03
-
-    def test_basket_runs(self, engine):
-        c = BasketOptionConfig(n_assets=3, S0=100, K=100, r=0.05, sigma=0.2,
-                               rho=0.5, T=1.0, N=12, M=10_000, seed=42)
-        price, _ = engine.run(c)
-        assert 0 < price < 30
-
-    def test_basket_correlation_effect(self, engine):
-        """Higher ρ → more correlated assets → basket behaves more like single asset."""
-        base = dict(n_assets=3, S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
-                   N=12, M=50_000, seed=42)
-        low_rho, _ = engine.run(BasketOptionConfig(rho=0.1, **base))
-        high_rho, _ = engine.run(BasketOptionConfig(rho=0.9, **base))
-        # Higher correlation → higher basket option price (less diversification benefit)
-        assert high_rho > low_rho
-
-    def test_supports_all_workloads(self, engine):
-        for wtype in ("european", "asian", "barrier", "basket"):
-            assert engine.supports(wtype)
-        assert not engine.supports("lookback")
-
     def test_cpu_rejects_ad_mode(self, engine):
         """CPU engine raises NotImplementedError for non-none AD modes."""
         c = EuropeanOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=1000, seed=1)
@@ -286,27 +182,6 @@ class TestJAXEngineEuropean:
             price, _ = engine.run(c, ad_mode=mode)
             assert isinstance(price, float)
             assert price > 0
-
-    def test_jax_ad_on_exotic_workloads(self):
-        """Asian, Barrier, Basket all return Greeks when AD is enabled."""
-        engine = JAXMonteCarloEngine()
-        cases = [
-            AsianOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
-                              N=50, M=5000, seed=42),
-            BarrierOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0,
-                                B=130, N=50, M=5000, seed=42),
-            BasketOptionConfig(n_assets=3, S0=100, K=100, r=0.05, sigma=0.2,
-                               rho=0.5, T=1.0, N=12, M=5000, seed=42),
-        ]
-        for config in cases:
-            for mode in ("forward", "reverse"):
-                price, greeks = engine.run(config, ad_mode=mode)
-                wtype = config.workload_type
-                assert greeks is not None, f"{wtype}+{mode} returned None greeks"
-                assert set(greeks.keys()) == {"delta", "rho", "vega"}, \
-                    f"{wtype}+{mode} has wrong greek keys: {greeks.keys()}"
-                assert isinstance(price, float) and price > 0, \
-                    f"{wtype}+{mode} returned bad price: {price}"
 
     def test_jax_supported_ad_modes(self):
         engine = JAXMonteCarloEngine()
@@ -434,9 +309,7 @@ class TestBenchmarkDB:
 
     def test_get_all_with_filters(self, db, sample_config):
         db.create_run(sample_config, "cpu", "none")
-        asian_config = AsianOptionConfig(S0=100, K=100, r=0.05, sigma=0.2,
-                                         T=1.0, N=50, M=1000, seed=42).to_dict()
-        db.create_run(asian_config, "jax", "none")
+        db.create_run(sample_config, "jax", "none")
 
         all_runs = db.get_all_runs()
         assert len(all_runs) == 2
@@ -444,9 +317,6 @@ class TestBenchmarkDB:
         cpu_only = db.get_all_runs(engine="cpu")
         assert len(cpu_only) == 1
         assert cpu_only[0]["engine"] == "cpu"
-
-        asian_only = db.get_all_runs(workload_type="asian")
-        assert len(asian_only) == 1
 
     def test_summary(self, db, sample_config):
         id1 = db.create_run(sample_config, "cpu", "none")
@@ -631,38 +501,11 @@ class TestEndToEnd:
             stored_config = config_from_dict(row["config"])
             assert stored_config.config_hash() == config.config_hash()
 
-    def test_asian_jax_full_flow(self):
-        """Asian option through JAX engine end-to-end."""
-        config = AsianOptionConfig(
-            S0=100, K=100, r=0.05, sigma=0.2, T=1.0, N=50,
-            averaging="arithmetic", M=5000, seed=7,
-        )
-        config.validate()
-
-        engine = JAXMonteCarloEngine()
-        runner = BenchmarkRunner(engine, name="e2e-asian-jax")
-        result = runner.run(config, num_warmup=1, num_runs=2, ad_mode="none")
-
-        assert result.result > 0
-        assert len(result.runtimes) == 2
-
-        # Serialize → deserialize round-trip
-        d = result.to_dict()
-        restored = BenchmarkResult.from_dict(d)
-        assert restored.result == result.result
-        assert restored.config.config_hash() == config.config_hash()
-
     def test_all_workloads_through_cpu(self):
-        """Every workload type prices successfully through the CPU engine."""
-        configs = {
-            "european": EuropeanOptionConfig(M=1000, seed=1),
-            "asian": AsianOptionConfig(N=10, M=1000, seed=1),
-            "barrier": BarrierOptionConfig(N=10, M=1000, seed=1),
-            "basket": BasketOptionConfig(n_assets=2, N=4, M=1000, seed=1),
-        }
+        """European option prices successfully through the CPU engine."""
+        config = EuropeanOptionConfig(M=1000, seed=1)
         engine = CPUMonteCarloEngine()
-        for wtype, config in configs.items():
-            config.validate()
-            price, _ = engine.run(config)
-            assert isinstance(price, float), f"{wtype} did not return float"
-            assert price >= 0, f"{wtype} returned negative price: {price}"
+        config.validate()
+        price, _ = engine.run(config)
+        assert isinstance(price, float)
+        assert price >= 0
