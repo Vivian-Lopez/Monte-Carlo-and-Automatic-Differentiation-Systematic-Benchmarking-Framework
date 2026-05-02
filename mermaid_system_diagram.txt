@@ -1,0 +1,58 @@
+flowchart TD
+    subgraph FE["Frontend  —  React + TypeScript + Vite"]
+        direction LR
+        PAG["Pages\nSimulate · Compare · History · Summary · Analysis"]
+        CLI["api/client.ts\nHTTP client"]
+        PAG --> CLI
+    end
+
+    subgraph API["Flask REST API"]
+        RST["Endpoints\nPOST /runs\nGET /runs/:id\nGET /summary  /compare_matrix\nGET /workloads  /engines"]
+        WRK["Background Worker\ndaemon thread · polls pending runs"]
+        RST --> WRK
+    end
+
+    CLI -- "HTTP + JSON" --> RST
+    RST -. "poll results" .-> CLI
+
+    subgraph CORE["Core Abstractions"]
+        direction LR
+        CFG["WorkloadConfig  ABC\nEuropeanOptionConfig\nS0  K  r  sigma  T  M  seed\noption_type · config_hash"]
+        RES["BenchmarkResult\nprice · runtimes\nmean  std  min  max\ngreeks · env_metadata · config_hash"]
+    end
+
+    subgraph RNR["BenchmarkRunner"]
+        RUN["warm-up + N timed repetitions\nenv capture via psutil\nconfig hash via SHA-256\nuses MonteCarloEngine ABC"]
+    end
+
+    subgraph ENGINES["Simulation Engines  (MonteCarloEngine ABC)"]
+        direction LR
+        ECPU["NumPy CPU\nGBM exact\nAD: none"]
+        EJAX["JAX\nJIT + XLA\nAD: fwd + rev"]
+        ECUDA["PyCUDA\ncuRAND\nAD: fwd pathwise"]
+        ECPP["C++ + OpenMP\npybind11\nAD: none"]
+    end
+
+    subgraph VALID["AD Validation"]
+        ADV["ad_validation.py\nBlack-Scholes closed form\ndelta · vega · rho\nrelative error vs computed"]
+    end
+
+    subgraph STORE["Storage"]
+        DB[("SQLite  benchmarks.db\nruns table · auto-migrate\nthread-safe · uuid PKs")]
+    end
+
+    subgraph EXPS["Experiment Scripts"]
+        direction LR
+        E1[baseline]
+        E2[scalability]
+        E3[AD analysis]
+    end
+
+    WRK --> RUN
+    CFG --> RUN
+    RUN --> ECPU & EJAX & ECUDA & ECPP
+    RUN --> RES
+    EJAX & ECUDA -- "computed greeks" --> ADV
+    RES -- "persist" --> DB
+    DB -- "query" --> RST
+    EXPS --> RUN
