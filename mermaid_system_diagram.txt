@@ -1,58 +1,136 @@
-flowchart TD
-    subgraph FE["Frontend  —  React + TypeScript + Vite"]
-        direction LR
-        PAG["Pages\nSimulate · Compare · History · Summary · Analysis"]
-        CLI["api/client.ts\nHTTP client"]
-        PAG --> CLI
-    end
+classDiagram
+    direction TB
 
-    subgraph API["Flask REST API"]
-        RST["Endpoints\nPOST /runs\nGET /runs/:id\nGET /summary  /compare_matrix\nGET /workloads  /engines"]
-        WRK["Background Worker\ndaemon thread · polls pending runs"]
-        RST --> WRK
-    end
+    class WorkloadConfig {
+        <<abstract>>
+        +workload_type: str
+        +M: int
+        +seed: int
+        +validate()
+        +to_dict() dict
+        +from_dict(data) WorkloadConfig
+        +config_hash() str
+    }
 
-    CLI -- "HTTP + JSON" --> RST
-    RST -. "poll results" .-> CLI
+    class EuropeanOptionConfig {
+        +workload_type = "european"
+        +S0: float = 100.0
+        +K: float = 100.0
+        +r: float = 0.05
+        +sigma: float = 0.20
+        +T: float = 1.0
+        +option_type: str = "call"
+        +N: int = 1
+        +M: int = 10000
+        +seed: int = 42
+        +validate()
+        +to_dict() dict
+        +from_dict(data) EuropeanOptionConfig
+    }
 
-    subgraph CORE["Core Abstractions"]
-        direction LR
-        CFG["WorkloadConfig  ABC\nEuropeanOptionConfig\nS0  K  r  sigma  T  M  seed\noption_type · config_hash"]
-        RES["BenchmarkResult\nprice · runtimes\nmean  std  min  max\ngreeks · env_metadata · config_hash"]
-    end
+    class MonteCarloEngine {
+        <<abstract>>
+        +run(config, ad_mode) (float, dict|None)
+        +supports(workload_type) bool
+        +supported_ad_modes() tuple
+    }
 
-    subgraph RNR["BenchmarkRunner"]
-        RUN["warm-up + N timed repetitions\nenv capture via psutil\nconfig hash via SHA-256\nuses MonteCarloEngine ABC"]
-    end
+    class CPUMonteCarloEngine {
+        +supported_ad_modes() = ("none",)
+        +run(config, ad_mode) (float, None)
+        -_price_european(config) float
+    }
 
-    subgraph ENGINES["Simulation Engines  (MonteCarloEngine ABC)"]
-        direction LR
-        ECPU["NumPy CPU\nGBM exact\nAD: none"]
-        EJAX["JAX\nJIT + XLA\nAD: fwd + rev"]
-        ECUDA["PyCUDA\ncuRAND\nAD: fwd pathwise"]
-        ECPP["C++ + OpenMP\npybind11\nAD: none"]
-    end
+    class JAXMonteCarloEngine {
+        +supported_ad_modes() = ("none","forward","reverse")
+        +run(config, ad_mode) (float, dict|None)
+        -_run_european(config, ad_mode)
+        -_compute_greeks(kernel, config, ad_mode)
+    }
 
-    subgraph VALID["AD Validation"]
-        ADV["ad_validation.py\nBlack-Scholes closed form\ndelta · vega · rho\nrelative error vs computed"]
-    end
+    class CUDAMonteCarloEngine {
+        +supported_ad_modes() = ("none","forward")
+        +run(config, ad_mode) (float, dict|None)
+        -_KERNEL_SOURCE: cuRAND C++ kernel
+    }
 
-    subgraph STORE["Storage"]
-        DB[("SQLite  benchmarks.db\nruns table · auto-migrate\nthread-safe · uuid PKs")]
-    end
+    class CPPMonteCarloEngine {
+        +supported_ad_modes() = ("none",)
+        +run(config, ad_mode) (float, None)
+        -price_european: pybind11 → OpenMP C++
+    }
 
-    subgraph EXPS["Experiment Scripts"]
-        direction LR
-        E1[baseline]
-        E2[scalability]
-        E3[AD analysis]
-    end
+    class BenchmarkRunner {
+        +engine: MonteCarloEngine
+        +name: str
+        +run(config, ad_mode, num_warmup, num_runs) BenchmarkResult
+        +capture_environment() dict
+        -_run_with_timings(config, num_warmup, num_runs, ad_mode)
+    }
 
-    WRK --> RUN
-    CFG --> RUN
-    RUN --> ECPU & EJAX & ECUDA & ECPP
-    RUN --> RES
-    EJAX & ECUDA -- "computed greeks" --> ADV
-    RES -- "persist" --> DB
-    DB -- "query" --> RST
-    EXPS --> RUN
+    class BenchmarkResult {
+        +config: WorkloadConfig
+        +result: float
+        +runtimes: List[float]
+        +mean_runtime: float
+        +std_runtime: float
+        +min_runtime: float
+        +max_runtime: float
+        +config_hash: str
+        +metadata: dict
+        +ad_mode: str
+        +ad_overhead_ratio: float
+        +gradient_time_ms: float
+        +baseline_mean_ms: float
+        +memory_peak_mb: float
+        +ad_accuracy_error: float
+        +throughput_paths_per_sec: float
+        +greeks: dict|None
+        +from_runs(...)$ BenchmarkResult
+    }
+
+    class BenchmarkDB {
+        -db_path: results/benchmarks.db
+        -_lock: threading.Lock
+        +save_run(result)
+        +get_run(id) dict
+        +list_runs(workload, engine, status) list
+        +get_summary() dict
+        +get_compare_matrix() dict
+    }
+
+    class FlaskAPI {
+        +POST /api/runs
+        +GET  /api/runs
+        +GET  /api/runs/:id
+        +GET  /api/engines
+        +GET  /api/workloads
+        +GET  /api/summary
+        +GET  /api/compare_matrix
+        -_worker_loop() daemon thread
+    }
+
+    class ReactFrontend {
+        +SimulatePage
+        +ComparePage
+        +HistoryPage
+        +SummaryPage
+        +AnalysisPage
+        +api/client.ts
+    }
+
+    WorkloadConfig <|-- EuropeanOptionConfig
+    MonteCarloEngine <|-- CPUMonteCarloEngine
+    MonteCarloEngine <|-- JAXMonteCarloEngine
+    MonteCarloEngine <|-- CUDAMonteCarloEngine
+    MonteCarloEngine <|-- CPPMonteCarloEngine
+
+    BenchmarkRunner o-- MonteCarloEngine : uses
+    BenchmarkRunner ..> BenchmarkResult : produces
+    BenchmarkResult o-- WorkloadConfig : contains
+
+    FlaskAPI --> BenchmarkRunner : dispatches via worker thread
+    FlaskAPI --> BenchmarkDB : reads / queries
+    BenchmarkResult --> BenchmarkDB : persisted by API worker
+
+    ReactFrontend --> FlaskAPI : HTTP + JSON
