@@ -92,11 +92,96 @@ classDiagram
     class BenchmarkDB {
         -db_path: results/benchmarks.db
         -_lock: threading.Lock
-        +save_run(result)
-        +get_run(id) dict
-        +list_runs(workload, engine, status) list
-        +get_summary() dict
-        +get_compare_matrix() dict
+        +create_run(config_dict, engine, ad_mode) str
+        +mark_running(run_id)
+        +mark_completed(run_id, result_value, mean_runtime_ms, std_runtime_ms, ad_overhead_ratio, greeks)
+        +mark_failed(run_id, error_message)
+        +store_run_full(config_dict, engine, ad_mode, ...) str
+        +get_run(run_id) dict
+        +get_all_runs(limit, workload_type, engine, status) list
+        +get_pending_runs() list
+        +summary() dict
+    }
+
+    class RunsTable {
+        <<SQLite Table: runs>>
+        -- Identity / Grouping --
+        +id: TEXT PK
+        +experiment_id: TEXT
+        +experiment_type: TEXT
+        +config_hash: TEXT
+        -- Status Lifecycle --
+        +status: TEXT NOT NULL DEFAULT 'pending'
+        +error_message: TEXT
+        +created_at: TEXT NOT NULL
+        +started_at: TEXT
+        +completed_at: TEXT
+        -- Workload Definition --
+        +workload_type: TEXT NOT NULL
+        +M: INTEGER
+        +N: INTEGER
+        +seed: INTEGER
+        +config_json: TEXT NOT NULL
+        -- Engine / Implementation --
+        +engine: TEXT NOT NULL
+        +language: TEXT
+        +backend: TEXT
+        -- Parallelism / Scalability --
+        +num_threads: INTEGER
+        +vectorization_flag: TEXT
+        +batch_size: INTEGER
+        -- Runtime / Performance --
+        +mean_runtime_ms: REAL
+        +std_runtime_ms: REAL
+        +min_runtime_ms: REAL
+        +max_runtime_ms: REAL
+        +throughput_paths_per_sec: REAL
+        -- AD Metadata --
+        +ad_mode: TEXT NOT NULL DEFAULT 'none'
+        +baseline_mean_ms: REAL
+        +ad_overhead_ratio: REAL
+        -- Numerical Results --
+        +result_value: REAL
+        +greek_delta: REAL
+        +greek_vega: REAL
+        +greek_rho: REAL
+        -- Analytical Reference --
+        +analytical_price: REAL
+        +analytical_delta: REAL
+        +analytical_vega: REAL
+        +analytical_rho: REAL
+        -- Error Metrics --
+        +abs_price_error: REAL
+        +rel_price_error: REAL
+        +abs_delta_error: REAL
+        +rel_delta_error: REAL
+        +abs_vega_error: REAL
+        +rel_vega_error: REAL
+        +abs_rho_error: REAL
+        +rel_rho_error: REAL
+        -- Resource Utilisation --
+        +memory_peak_mb: REAL
+        -- Environment / Hardware --
+        +cpu_model: TEXT
+        +cpu_architecture: TEXT
+        +cpu_count: INTEGER
+        +memory_gb: REAL
+        +platform: TEXT
+        +python_version: TEXT
+        +numpy_version: TEXT
+        +jax_version: TEXT
+        +blas_backend: TEXT
+        -- Cloud Fields --
+        +cloud_provider: TEXT
+        +instance_type: TEXT
+        +cost_per_run: REAL
+        -- Legacy --
+        +greeks_json: TEXT
+        -- Indexes --
+        +idx_status ON status
+        +idx_workload ON workload_type
+        +idx_engine ON engine
+        +idx_experiment ON experiment_id
     }
 
     class FlaskAPI {
@@ -132,5 +217,7 @@ classDiagram
     FlaskAPI --> BenchmarkRunner : dispatches via worker thread
     FlaskAPI --> BenchmarkDB : reads / queries
     BenchmarkResult --> BenchmarkDB : persisted by API worker
+
+    BenchmarkDB --> RunsTable : reads/writes via SQLite
 
     ReactFrontend --> FlaskAPI : HTTP + JSON
