@@ -153,13 +153,6 @@ _worker.start()
 # Helpers
 # ------------------------------------------------------------------
 
-def _schema_for(workload_type: str) -> list:
-    cls = WORKLOAD_REGISTRY[workload_type]
-    # Instantiate with defaults to read the SCHEMA field
-    instance = cls()
-    return instance.SCHEMA
-
-
 def _throughput(row: dict) -> float | None:
     """Paths per second = M / mean_runtime_s.  Returns None when unavailable."""
     ms = row.get("mean_runtime_ms")
@@ -199,14 +192,12 @@ def _jsonify_run(row: dict) -> dict:
 
 @app.get("/api/workloads")
 def list_workloads():
-    """Return all registered workload types with their parameter schema."""
+    """Return all registered workload types."""
     workloads = {}
     for wtype, cls in WORKLOAD_REGISTRY.items():
-        instance = cls()
         workloads[wtype] = {
-            "label":       wtype.capitalize() + " Option",
+            "label":         wtype.capitalize() + " Option",
             "workload_type": wtype,
-            "schema":      instance.SCHEMA,
         }
     return jsonify(workloads)
 

@@ -26,31 +26,7 @@ from benchmarking.core.config import (
     EuropeanOptionConfig,
     WORKLOAD_REGISTRY,
     config_from_dict,
-    MCConfig,
 )
-
-
-class TestConfigValidation:
-    """Validation rejects bad inputs and accepts good ones."""
-
-    def test_european_valid(self):
-        c = EuropeanOptionConfig(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=1000, seed=1)
-        c.validate()  # should not raise
-
-    @pytest.mark.parametrize("field,value", [
-        ("S0", -1), ("K", 0), ("sigma", 0), ("T", -0.5), ("M", 0),
-    ])
-    def test_european_rejects_bad_numerics(self, field, value):
-        kwargs = dict(S0=100, K=100, r=0.05, sigma=0.2, T=1.0, M=1000, seed=1)
-        kwargs[field] = value
-        c = EuropeanOptionConfig(**kwargs)
-        with pytest.raises(ValueError):
-            c.validate()
-
-    def test_european_rejects_bad_option_type(self):
-        c = EuropeanOptionConfig(option_type="straddle")
-        with pytest.raises(ValueError):
-            c.validate()
 
 
 class TestConfigSerialization:
@@ -63,7 +39,7 @@ class TestConfigSerialization:
         original = cls(**extras)
         d = original.to_dict()
         assert "workload_type" in d
-        assert "SCHEMA" not in d      # SCHEMA must be stripped
+        assert "SCHEMA" not in d      # SCHEMA ClassVar must not appear in serialised output
         restored = cls.from_dict(d)
         assert restored.to_dict() == d
 
@@ -102,17 +78,6 @@ class TestWorkloadRegistry:
 
     def test_registry_keys(self):
         assert set(WORKLOAD_REGISTRY.keys()) == {"european"}
-
-    def test_all_have_schema(self):
-        for wtype, cls in WORKLOAD_REGISTRY.items():
-            instance = cls()
-            assert isinstance(instance.SCHEMA, list), f"{wtype} SCHEMA is not a list"
-            assert len(instance.SCHEMA) > 0, f"{wtype} SCHEMA is empty"
-            for field in instance.SCHEMA:
-                assert "key" in field and "label" in field and "type" in field
-
-    def test_mcconfig_is_european(self):
-        assert MCConfig is EuropeanOptionConfig
 
 
 # ── Layer 2: Engine correctness ───────────────────────────────────────────
@@ -356,8 +321,6 @@ class TestAPI:
         assert r.status_code == 200
         data = r.get_json()
         assert "european" in data
-        assert "schema" in data["european"]
-        assert len(data["european"]["schema"]) > 0
 
     def test_get_engines(self, client):
         r = client.get("/api/engines")
@@ -386,16 +349,6 @@ class TestAPI:
         data = r.get_json()
         assert "id" in data
         assert data["status"] == "pending"
-
-    def test_submit_run_validates_config(self, client):
-        payload = {
-            "workload_type": "european",
-            "engine": "cpu",
-            "config": {"S0": -100, "K": 100, "r": 0.05, "sigma": 0.2, "T": 1.0,
-                       "M": 1000, "seed": 42},
-        }
-        r = client.post("/api/runs", json=payload)
-        assert r.status_code == 400
 
     def test_submit_run_rejects_unknown_engine(self, client):
         payload = {

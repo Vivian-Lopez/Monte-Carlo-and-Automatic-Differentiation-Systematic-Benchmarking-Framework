@@ -10,7 +10,7 @@ Tests:
 
 import pytest
 import math
-from benchmarking.core.config import MCConfig
+from benchmarking.core.config import EuropeanOptionConfig
 from benchmarking.workloads.mc_jax import JAXMonteCarloEngine, monte_carlo_european_call_jax
 from benchmarking.workloads.ad_validation import (
     analytical_delta,
@@ -25,7 +25,7 @@ from benchmarking.runner.runner import BenchmarkRunner
 
 def test_jax_engine_runs():
     """Test JAX engine executes without error."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
     engine = JAXMonteCarloEngine()
     
     # Test no-AD mode
@@ -49,7 +49,7 @@ def test_jax_engine_runs():
 
 def test_jax_function_signature():
     """Test standalone JAX function has correct signature."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
     
     result = monte_carlo_european_call_jax(config, ad_mode="none")
     assert isinstance(result, float)
@@ -58,7 +58,7 @@ def test_jax_function_signature():
 
 def test_analytical_greeks():
     """Test analytical Greek computation."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
     
     delta = analytical_delta(config)
     assert 0.0 < delta < 1.0, f"Delta {delta} out of bounds [0, 1]"
@@ -72,7 +72,7 @@ def test_analytical_greeks():
 
 def test_analytical_greeks_atm():
     """Test Greeks for at-the-money option."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
     
     greeks = compute_all_analytical_greeks(config)
     
@@ -97,7 +97,7 @@ def test_gradient_validation():
 
 def test_benchmark_result_with_ad_metrics():
     """Test BenchmarkResult stores and retrieves AD metrics."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
     
     result = BenchmarkResult.from_runs(
         config=config,
@@ -121,7 +121,7 @@ def test_benchmark_result_with_ad_metrics():
 
 def test_benchmark_result_serialization():
     """Test BenchmarkResult serialization with AD metrics."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
     
     result1 = BenchmarkResult.from_runs(
         config=config,
@@ -151,7 +151,7 @@ def test_benchmark_result_serialization():
 
 def test_benchmark_runner_with_jax_ad():
     """Test BenchmarkRunner with JAX engine and AD."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
     config.validate()
     
     runner = BenchmarkRunner(JAXMonteCarloEngine(), name="JAX Test")
@@ -168,8 +168,8 @@ def test_benchmark_runner_with_jax_ad():
 
 def test_jax_deterministic_seeding():
     """Test JAX engine produces consistent results with same seed."""
-    config1 = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=1000, seed=42)
-    config2 = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=1000, seed=42)
+    config1 = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=1000, seed=42)
+    config2 = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=1000, seed=42)
     
     engine = JAXMonteCarloEngine()
     
@@ -181,7 +181,7 @@ def test_jax_deterministic_seeding():
 
 def test_forward_mode_uses_jvp():
     """Forward-mode AD computes Greeks via jax.jvp, not jax.grad."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=50_000, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=50_000, seed=42)
     engine = JAXMonteCarloEngine()
 
     _, fwd = engine.run(config, ad_mode="forward")
@@ -200,7 +200,7 @@ def test_forward_mode_uses_jvp():
 
 def test_greeks_vs_analytical():
     """AD Greeks should be close to Black-Scholes analytical Greeks."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=200_000, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=200_000, seed=42)
     analytical = compute_all_analytical_greeks(config)
 
     engine = JAXMonteCarloEngine()
@@ -214,7 +214,7 @@ def test_greeks_vs_analytical():
 
 def test_no_ad_does_not_return_greeks():
     """Running with ad_mode='none' should return None greeks."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
     engine = JAXMonteCarloEngine()
     _, greeks = engine.run(config, ad_mode="none")
     assert greeks is None
@@ -222,7 +222,7 @@ def test_no_ad_does_not_return_greeks():
 
 def test_runner_captures_greeks():
     """BenchmarkRunner should capture Greeks from the engine."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=1000, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=1000, seed=42)
     runner = BenchmarkRunner(JAXMonteCarloEngine(), name="greeks-test")
     result = runner.run(config, num_warmup=1, num_runs=2, ad_mode="reverse")
     assert result.greeks is not None
@@ -247,7 +247,7 @@ def test_db_stores_and_retrieves_greeks():
 
 def test_result_greeks_serialization():
     """BenchmarkResult.to_dict / from_dict should round-trip Greeks."""
-    config = MCConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
+    config = EuropeanOptionConfig(S0=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0, N=1, M=100, seed=42)
     result = BenchmarkResult.from_runs(
         config=config, result=10.5, runtimes=[0.01],
         config_hash="abc", metadata={}, ad_mode="forward",

@@ -6,10 +6,10 @@ Compares computed gradients against analytical benchmarks to verify correctness.
 
 import math
 from scipy.stats import norm
-from benchmarking.core.config import MCConfig
+from benchmarking.core.config import EuropeanOptionConfig
 
 
-def analytical_delta(config: MCConfig) -> float:
+def analytical_delta(config: EuropeanOptionConfig) -> float:
     """
     Analytical delta (dC/dS0) for European call option via Black-Scholes.
     
@@ -17,7 +17,7 @@ def analytical_delta(config: MCConfig) -> float:
     d1 = (ln(S0/K) + (r + 0.5*sigma^2)*T) / (sigma*sqrt(T))
     
     Args:
-        config: MCConfig containing option parameters
+        config: EuropeanOptionConfig containing option parameters
         
     Returns:
         Delta value (N(d1))
@@ -30,14 +30,14 @@ def analytical_delta(config: MCConfig) -> float:
     return float(norm.cdf(d1))
 
 
-def analytical_vega(config: MCConfig) -> float:
+def analytical_vega(config: EuropeanOptionConfig) -> float:
     """
     Analytical vega (dC/dsigma) for European call option via Black-Scholes.
     
     Vega = S0 * N'(d1) * sqrt(T), where N'(x) is the PDF of standard normal.
     
     Args:
-        config: MCConfig containing option parameters
+        config: EuropeanOptionConfig containing option parameters
         
     Returns:
         Vega value
@@ -52,7 +52,7 @@ def analytical_vega(config: MCConfig) -> float:
     return float(vega)
 
 
-def analytical_rho(config: MCConfig) -> float:
+def analytical_rho(config: EuropeanOptionConfig) -> float:
     """
     Analytical rho (dC/dr) for European call option via Black-Scholes.
     
@@ -60,7 +60,7 @@ def analytical_rho(config: MCConfig) -> float:
     d2 = d1 - sigma*sqrt(T)
     
     Args:
-        config: MCConfig containing option parameters
+        config: EuropeanOptionConfig containing option parameters
         
     Returns:
         Rho value
@@ -94,7 +94,7 @@ def validate_gradient(computed_gradient: float, analytical_gradient: float) -> f
     return rel_error
 
 
-def compute_all_analytical_greeks(config: MCConfig) -> dict:
+def compute_all_analytical_greeks(config: EuropeanOptionConfig) -> dict:
     """
     Compute all analytical Greeks for reference.
     
