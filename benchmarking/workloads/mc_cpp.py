@@ -6,7 +6,7 @@ which uses an OpenMP-parallelised Mersenne Twister implementation.
 
 Build the extension first:
     cd benchmarking/cpp
-    pip install -e .
+    pip install -e . --no-build-isolation
 or:
     python benchmarking/cpp/setup.py build_ext --inplace
 """
@@ -46,7 +46,7 @@ class CPPMonteCarloEngine(MonteCarloEngine):
         except ImportError as exc:
             raise RuntimeError(
                 "cpp_mc extension not found. "
-                "Build it with: cd benchmarking/cpp && pip install -e ."
+                "Build it with: cd benchmarking/cpp && pip install -e . --no-build-isolation"
             ) from exc
 
         is_call = 1 if config.option_type == "call" else 0
