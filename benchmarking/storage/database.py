@@ -302,6 +302,7 @@ class BenchmarkDB:
         numpy_version: Optional[str] = None,
         jax_version: Optional[str] = None,
         blas_backend: Optional[str] = None,
+        vectorization_flag: Optional[str] = None,
         # cloud (future)
         cloud_provider: Optional[str] = None,
         instance_type: Optional[str] = None,
@@ -347,6 +348,7 @@ class BenchmarkDB:
                     memory_peak_mb,
                     cpu_model, cpu_architecture, cpu_count, memory_gb,
                     platform, python_version, numpy_version, jax_version, blas_backend,
+                    vectorization_flag,
                     cloud_provider, instance_type, cost_per_run,
                     greeks_json,
                     requested_threads,
@@ -373,6 +375,7 @@ class BenchmarkDB:
                     ?,
                     ?,?,?,?,
                     ?,?,?,?,?,
+                    ?,
                     ?,?,?,
                     ?,
                     ?,?,?,?,?,?,?
@@ -394,6 +397,7 @@ class BenchmarkDB:
                     memory_peak_mb,
                     cpu_model, cpu_architecture, cpu_count, memory_gb,
                     platform, python_version, numpy_version, jax_version, blas_backend,
+                    vectorization_flag,
                     cloud_provider, instance_type, cost_per_run,
                     greeks_json,
                     requested_threads,
