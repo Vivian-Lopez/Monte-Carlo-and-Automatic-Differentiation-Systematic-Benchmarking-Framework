@@ -56,6 +56,14 @@ _FULL_SCHEMA_COLUMNS: list[tuple[str, str]] = [
     ("backend",               "TEXT"),
     # Parallelism / scalability (nullable for now)
     ("num_threads",           "INTEGER"),
+    # Thread diagnostics (recorded per cell by run_thread_cell.py)
+    ("requested_threads",                   "INTEGER"),
+    ("observed_threads_before_engine_load", "INTEGER"),
+    ("observed_threads_after_engine_load",  "INTEGER"),
+    ("observed_threads_after_run",          "INTEGER"),
+    ("observed_threads_max",                "INTEGER"),
+    ("env_omp_num_threads",                 "TEXT"),
+    ("env_xla_flags",                       "TEXT"),
     ("vectorization_flag",    "TEXT"),
     ("batch_size",            "INTEGER"),
     # Runtime / performance
@@ -278,6 +286,13 @@ class BenchmarkDB:
         language: Optional[str] = None,
         backend: Optional[str] = None,
         num_threads: Optional[int] = None,
+        requested_threads: Optional[int] = None,
+        observed_threads_before_engine_load: Optional[int] = None,
+        observed_threads_after_engine_load: Optional[int] = None,
+        observed_threads_after_run: Optional[int] = None,
+        observed_threads_max: Optional[int] = None,
+        env_omp_num_threads: Optional[str] = None,
+        env_xla_flags: Optional[str] = None,
         cpu_model: Optional[str] = None,
         cpu_architecture: Optional[str] = None,
         cpu_count: Optional[int] = None,
@@ -333,7 +348,14 @@ class BenchmarkDB:
                     cpu_model, cpu_architecture, cpu_count, memory_gb,
                     platform, python_version, numpy_version, jax_version, blas_backend,
                     cloud_provider, instance_type, cost_per_run,
-                    greeks_json
+                    greeks_json,
+                    requested_threads,
+                    observed_threads_before_engine_load,
+                    observed_threads_after_engine_load,
+                    observed_threads_after_run,
+                    observed_threads_max,
+                    env_omp_num_threads,
+                    env_xla_flags
                 ) VALUES (
                     ?,?,?,?,
                     ?,?,?,?,
@@ -352,7 +374,8 @@ class BenchmarkDB:
                     ?,?,?,?,
                     ?,?,?,?,?,
                     ?,?,?,
-                    ?
+                    ?,
+                    ?,?,?,?,?,?,?
                 )""",
                 (
                     run_id, experiment_id, experiment_type, config_hash,
@@ -373,6 +396,13 @@ class BenchmarkDB:
                     platform, python_version, numpy_version, jax_version, blas_backend,
                     cloud_provider, instance_type, cost_per_run,
                     greeks_json,
+                    requested_threads,
+                    observed_threads_before_engine_load,
+                    observed_threads_after_engine_load,
+                    observed_threads_after_run,
+                    observed_threads_max,
+                    env_omp_num_threads,
+                    env_xla_flags,
                 ),
             )
         return run_id

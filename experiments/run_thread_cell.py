@@ -33,15 +33,33 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+try:
+    import psutil as _psutil
+except ImportError as _e:
+    raise SystemExit(
+        "psutil is required for thread diagnostics.\n"
+        "Install it with:  pip install psutil\n"
+        f"Original error: {_e}"
+    ) from _e
+
 # ---------------------------------------------------------------------------
-# These imports happen AFTER the parent has set env vars, so XLA/OpenMP pick
-# up the correct thread count automatically.
+# These imports happen AFTER the parent has set env vars, ensuring
+# OMP_NUM_THREADS and related variables are visible at process start.
+# For OpenMP/C++ this gives reliable thread-count control.
+# For JAX/XLA, subprocess isolation guarantees a clean runtime and the
+# requested environment, but exact CPU worker thread control is
+# runtime-dependent — we record observed OS thread counts for honest
+# post-hoc interpretation.
+# Note: runner.py imports JAX at module level, so JAX is already loaded
+# before main() runs.  observed_threads_before_engine_load is measured
+# after module imports but before the engine class is instantiated.
 # ---------------------------------------------------------------------------
 from benchmarking.core.config import EuropeanOptionConfig
 from benchmarking.runner.runner import BenchmarkRunner
@@ -52,6 +70,14 @@ _ENGINE_META = {
     "jax": ("python", "xla"),
     "cpp": ("cpp",    "openmp"),
 }
+
+
+def _thread_count() -> int:
+    """Return number of OS threads in the current process (via psutil)."""
+    try:
+        return _psutil.Process().num_threads()
+    except Exception:
+        return -1
 
 
 def _load_engine(name: str):
@@ -93,6 +119,11 @@ def main() -> None:
     if args.oversubscribed:
         experiment_type += "_oversubscribed"
 
+    # Capture env vars set by orchestrator before any engine loads
+    env_omp = os.environ.get("OMP_NUM_THREADS")
+    env_xla = os.environ.get("XLA_FLAGS")
+    threads_before = _thread_count()
+
     try:
         engine = _load_engine(args.engine)
     except Exception as exc:
@@ -100,6 +131,8 @@ def main() -> None:
                           "engine": args.engine, "threads": args.threads,
                           "M": args.M, "regime": args.regime}))
         sys.exit(1)
+
+    threads_after_load = _thread_count()
 
     runner = BenchmarkRunner(
         engine,
@@ -113,6 +146,9 @@ def main() -> None:
                           "engine": args.engine, "threads": args.threads,
                           "M": args.M, "regime": args.regime}))
         sys.exit(1)
+
+    threads_after_run = _thread_count()
+    threads_max = max(threads_before, threads_after_load, threads_after_run)
 
     mean_ms    = res.mean_runtime * 1000
     std_ms     = res.std_runtime  * 1000
@@ -144,6 +180,13 @@ def main() -> None:
         language=language,
         backend=backend,
         num_threads=args.threads,
+        requested_threads=args.threads,
+        observed_threads_before_engine_load=threads_before,
+        observed_threads_after_engine_load=threads_after_load,
+        observed_threads_after_run=threads_after_run,
+        observed_threads_max=threads_max,
+        env_omp_num_threads=env_omp,
+        env_xla_flags=env_xla,
         cpu_model=env.get("cpu_model"),
         cpu_architecture=env.get("cpu_architecture"),
         cpu_count=env.get("cpu_count"),
@@ -168,6 +211,14 @@ def main() -> None:
         "price":          round(price, 8),
         "rel_err":        round(rel_err, 8) if rel_err is not None else None,
         "memory_peak_mb": round(res.memory_peak_mb, 2),
+        # Thread diagnostics
+        "requested_threads":                   args.threads,
+        "observed_threads_before_engine_load": threads_before,
+        "observed_threads_after_engine_load":  threads_after_load,
+        "observed_threads_after_run":          threads_after_run,
+        "observed_threads_max":                threads_max,
+        "env_omp_num_threads":                 env_omp,
+        "env_xla_flags":                       env_xla,
     }))
 
 

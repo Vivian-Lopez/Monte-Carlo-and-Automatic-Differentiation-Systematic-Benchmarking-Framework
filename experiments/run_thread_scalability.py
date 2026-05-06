@@ -24,8 +24,14 @@ fixed on the first parallel region entry.
 
 This orchestrator therefore launches a fresh Python subprocess for every
 (engine, thread_count, M, regime) cell, setting the correct environment
-variables before the process starts.  This guarantees each cell sees the
-intended thread count.
+variables before the process starts.  This guarantees each cell starts
+with a clean process and the requested environment.
+
+For C++/OpenMP, OMP_NUM_THREADS reliably controls the thread pool.
+For JAX/XLA, subprocess isolation guarantees a clean runtime and the
+requested environment, but exact CPU worker thread control is
+runtime-dependent.  Each cell records observed OS thread counts (via
+psutil) for honest post-hoc interpretation.
 
 Usage
 -----
@@ -76,10 +82,15 @@ def _build_env(n_threads: int, engine: str) -> dict[str, str]:
     was removed in XLA ≥ 0.4.x (JAX 0.4+).  In JAX 0.9.x, XLA's internal
     CPU thread pool no longer has a public XLA_FLAGS knob.
 
-    For the JAX engine we still set ``OMP_NUM_THREADS`` because:
-      • XLA's Eigen thread pool on Linux falls back to the OpenMP thread count
-        if no other limit is configured.
-      • It keeps the environment consistent between engines.
+    For the JAX engine we still set ``OMP_NUM_THREADS`` because it may
+    influence XLA's internal thread scheduling on some platforms, and it
+    keeps the environment consistent between engines.
+
+    For JAX/XLA, subprocess isolation guarantees a clean runtime and the
+    requested environment, but exact CPU worker thread control is
+    runtime-dependent.  Observed OS thread counts (recorded per cell via
+    psutil) are needed for honest interpretation of JAX thread-scaling
+    results.
     """
     env = os.environ.copy()
 
@@ -253,6 +264,41 @@ def _print_speedup(strong_rows: list[dict], engines: list[str],
             print(row_s)
 
 
+def _print_diag_table(rows: list[dict]) -> None:
+    """Print per-cell OS thread diagnostics for result interpretation."""
+    diag_rows = [r for r in rows if "observed_threads_max" in r]
+    if not diag_rows:
+        return
+    print("\n  Thread diagnostics")
+    print("  Note: For C++/OpenMP, T_env (OMP_NUM_THREADS) is the reliable control.")
+    print("        For JAX/XLA, Obs_run shows OS threads after first computation.")
+    print("        A match between T_req and Obs_max does NOT guarantee XLA used")
+    print("        exactly that many compute threads \u2014 it reflects the process pool.")
+    print("  " + "-" * 90)
+    hdr = (
+        f"  {'Engine':<8}  {'Regime':<8}  {'T_req':>5}  {'T_env':>5}  "
+        f"{'Obs_bef':>7}  {'Obs_ld':>6}  {'Obs_run':>7}  {'Obs_max':>7}  "
+        f"XLA_FLAGS"
+    )
+    print(hdr)
+    print("  " + "-" * 90)
+    for r in diag_rows:
+        xla = r.get("env_xla_flags") or "-"
+        if len(xla) > 35:
+            xla = xla[:32] + "..."
+        t_env = r.get("env_omp_num_threads") or "-"
+        print(
+            f"  {r['engine']:<8}  {r.get('regime', '?'):<8}  "
+            f"{r.get('requested_threads', r['threads']):>5}  "
+            f"{t_env:>5}  "
+            f"{r.get('observed_threads_before_engine_load', -1):>7}  "
+            f"{r.get('observed_threads_after_engine_load', -1):>6}  "
+            f"{r.get('observed_threads_after_run', -1):>7}  "
+            f"{r.get('observed_threads_max', -1):>7}  "
+            f"{xla}"
+        )
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -300,7 +346,13 @@ def main() -> None:
     print("=" * 80)
     print("  Thread-Scalability Benchmark")
     print("=" * 80)
-    print(f"  Physical cores : {n_cpus}")
+    try:
+        import psutil as _psutil
+        n_physical = _psutil.cpu_count(logical=False) or "unknown"
+    except Exception:
+        n_physical = "unknown"
+    print(f"  Logical CPUs   : {n_cpus}")
+    print(f"  Physical cores : {n_physical}")
     print(f"  Thread sweep   : {thread_counts}")
     print(f"  Engines        : {args.engines}")
     if not args.no_strong_scaling:
@@ -364,18 +416,53 @@ def main() -> None:
     if strong_rows and not args.no_strong_scaling:
         _print_speedup(strong_rows, args.engines, thread_counts)
 
+    # Thread diagnostics table (all cells, both regimes)
+    _print_diag_table(strong_rows + weak_rows)
+
     from benchmarking.storage.database import BenchmarkDB
     db = BenchmarkDB()
     print()
     print(f"  Results stored in : {db.db_path}")
     print(f"  Experiment ID     : {experiment_id}")
     print()
-    print("  Query strong-scaling results:")
-    print("    sqlite3 results/benchmarks.db \\")
-    print("      \"SELECT engine, num_threads, mean_runtime_ms,")
-    print("              throughput_paths_per_sec")
-    print(f"       FROM runs WHERE experiment_type='thread_scalability_strong'")
-    print("       ORDER BY engine, num_threads;\"")
+    print("  ── Performance query (strong scaling) ────────────────────────────────────────")
+    print(f'  sqlite3 results/benchmarks.db "')
+    print(f"    SELECT engine, num_threads, mean_runtime_ms,")
+    print(f"           throughput_paths_per_sec, rel_price_error")
+    print(f"    FROM runs")
+    print(f"    WHERE experiment_id='{experiment_id}'")
+    print(f"      AND experiment_type='thread_scalability_strong'")
+    print(f'    ORDER BY engine, num_threads;"')
+    print()
+    print("  ── Thread diagnostics query ──────────────────────────────────────────────────")
+    print(f'  sqlite3 results/benchmarks.db "')
+    print(f"    SELECT experiment_type, engine, num_threads,")
+    print(f"           requested_threads, env_omp_num_threads,")
+    print(f"           observed_threads_before_engine_load,")
+    print(f"           observed_threads_after_engine_load,")
+    print(f"           observed_threads_after_run,")
+    print(f"           observed_threads_max,")
+    print(f"           env_xla_flags,")
+    print(f"           mean_runtime_ms, throughput_paths_per_sec")
+    print(f"    FROM runs")
+    print(f"    WHERE experiment_id='{experiment_id}'")
+    print(f'    ORDER BY experiment_type, engine, num_threads;"')
+    print()
+    print("  ── Correctness check query ───────────────────────────────────────────────────")
+    print(f'  sqlite3 results/benchmarks.db "')
+    print(f"    SELECT engine, num_threads,")
+    print(f"           json_extract(config_json, '$.M') AS M,")
+    print(f"           requested_threads,")
+    print(f"           env_omp_num_threads,")
+    print(f"           observed_threads_max,")
+    print(f"           round(rel_price_error * 100, 4)              AS rel_err_pct,")
+    print(f"           round(mean_runtime_ms, 3)                    AS mean_ms,")
+    print(f"           round(json_extract(config_json, '$.M')")
+    print(f"                 / (mean_runtime_ms / 1000.0))          AS implied_paths_s,")
+    print(f"           round(throughput_paths_per_sec)              AS recorded_paths_s")
+    print(f"    FROM runs")
+    print(f"    WHERE experiment_id='{experiment_id}'")
+    print(f'    ORDER BY engine, num_threads;"')
     print()
 
 
