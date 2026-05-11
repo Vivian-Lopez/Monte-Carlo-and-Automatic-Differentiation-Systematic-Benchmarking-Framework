@@ -25,11 +25,58 @@ import functools
 import jax
 import jax.numpy as jnp
 import numpy as np
-from typing import Callable, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 from benchmarking.core.config import (
-    WorkloadConfig, EuropeanOptionConfig,
+    WorkloadConfig, EuropeanOptionConfig, EuropeanLocalVolConfig,
 )
 from benchmarking.core.engine import MonteCarloEngine, ADMode
+
+
+# ---------------------------------------------------------------------------
+# Module-level JIT kernel for European local vol option.
+# Z has shape (N, M); theta components are scalar inputs so JAX can
+# differentiate through them.  option_type is static.
+# ---------------------------------------------------------------------------
+
+@functools.partial(jax.jit, static_argnames=("option_type", "N"))
+def _european_lv_kernel_jit(
+    S0:        float,
+    K:         float,
+    r:         float,
+    T:         float,
+    sigma_min: float,
+    a0:        float,
+    a1:        float,
+    a2:        float,
+    b1:        float,
+    Z:         jnp.ndarray,   # shape (N, M)
+    N:         int,
+    option_type: str = "call",
+) -> jnp.ndarray:
+    """JIT-compiled log-Euler MC under 4-parameter local vol.
+
+    theta = [a0, a1, a2, b1] is unpacked to individual scalars so that
+    jax.grad / jax.jvp can differentiate w.r.t. each component.
+    """
+    dt      = T / N
+    sqrt_dt = jnp.sqrt(dt)
+
+    def step(S, z_and_t):
+        z, t_n = z_and_t
+        x       = jnp.log(S / S0)
+        raw     = a0 + a1 * x + a2 * x ** 2 + b1 * t_n
+        sigma_n = sigma_min + jnp.maximum(raw, 0.0) + jnp.log1p(jnp.exp(-jnp.abs(raw)))
+        S_next  = S * jnp.exp((r - 0.5 * sigma_n ** 2) * dt + sigma_n * sqrt_dt * z)
+        return S_next, None
+
+    t_grid = jnp.arange(N, dtype=jnp.float64) * dt   # shape (N,)
+    S_T, _ = jax.lax.scan(step, jnp.full((Z.shape[1],), S0), (Z, t_grid))
+
+    if option_type == "call":
+        payoff = jnp.maximum(S_T - K, 0.0)
+    else:
+        payoff = jnp.maximum(K - S_T, 0.0)
+    return jnp.exp(-r * T) * jnp.mean(payoff)
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +113,7 @@ class JAXMonteCarloEngine(MonteCarloEngine):
     Greeks computed are Delta (dP/dS0), Vega (dP/dσ), and Rho (dP/dr).
     """
 
-    SUPPORTED = {"european"}
+    SUPPORTED = {"european", "european_local_vol"}
 
     def supports(self, workload_type: str) -> bool:
         return workload_type in self.SUPPORTED
@@ -77,6 +124,8 @@ class JAXMonteCarloEngine(MonteCarloEngine):
     def run(self, config: WorkloadConfig, ad_mode: ADMode = "none") -> Tuple[float, Optional[dict]]:
         if config.workload_type == "european":
             return self._run_european(config, ad_mode)
+        elif config.workload_type == "european_local_vol":
+            return self._run_european_local_vol(config, ad_mode)
         else:
             raise NotImplementedError(f"JAXMonteCarloEngine does not support '{config.workload_type}'")
 
@@ -115,6 +164,68 @@ class JAXMonteCarloEngine(MonteCarloEngine):
             _, d_r   = jax.jvp(price_fn, primals, (0.0, 1.0, 0.0))
             _, d_sig = jax.jvp(price_fn, primals, (0.0, 0.0, 1.0))
         return {"delta": float(d_S0), "rho": float(d_r), "vega": float(d_sig)}
+
+    # ------------------------------------------------------------------
+    # European local vol
+    # ------------------------------------------------------------------
+
+    def _run_european_local_vol(
+        self, config: EuropeanLocalVolConfig, ad_mode: str
+    ) -> Tuple[float, Optional[dict]]:
+        key = jax.random.PRNGKey(int(config.seed))
+        N   = int(config.N)
+        M   = int(config.M)
+        Z   = jax.random.normal(key, shape=(N, M), dtype=jnp.float64)  # (N, M)
+
+        S0, K, r, T       = float(config.S0), float(config.K), float(config.r), float(config.T)
+        sigma_min         = float(config.sigma_min)
+        a0, a1, a2, b1    = [float(v) for v in config.theta]
+        opt               = config.option_type
+
+        def price_fn(
+            S0_: float, a0_: float, a1_: float, a2_: float,
+            b1_: float, sigma_min_: float,
+        ) -> jnp.ndarray:
+            return _european_lv_kernel_jit(
+                S0_, K, r, T, sigma_min_, a0_, a1_, a2_, b1_, Z, N, opt
+            )
+
+        price = float(jax.block_until_ready(
+            price_fn(S0, a0, a1, a2, b1, sigma_min)
+        ))
+
+        greeks = None
+        if ad_mode != "none":
+            greeks = self._compute_lv_greeks(
+                price_fn, S0, a0, a1, a2, b1, sigma_min, ad_mode
+            )
+        return (price, greeks)
+
+    @staticmethod
+    def _compute_lv_greeks(
+        price_fn: Callable,
+        S0: float,
+        a0: float, a1: float, a2: float, b1: float,
+        sigma_min: float,
+        ad_mode: str,
+    ) -> dict:
+        """Differentiate price w.r.t. S0 and theta = [a0, a1, a2, b1] and sigma_min."""
+        argnums = (0, 1, 2, 3, 4, 5)   # S0, a0, a1, a2, b1, sigma_min
+        primals = (S0, a0, a1, a2, b1, sigma_min)
+
+        if ad_mode == "reverse":
+            grad_fn = jax.grad(price_fn, argnums=argnums)
+            grads   = grad_fn(*primals)
+        else:  # forward
+            n = len(primals)
+            grads = []
+            for i in range(n):
+                tangent = tuple(1.0 if j == i else 0.0 for j in range(n))
+                _, g = jax.jvp(price_fn, primals, tangent)
+                grads.append(g)
+
+        keys = ("delta", "d_a0", "d_a1", "d_a2", "d_b1", "d_sigma_min")
+        return {k: float(v) for k, v in zip(keys, grads)}
 
     # ------------------------------------------------------------------
     # European

@@ -2,9 +2,9 @@ import math
 import random
 import numpy as np
 from scipy.stats import norm
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from benchmarking.core.config import (
-    WorkloadConfig, EuropeanOptionConfig,
+    WorkloadConfig, EuropeanOptionConfig, EuropeanLocalVolConfig,
 )
 from benchmarking.core.engine import MonteCarloEngine, ADMode
 
@@ -17,7 +17,7 @@ class CPUMonteCarloEngine(MonteCarloEngine):
     workload only requires adding a new _price_<type> method here.
     """
 
-    SUPPORTED = {"european"}
+    SUPPORTED = {"european", "european_local_vol"}
 
     def supports(self, workload_type: str) -> bool:
         return workload_type in self.SUPPORTED
@@ -33,6 +33,14 @@ class CPUMonteCarloEngine(MonteCarloEngine):
             )
         if config.workload_type == "european":
             return (self._price_european(config), None)
+        elif config.workload_type == "european_local_vol":
+            price = price_european_local_vol(
+                S0=config.S0, K=config.K, r=config.r, T=config.T,
+                M=config.M, N=config.N, sigma_min=config.sigma_min,
+                theta=config.theta, option_type=config.option_type,
+                seed=config.seed,
+            )
+            return (price, None)
         else:
             raise NotImplementedError(f"CPUMonteCarloEngine does not support workload '{config.workload_type}'")
 
@@ -125,3 +133,141 @@ def european_analytical_greeks(config: EuropeanOptionConfig) -> dict:
 def monte_carlo_european_call(config: EuropeanOptionConfig, ad_mode: str = "none") -> float:
     price, _ = CPUMonteCarloEngine().run(config, ad_mode)
     return price
+
+
+# ===========================================================================
+# Numerically stable softplus
+# ===========================================================================
+
+def softplus_np(z: np.ndarray) -> np.ndarray:
+    """Element-wise softplus: log(1 + exp(z)), numerically stable.
+
+    Uses: max(z, 0) + log1p(exp(-|z|))
+    This avoids overflow for large positive z and catastrophic cancellation
+    for large negative z.
+    """
+    return np.maximum(z, 0.0) + np.log1p(np.exp(-np.abs(z)))
+
+
+# ===========================================================================
+# 4-parameter local volatility surface
+# ===========================================================================
+
+def local_vol(
+    S: np.ndarray,
+    t: float,
+    S0: float,
+    sigma_min: float,
+    theta: List[float],
+) -> np.ndarray:
+    """
+    Evaluate the 4-parameter local volatility sigma(S, t; theta).
+
+        x   = log(S / S0)
+        raw = a0 + a1*x + a2*x^2 + b1*t
+        sigma = sigma_min + softplus(raw)
+
+    Parameters
+    ----------
+    S        : current asset prices, shape (M,)
+    t        : current time (years)
+    S0       : initial asset price (used to normalise moneyness x)
+    sigma_min: volatility floor (ensures sigma > sigma_min > 0)
+    theta    : [a0, a1, a2, b1]
+
+    Returns
+    -------
+    sigma : shape (M,), dtype float64
+    """
+    a0, a1, a2, b1 = theta
+    x = np.log(S / S0)
+    raw = a0 + a1 * x + a2 * (x ** 2) + b1 * t
+    return sigma_min + softplus_np(raw)
+
+
+# ===========================================================================
+# Core pricing function — European option under local vol
+# ===========================================================================
+
+def price_european_local_vol(
+    S0:          float,
+    K:           float,
+    r:           float,
+    T:           float,
+    M:           int,
+    N:           int,
+    sigma_min:   float,
+    theta:       List[float],
+    option_type: str   = "call",
+    seed:        int   = 42,
+) -> float:
+    """
+    Price a European option under a 4-parameter parametric local volatility
+    model using log-Euler Monte Carlo discretisation.
+
+    Dynamics:
+        dS = r S dt + sigma(S, t; theta) S dW
+
+    Log-Euler step:
+        S_{n+1} = S_n * exp((r - 0.5*sigma_n^2)*dt + sigma_n*sqrt(dt)*Z_n)
+
+    Returns the discounted expected payoff as a float, consistent with the
+    MonteCarloEngine.run() contract.  BenchmarkRunner owns timing and SE.
+    """
+    dt      = T / N
+    sqrt_dt = math.sqrt(dt)
+
+    rng = np.random.default_rng(seed)
+    Z   = rng.standard_normal((N, M))          # shape (N, M), float64
+
+    S = np.full(M, S0, dtype=np.float64)
+
+    for n in range(N):
+        t_n     = n * dt
+        sigma_n = local_vol(S, t_n, S0, sigma_min, theta)
+        S       = S * np.exp(
+            (r - 0.5 * sigma_n ** 2) * dt + sigma_n * sqrt_dt * Z[n]
+        )
+
+    if option_type == "call":
+        payoff = np.maximum(S - K, 0.0)
+    else:
+        payoff = np.maximum(K - S, 0.0)
+
+    disc = math.exp(-r * T)
+    return float(disc * payoff.mean())
+
+
+# ===========================================================================
+# Constant-vol Black-Scholes validation helper
+# ===========================================================================
+
+def black_scholes_local_vol_constant(
+    S0:        float,
+    K:         float,
+    r:         float,
+    T:         float,
+    sigma_min: float,
+    a0:        float,
+    option_type: str = "call",
+) -> float:
+    """
+    Black-Scholes price for the constant-vol case of the local vol model.
+
+    When a1 = a2 = b1 = 0, sigma is spatially and temporally flat:
+        sigma = sigma_min + softplus(a0)
+
+    This is used as a sanity check: the MC price should converge to this
+    value as M increases.
+    """
+    sigma_const = sigma_min + (max(a0, 0.0) + math.log1p(math.exp(-abs(a0))))
+
+    sqrt_T = math.sqrt(T)
+    d1 = (math.log(S0 / K) + (r + 0.5 * sigma_const ** 2) * T) / (sigma_const * sqrt_T)
+    d2 = d1 - sigma_const * sqrt_T
+    disc = math.exp(-r * T)
+
+    if option_type == "call":
+        return S0 * norm.cdf(d1) - K * disc * norm.cdf(d2)
+    else:
+        return K * disc * norm.cdf(-d2) - S0 * norm.cdf(-d1)

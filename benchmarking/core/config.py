@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, asdict
-from typing import Any, ClassVar, Dict, Type
+import math
+from dataclasses import dataclass, asdict, field
+from typing import Any, ClassVar, Dict, List, Optional, Type
 
 
 WORKLOAD_REGISTRY: Dict[str, Type["WorkloadConfig"]] = {}
@@ -87,6 +88,29 @@ class EuropeanOptionConfig(WorkloadConfig):
     N:           int   = 1
     M:           int   = 10000
     seed:        int   = 42
+
+
+@workload(name="european_local_vol")
+class EuropeanLocalVolConfig(WorkloadConfig):
+    """European call/put under a 4-parameter parametric local volatility model."""
+
+    S0:          float                = 100.0
+    K:           float                = 100.0
+    r:           float                = 0.05
+    T:           float                = 1.0
+    M:           int                  = 100_000
+    N:           int                  = 252
+    sigma_min:   float                = 0.01
+    theta:       Optional[List[float]] = None   # [a0, a1, a2, b1]
+    option_type: str                  = "call"
+    seed:        int                  = 42
+
+    def __post_init__(self) -> None:
+        # Compute default theta so that constant-vol sigma == 0.20:
+        #   sigma_min + softplus(a0) = 0.20  =>  a0 = log(expm1(0.20 - sigma_min))
+        if self.theta is None:
+            a0 = math.log(math.expm1(0.20 - self.sigma_min))
+            self.theta = [a0, -0.10, 0.20, 0.00]
 
 
 def config_from_dict(data: Dict[str, Any]) -> WorkloadConfig:

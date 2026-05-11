@@ -12,7 +12,9 @@ or:
 """
 
 from typing import Optional, Tuple
-from benchmarking.core.config import WorkloadConfig, EuropeanOptionConfig
+from benchmarking.core.config import (
+    WorkloadConfig, EuropeanOptionConfig, EuropeanLocalVolConfig,
+)
 from benchmarking.core.engine import MonteCarloEngine, ADMode
 
 
@@ -20,12 +22,12 @@ class CPPMonteCarloEngine(MonteCarloEngine):
     """
     OpenMP-parallelised C++ Monte Carlo engine.
 
-    Supported workloads: european only (call and put).
+    Supported workloads: european, european_local_vol.
     AD modes are not supported.
     """
 
     def supports(self, workload_type: str) -> bool:
-        return workload_type == "european"
+        return workload_type in {"european", "european_local_vol"}
 
     def supported_ad_modes(self) -> Tuple[ADMode, ...]:
         return ("none",)
@@ -35,29 +37,39 @@ class CPPMonteCarloEngine(MonteCarloEngine):
             raise NotImplementedError(
                 f"CPPMonteCarloEngine does not support ad_mode={ad_mode!r}."
             )
-        if not isinstance(config, EuropeanOptionConfig):
-            raise NotImplementedError(
-                f"CPPMonteCarloEngine only supports EuropeanOptionConfig, "
-                f"got {type(config).__name__}"
-            )
 
         try:
-            from cpp_mc import price_european  # type: ignore[import]
+            import cpp_mc  # type: ignore[import]
         except ImportError as exc:
             raise RuntimeError(
                 "cpp_mc extension not found. "
                 "Build it with: cd benchmarking/cpp && pip install -e . --no-build-isolation"
             ) from exc
 
-        is_call = 1 if config.option_type == "call" else 0
+        if config.workload_type == "european":
+            if not isinstance(config, EuropeanOptionConfig):
+                raise TypeError(f"Expected EuropeanOptionConfig, got {type(config).__name__}")
+            is_call = 1 if config.option_type == "call" else 0
+            price = cpp_mc.price_european(
+                config.S0, config.K, config.r, config.sigma,
+                config.T, config.M, config.seed, is_call,
+            )
 
-        return (price_european(
-            config.S0,
-            config.K,
-            config.r,
-            config.sigma,
-            config.T,
-            config.M,
-            config.seed,
-            is_call,
-        ), None)
+        elif config.workload_type == "european_local_vol":
+            if not isinstance(config, EuropeanLocalVolConfig):
+                raise TypeError(f"Expected EuropeanLocalVolConfig, got {type(config).__name__}")
+            is_call = 1 if config.option_type == "call" else 0
+            a0, a1, a2, b1 = config.theta
+            price = cpp_mc.price_european_local_vol(
+                config.S0, config.K, config.r, config.T,
+                config.M, config.N, config.sigma_min,
+                a0, a1, a2, b1,
+                config.seed, is_call,
+            )
+
+        else:
+            raise NotImplementedError(
+                f"CPPMonteCarloEngine does not support workload '{config.workload_type}'"
+            )
+
+        return (float(price), None)
