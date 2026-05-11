@@ -48,6 +48,14 @@ dist-ssr/
 # Environment variables
 .env
 .env.*
+
+# =========================
+# Rust (via PyO3 + maturin)
+# =========================
+target/
+Cargo.lock
+benchmarking/rust/target/
+benchmarking/rust/.cargo/
 !.env.example
 
 # =========================
