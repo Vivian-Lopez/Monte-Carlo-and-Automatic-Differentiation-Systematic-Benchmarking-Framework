@@ -9,12 +9,12 @@ A modular, extensible framework for systematically benchmarking Monte Carlo simu
 
 ## Research objectives
 
-- **Cross-engine comparison** — evaluate NumPy (CPU), JAX (XLA-compiled), and C++ (OpenMP) on identical workloads with identical seeds
+- **Cross-engine comparison** — evaluate NumPy (CPU), JAX (XLA-compiled), C++ (OpenMP), and Rust (Rayon) on identical workloads with identical seeds
 - **AD analysis** — measure the overhead of forward vs. reverse-mode AD and validate computed Greeks against Black-Scholes analytical solutions
 - **Scalability** — characterise throughput scaling as path count M grows from 1k to 100k
 - **Reproducibility** — every result is fully traceable: config hash, seed, engine version, platform metadata, and all timing samples are stored in SQLite
 
-Planned extensions: CPU architecture comparison (AMD vs Intel, SIMD backends), GPU/CUDA acceleration, Rust and Mojo implementations, cloud resource profiling on Google Cloud, and mixed-precision / operator-fusion techniques drawn from the ML community.
+Planned extensions: CPU architecture comparison (AMD vs Intel, SIMD backends), GPU/CUDA acceleration, Mojo implementations, cloud resource profiling on Google Cloud, and mixed-precision / operator-fusion techniques drawn from the ML community.
 
 ---
 
@@ -33,7 +33,17 @@ pip install -r requirements.txt
 ```bash
 pip install -e benchmarking/cpp/
 ```
-The C++ engine is silently skipped in all scripts if not built.
+
+**Optional — build the Rust (Rayon) engine:**
+```bash
+# Requires the Rust toolchain: https://rustup.rs
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+pip install maturin
+cd benchmarking/rust && maturin develop --release
+```
+
+Both native engines are silently skipped in all scripts if not built.
 
 ---
 
@@ -103,7 +113,19 @@ benchmarking/
 ├── workloads/
 │   ├── mc_cpu.py       ← NumPy engine + Black-Scholes analytical functions
 │   ├── mc_jax.py       ← JAX JIT engine + forward/reverse AD
-│   └── mc_cpp.py       ← C++ OpenMP engine (via pybind11)
+│   ├── mc_cpp.py       ← C++ OpenMP engine (via pybind11)
+│   └── mc_rust.py      ← Rust Rayon engine (via PyO3 + maturin)
+├── cpp/                ← C++ source + pybind11 bindings
+│   ├── engine/
+│   │   ├── cpu_engine.hpp
+│   │   └── cpu_engine.cpp
+│   ├── bindings/
+│   │   └── pybind_module.cpp
+│   └── setup.py
+├── rust/               ← Rust crate source
+│   ├── Cargo.toml
+│   ├── pyproject.toml
+│   └── src/lib.rs
 ├── runner/
 │   └── runner.py       ← BenchmarkRunner: warmup, timed loop, env capture
 ├── storage/
@@ -127,53 +149,79 @@ results/
 
 ---
 
-## Current workload: European option
+## Workloads
 
-The sole active workload is a plain vanilla European call or put under Geometric Brownian Motion (GBM). It serves as the reference workload for all engine and AD comparisons, with Black-Scholes providing an exact analytical benchmark.
+### 1. European option (GBM)
 
-### Pricing model
+Plain vanilla European call or put under Geometric Brownian Motion. Serves as the reference workload for all engine and AD comparisons, with Black-Scholes providing an exact analytical benchmark.
 
 $$S_T = S_0 \exp\!\left[\left(r - \tfrac{1}{2}\sigma^2\right)T + \sigma\sqrt{T}\,Z\right], \quad Z \sim \mathcal{N}(0,1)$$
 
-$$P = e^{-rT}\,\mathbb{E}\!\left[\max(S_T - K,\, 0)\right]$$
-
-Single-step exact simulation (no Euler discretisation). `N` time steps is exposed as a config field for future path-dependent extensions; it defaults to 1.
-
-### Configuration
+Single-step exact simulation. `N` defaults to 1.
 
 ```python
 from benchmarking.core.config import EuropeanOptionConfig
 
 config = EuropeanOptionConfig(
-    S0=100.0,        # initial spot price
-    K=100.0,         # strike
-    r=0.05,          # continuously-compounded risk-free rate
-    sigma=0.20,      # annualised volatility
-    T=1.0,           # time to maturity in years
-    option_type="call",  # "call" or "put"
-    M=10000,         # number of Monte Carlo paths
-    seed=42,         # RNG seed — fixes random paths for reproducibility
+    S0=100.0, K=100.0, r=0.05, sigma=0.20,
+    T=1.0, option_type="call", M=10_000, seed=42,
 )
 ```
 
-All fields have defaults; `EuropeanOptionConfig()` with no arguments is valid.
+### 2. European option — local volatility
 
-### Engines
+European call or put under a 4-parameter parametric local volatility model, simulated with log-Euler discretisation over `N` time steps. The primary workload for AD benchmarking and Greek computation.
 
-| Engine | Key | AD modes | Notes |
-|---|---|---|---|
-| NumPy (CPU) | `cpu` | `none` | Reference; uses `np.random.default_rng(seed)` |
-| JAX (XLA) | `jax` | `none`, `forward`, `reverse` | Module-level `@jax.jit` kernel; warmup excludes XLA compile time |
-| C++ OpenMP | `cpp` | `none` | pybind11 binding; build separately |
+**Dynamics:**
 
-### Greeks (JAX engine)
+$$dS_t = r\,S_t\,dt + \sigma(S_t, t;\theta)\,S_t\,dW_t$$
 
-The JAX engine computes Delta (∂P/∂S₀), Vega (∂P/∂σ), and Rho (∂P/∂r):
+**Log-Euler step:**
 
-- **Reverse mode** — one `jax.grad(argnums=(0,1,2))` call; single backward pass returning all three partials simultaneously
-- **Forward mode** — three `jax.jvp` calls, one per parameter
+$$S_{n+1} = S_n \exp\!\left[\left(r - \tfrac{1}{2}\sigma_n^2\right)\Delta t + \sigma_n\sqrt{\Delta t}\,Z_n\right]$$
 
-Both are validated against Black-Scholes analytical Greeks. Relative errors are stored in the DB for every run.
+**Local volatility surface:**
+
+$$x_n = \ln(S_n/S_0), \qquad \text{raw}_n = a_0 + a_1 x_n + a_2 x_n^2 + b_1 t_n$$
+
+$$\sigma_n = \sigma_{\min} + \operatorname{softplus}(\text{raw}_n), \qquad \operatorname{softplus}(z) = \max(z,0) + \ln(1+e^{-|z|})$$
+
+```python
+from benchmarking.core.config import EuropeanLocalVolConfig
+
+config = EuropeanLocalVolConfig(
+    S0=100.0, K=100.0, r=0.05, T=1.0,
+    M=100_000, N=252,
+    sigma_min=0.01,
+    theta=[-1.564, -0.10, 0.20, 0.00],  # [a0, a1, a2, b1]
+    option_type="call",
+    seed=42,
+)
+```
+
+Default `theta` is set automatically so that `sigma_min + softplus(a0) = 0.20` (20% flat vol). When `a1 = a2 = b1 = 0` the model reduces to constant GBM and the MC price converges to Black-Scholes.
+
+**AD targets (JAX engine):** Delta (∂P/∂S₀), and all four theta sensitivities (∂P/∂a₀, ∂P/∂a₁, ∂P/∂a₂, ∂P/∂b₁), and ∂P/∂σ_min.
+
+---
+
+## Engines
+
+| Engine | Key | Workloads | AD modes | Parallelism | Notes |
+|---|---|---|---|---|---|
+| NumPy (CPU) | `cpu` | `european`, `european_local_vol` | `none` | single-threaded | Reference; `np.random.default_rng(seed)` |
+| JAX (XLA) | `jax` | `european`, `european_local_vol` | `none`, `forward`, `reverse` | XLA-compiled | `@jax.jit` + `jax.lax.scan`; warmup excludes compile time |
+| C++ OpenMP | `cpp` | `european`, `european_local_vol` | `none` | OpenMP threads | pybind11; build with `pip install -e benchmarking/cpp/` |
+| Rust (Rayon) | `rust` | `european`, `european_local_vol` | `none` | Rayon thread pool | PyO3; build with `maturin develop --release` |
+
+### Greeks — JAX engine
+
+For `european` (GBM): Delta (∂P/∂S₀), Vega (∂P/∂σ), Rho (∂P/∂r), validated against Black-Scholes.
+
+For `european_local_vol`: Delta (∂P/∂S₀) and the full theta gradient (∂P/∂a₀, ∂P/∂a₁, ∂P/∂a₂, ∂P/∂b₁, ∂P/∂σ_min), computed in a single pass.
+
+- **Reverse mode** — one `jax.grad` call returning all partials simultaneously
+- **Forward mode** — one `jax.jvp` call per input direction
 
 ---
 
