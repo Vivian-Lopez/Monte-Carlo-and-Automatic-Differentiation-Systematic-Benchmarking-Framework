@@ -61,6 +61,9 @@ from typing import Optional
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+from benchmarking.cloud.metadata import get_instance_metadata
+from benchmarking.cloud.pricing import get_hourly_rate
+
 CELL_SCRIPT  = Path(__file__).parent / "run_thread_cell.py"
 DEFAULT_THREADS    = [1, 2, 4]
 DEFAULT_STRONG_M   = [50_000]
@@ -143,6 +146,15 @@ def _run_cell(
     ]
     if oversubscribed:
         cmd.append("--oversubscribed")
+    # Forward cloud metadata to cell
+    if getattr(args, "instance_type", None):
+        cmd += ["--instance-type", args.instance_type]
+    if getattr(args, "cloud_provider", None):
+        cmd += ["--cloud-provider", args.cloud_provider]
+    if getattr(args, "hourly_rate", None) is not None:
+        cmd += ["--hourly-rate", str(args.hourly_rate)]
+    if getattr(args, "gcp_api_key", None):
+        cmd += ["--gcp-api-key", args.gcp_api_key]
 
     env = _build_env(n_threads, engine)
 
@@ -328,7 +340,24 @@ def main() -> None:
                         help=f"Per-thread M for weak scaling (default: {DEFAULT_WEAK_BASE})")
     parser.add_argument("--no-strong-scaling", action="store_true")
     parser.add_argument("--no-weak-scaling",   action="store_true")
+    parser.add_argument("--instance-type",  default=None, help="GCP machine type (auto-detected on GCP VMs)")
+    parser.add_argument("--cloud-provider", default=None, help="Cloud provider name, e.g. 'gcp'")
+    parser.add_argument("--hourly-rate",    type=float, default=None, help="Instance hourly rate USD")
+    parser.add_argument("--gcp-api-key",    default=None, help="GCP API key for Billing Catalog")
     args = parser.parse_args()
+
+    _cloud_meta  = get_instance_metadata()
+    # Resolve instance metadata once; cell scripts receive it via CLI args
+    if not args.instance_type:
+        args.instance_type = _cloud_meta.get("instance_type")
+    if not args.cloud_provider:
+        args.cloud_provider = _cloud_meta.get("cloud_provider")
+    if args.hourly_rate is None and args.instance_type:
+        _zone   = _cloud_meta.get("zone") or ""
+        _region = "-".join(_zone.split("-")[:2]) if _zone else "us-central1"
+        args.hourly_rate = get_hourly_rate(
+            args.instance_type, region=_region, api_key=args.gcp_api_key
+        )
 
     thread_counts = sorted(set(args.threads))
 

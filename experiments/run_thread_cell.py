@@ -49,6 +49,8 @@ except ImportError as _e:
         f"Original error: {_e}"
     ) from _e
 
+from benchmarking.cloud.pricing import compute_cost_per_run
+
 # ---------------------------------------------------------------------------
 # These imports happen AFTER the parent has set env vars, ensuring
 # OMP_NUM_THREADS and related variables are visible at process start.
@@ -102,6 +104,10 @@ def main() -> None:
     parser.add_argument("--warmup",        type=int, default=2)
     parser.add_argument("--oversubscribed", action="store_true",
                         help="Flag this cell as an oversubscription run")
+    parser.add_argument("--instance-type",  default=None)
+    parser.add_argument("--cloud-provider", default=None)
+    parser.add_argument("--hourly-rate",    type=float, default=None)
+    parser.add_argument("--gcp-api-key",    default=None)
     args = parser.parse_args()
 
     config = EuropeanOptionConfig(
@@ -160,6 +166,10 @@ def main() -> None:
     env        = res.metadata
 
     db = BenchmarkDB()
+    _cost = (
+        compute_cost_per_run(mean_ms, args.hourly_rate)
+        if args.hourly_rate is not None else None
+    )
     db.store_run_full(
         config_dict=config.to_dict(),
         engine=args.engine,
@@ -187,6 +197,9 @@ def main() -> None:
         observed_threads_max=threads_max,
         env_omp_num_threads=env_omp,
         env_xla_flags=env_xla,
+        cloud_provider=args.cloud_provider,
+        instance_type=args.instance_type,
+        cost_per_run=_cost,
         cpu_model=env.get("cpu_model"),
         cpu_architecture=env.get("cpu_architecture"),
         cpu_count=env.get("cpu_count"),

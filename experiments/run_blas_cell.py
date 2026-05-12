@@ -35,6 +35,8 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+from benchmarking.cloud.pricing import compute_cost_per_run
+
 
 # ---------------------------------------------------------------------------
 # BLAS detection — must succeed before any timing
@@ -127,6 +129,10 @@ def main() -> None:
     parser.add_argument("--experiment-id", required=True)
     parser.add_argument("--runs",          type=int, default=7)
     parser.add_argument("--warmup",        type=int, default=2)
+    parser.add_argument("--instance-type",  default=None)
+    parser.add_argument("--cloud-provider", default=None)
+    parser.add_argument("--hourly-rate",    type=float, default=None)
+    parser.add_argument("--gcp-api-key",    default=None)
     args = parser.parse_args()
 
     # ------------------------------------------------------------------
@@ -189,6 +195,11 @@ def main() -> None:
     import numpy as np
     numpy_version = np.__version__
 
+    _cost = (
+        compute_cost_per_run(mean_ms, args.hourly_rate)
+        if args.hourly_rate is not None else None
+    )
+
     db = BenchmarkDB()
     run_id = db.store_run_full(
         config_dict=config.to_dict(),
@@ -215,6 +226,9 @@ def main() -> None:
         num_threads=1,
         blas_backend=blas_name,
         vectorization_flag=vec_flag,
+        cloud_provider=args.cloud_provider,
+        instance_type=args.instance_type,
+        cost_per_run=_cost,
         cpu_model=env.get("cpu_model"),
         cpu_architecture=env.get("cpu_architecture"),
         cpu_count=env.get("cpu_count"),

@@ -15,5 +15,8 @@ pytest>=8.0
 # Process/thread diagnostics
 psutil>=5.9
 
+# HTTP client (used by cloud pricing / metadata utilities)
+requests>=2.31
+
 # Optional C++ build support (only needed if building benchmarking/cpp)
 pybind11>=2.11

@@ -20,6 +20,9 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
+from benchmarking.cloud.metadata import get_instance_metadata
+from benchmarking.cloud.pricing import get_hourly_rate, compute_cost_per_run
+
 from benchmarking.core.config import EuropeanOptionConfig
 from benchmarking.runner.runner import BenchmarkRunner
 from benchmarking.storage.database import BenchmarkDB
@@ -74,7 +77,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="European option baseline benchmark")
     parser.add_argument("--runs",   type=int, default=NUM_RUNS,   help="Timed repetitions (default: %(default)s)")
     parser.add_argument("--warmup", type=int, default=NUM_WARMUP, help="Warmup runs (default: %(default)s)")
+    parser.add_argument("--instance-type",  default=None, help="GCP machine type (auto-detected on GCP VMs)")
+    parser.add_argument("--cloud-provider", default=None, help="Cloud provider name, e.g. 'gcp'")
+    parser.add_argument("--hourly-rate",    type=float, default=None, help="Instance hourly rate USD")
+    parser.add_argument("--gcp-api-key",    default=None, help="GCP API key for Billing Catalog")
     args = parser.parse_args()
+
+    _cloud_meta   = get_instance_metadata()
+    _cloud_prov   = args.cloud_provider or _cloud_meta.get("cloud_provider")
+    _inst_type    = args.instance_type  or _cloud_meta.get("instance_type")
+    _zone         = _cloud_meta.get("zone") or ""
+    _region       = "-".join(_zone.split("-")[:2]) if _zone else "us-central1"
+    _hourly_rate  = args.hourly_rate if args.hourly_rate is not None else (
+        get_hourly_rate(_inst_type, region=_region, api_key=args.gcp_api_key)
+        if _inst_type else None
+    )
 
     db = BenchmarkDB()
     experiment_id = str(uuid.uuid4())
@@ -116,6 +133,11 @@ def main() -> None:
         language, backend = _ENGINE_META.get(eng_name, ("python", "cpu"))
         env = result.metadata
 
+        _cost = (
+            compute_cost_per_run(mean_ms, _hourly_rate)
+            if _hourly_rate is not None else None
+        )
+
         run_id = db.store_run_full(
             config_dict=CONFIG.to_dict(),
             engine=eng_name,
@@ -138,6 +160,9 @@ def main() -> None:
             memory_peak_mb=result.memory_peak_mb,
             language=language,
             backend=backend,
+            cloud_provider=_cloud_prov,
+            instance_type=_inst_type,
+            cost_per_run=_cost,
             cpu_model=env.get("cpu_model"),
             cpu_architecture=env.get("cpu_architecture"),
             cpu_count=env.get("cpu_count"),
