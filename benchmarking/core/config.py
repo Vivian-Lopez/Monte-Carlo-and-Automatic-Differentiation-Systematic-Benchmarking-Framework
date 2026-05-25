@@ -113,6 +113,21 @@ class EuropeanLocalVolConfig(WorkloadConfig):
             self.theta = [a0, -0.10, 0.20, 0.00]
 
 
+@workload(name="asian")
+class AsianOptionConfig(WorkloadConfig):
+    """Arithmetic-average Asian call/put under GBM (log-Euler, N steps)."""
+
+    S0:          float = 100.0
+    K:           float = 100.0
+    r:           float = 0.05
+    sigma:       float = 0.20
+    T:           float = 1.0
+    N:           int   = 252
+    M:           int   = 100_000
+    seed:        int   = 42
+    option_type: str   = "call"
+
+
 def config_from_dict(data: Dict[str, Any]) -> WorkloadConfig:
     """Deserialise a config dict to the correct WorkloadConfig subclass."""
     wtype = data.get("workload_type", "european")

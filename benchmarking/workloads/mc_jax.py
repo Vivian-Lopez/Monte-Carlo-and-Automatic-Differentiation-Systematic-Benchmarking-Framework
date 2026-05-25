@@ -23,11 +23,12 @@ three independent backward passes, tripling the AD cost.
 
 import functools
 import jax
+jax.config.update("jax_enable_x64", True)  # needed for float64 local-vol paths
 import jax.numpy as jnp
 import numpy as np
 from typing import Callable, List, Optional, Tuple
 from benchmarking.core.config import (
-    WorkloadConfig, EuropeanOptionConfig, EuropeanLocalVolConfig,
+    WorkloadConfig, EuropeanOptionConfig, EuropeanLocalVolConfig, AsianOptionConfig,
 )
 from benchmarking.core.engine import MonteCarloEngine, ADMode
 
@@ -113,7 +114,7 @@ class JAXMonteCarloEngine(MonteCarloEngine):
     Greeks computed are Delta (dP/dS0), Vega (dP/dσ), and Rho (dP/dr).
     """
 
-    SUPPORTED = {"european", "european_local_vol"}
+    SUPPORTED = {"european", "european_local_vol", "asian"}
 
     def supports(self, workload_type: str) -> bool:
         return workload_type in self.SUPPORTED
@@ -126,6 +127,8 @@ class JAXMonteCarloEngine(MonteCarloEngine):
             return self._run_european(config, ad_mode)
         elif config.workload_type == "european_local_vol":
             return self._run_european_local_vol(config, ad_mode)
+        elif config.workload_type == "asian":
+            return self._run_asian(config, ad_mode)
         else:
             raise NotImplementedError(f"JAXMonteCarloEngine does not support '{config.workload_type}'")
 
@@ -241,6 +244,39 @@ class JAXMonteCarloEngine(MonteCarloEngine):
         # JIT kernel so JAX reuses the compiled computation across timed runs.
         def price_fn(S0_: float, r_: float, sigma_: float) -> jnp.ndarray:
             return _european_kernel_jit(S0_, K, r_, sigma_, T, Z, opt)
+
+        price = float(jax.block_until_ready(price_fn(S0, r, sigma)))
+        greeks = self._compute_greeks(price_fn, S0, r, sigma, ad_mode) if ad_mode != "none" else None
+        return (price, greeks)
+
+    # ------------------------------------------------------------------
+    # Asian arithmetic-average option (GBM log-Euler, N steps)
+    # ------------------------------------------------------------------
+
+    def _run_asian(self, config: AsianOptionConfig, ad_mode: str) -> Tuple[float, Optional[dict]]:
+        key = jax.random.PRNGKey(int(config.seed))
+        N, M = int(config.N), int(config.M)
+        # Z shape: (N, M)
+        Z = jax.random.normal(key, shape=(N, M))
+        K, T, opt = float(config.K), float(config.T), config.option_type
+        S0, r, sigma = float(config.S0), float(config.r), float(config.sigma)
+
+        def price_fn(S0_: float, r_: float, sigma_: float) -> jnp.ndarray:
+            dt = T / N
+            log_drift = (r_ - 0.5 * sigma_ ** 2) * dt
+            log_vol   = sigma_ * jnp.sqrt(dt)
+            # scan over time steps: carry = log(S_t), accumulate path sum
+            def step(log_s, z):
+                log_s_next = log_s + log_drift + log_vol * z
+                return log_s_next, jnp.exp(log_s_next)
+            log_S0 = jnp.full((M,), jnp.log(S0_))
+            _, S_path = jax.lax.scan(step, log_S0, Z)  # S_path shape (N, M)
+            A = jnp.mean(S_path, axis=0)  # arithmetic average per path
+            if opt == "call":
+                payoff = jnp.maximum(A - K, 0.0)
+            else:
+                payoff = jnp.maximum(K - A, 0.0)
+            return jnp.exp(-r_ * T) * jnp.mean(payoff)
 
         price = float(jax.block_until_ready(price_fn(S0, r, sigma)))
         greeks = self._compute_greeks(price_fn, S0, r, sigma, ad_mode) if ad_mode != "none" else None

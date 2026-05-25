@@ -4,7 +4,7 @@ import numpy as np
 from scipy.stats import norm
 from typing import List, Optional, Tuple
 from benchmarking.core.config import (
-    WorkloadConfig, EuropeanOptionConfig, EuropeanLocalVolConfig,
+    WorkloadConfig, EuropeanOptionConfig, EuropeanLocalVolConfig, AsianOptionConfig,
 )
 from benchmarking.core.engine import MonteCarloEngine, ADMode
 
@@ -17,7 +17,7 @@ class CPUMonteCarloEngine(MonteCarloEngine):
     workload only requires adding a new _price_<type> method here.
     """
 
-    SUPPORTED = {"european", "european_local_vol"}
+    SUPPORTED = {"european", "european_local_vol", "asian"}
 
     def supports(self, workload_type: str) -> bool:
         return workload_type in self.SUPPORTED
@@ -41,6 +41,8 @@ class CPUMonteCarloEngine(MonteCarloEngine):
                 seed=config.seed,
             )
             return (price, None)
+        elif config.workload_type == "asian":
+            return (self._price_asian(config), None)
         else:
             raise NotImplementedError(f"CPUMonteCarloEngine does not support workload '{config.workload_type}'")
 
@@ -60,6 +62,27 @@ class CPUMonteCarloEngine(MonteCarloEngine):
         else:
             payoff = np.maximum(config.K - S_T, 0.0)
         return float(math.exp(-config.r * config.T) * payoff.mean())
+
+    # ------------------------------------------------------------------
+    # Asian arithmetic-average option (GBM log-Euler, N steps)
+    # ------------------------------------------------------------------
+
+    def _price_asian(self, config: AsianOptionConfig) -> float:
+        rng = np.random.default_rng(config.seed)
+        dt = config.T / config.N
+        # Z shape: (N, M) — each column is one path
+        Z = rng.standard_normal((config.N, config.M))
+        log_drift = (config.r - 0.5 * config.sigma ** 2) * dt
+        log_vol   = config.sigma * math.sqrt(dt)
+        log_S = np.log(config.S0) + np.cumsum(log_drift + log_vol * Z, axis=0)
+        S = np.exp(log_S)  # shape (N, M)
+        A = S.mean(axis=0)  # arithmetic average over time steps, shape (M,)
+        if config.option_type == "call":
+            payoff = np.maximum(A - config.K, 0.0)
+        else:
+            payoff = np.maximum(config.K - A, 0.0)
+        return float(math.exp(-config.r * config.T) * payoff.mean())
+
 
 # ---------------------------------------------------------------------------
 # Black-Scholes closed form (European only, for validation)

@@ -1,0 +1,79 @@
+======================================================================
+Budget-Aware Profiler vs Naive Grid Search
+Experiment ID : 056cedeb-d6ab-41ed-98b0-84bb763d7361
+Workloads     : ['european', 'european_local_vol', 'asian']
+Engines       : ['cpu', 'jax']
+Probe M       : 1000
+Full M values : [10000, 50000, 100000]
+Probe runs    : 2  warmup=1
+Full runs     : 5  warmup=2
+Top-K         : 3
+Instance      : local
+Hourly rate   : n/a (local)
+======================================================================
+
+Total candidates: 12
+
+--- PROBE RUNS (M=1000) ---
+
+Probe runs completed: 12 / 12
+
+--- PROFILER SELECTION ---
+
+  european: 4 probed -> 1 selected
+    cpu/none  score=0.10  rt=0.08ms  price=9.9120
+
+  european_local_vol: 4 probed -> 1 selected
+    jax/none  score=10.23  rt=10.01ms  price=10.3382
+
+  asian: 4 probed -> 1 selected
+    cpu/none  score=7.87  rt=7.86ms  price=5.8204
+
+--- FULL NAIVE GRID SEARCH ---
+Running 12 configs x 3 M values = 36 runs
+
+Full grid completed: 36 runs stored
+
+--- PARETO FRONTIER (FULL GRID) ---
+
+  european Pareto frontier (1 / 4 configs at M=100000):
+    jax/none  rt=1.81ms
+
+  european_local_vol Pareto frontier (1 / 4 configs at M=100000):
+    jax/none  rt=657.86ms
+
+  asian Pareto frontier (1 / 4 configs at M=100000):
+    jax/none  rt=411.24ms
+
+--- PROFILER vs PARETO OVERLAP ---
+
+  european:
+    Pareto frontier size       : 1
+    Profiler selected          : 1
+    Recovered Pareto configs   : 0
+    Missed Pareto configs      : 1
+    Missed: ['jax/none']
+
+  european_local_vol:
+    Pareto frontier size       : 1
+    Profiler selected          : 1
+    Recovered Pareto configs   : 1
+    Missed Pareto configs      : 0
+
+  asian:
+    Pareto frontier size       : 1
+    Profiler selected          : 1
+    Recovered Pareto configs   : 0
+    Missed Pareto configs      : 1
+    Missed: ['jax/none']
+
+======================================================================
+SUMMARY
+======================================================================
+Total full-grid configs         : 36
+Profiler-selected full configs  : 9
+Full runs saved                 : 27  (75.0%)
+Total Pareto-optimal configs    : 3
+Pareto configs recovered        : 1  (33.3%)
+Pareto configs missed           : 2
+======================================================================
