@@ -333,9 +333,11 @@ done
 
 # Wait for all VMs to finish
 echo ""
-echo "  Waiting for all VMs to complete ..."
+echo "  Waiting for all VM jobs to complete ..."
 ALL_OK=true
 for MT in $MACHINE_TYPES; do
+    [[ -z "${VM_NAMES[$MT]:-}" ]] && continue
+    [[ -z "${VM_PIDS[$MT]:-}" ]] && continue
     wait "${VM_PIDS[$MT]}" || { echo "  [WARN] VM job for $MT failed"; ALL_OK=false; }
 done
 
