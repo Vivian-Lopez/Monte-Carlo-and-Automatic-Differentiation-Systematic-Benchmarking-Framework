@@ -1,79 +1,120 @@
 ======================================================================
 Budget-Aware Profiler vs Naive Grid Search
-Experiment ID : 056cedeb-d6ab-41ed-98b0-84bb763d7361
+Experiment ID : final_local_profiler_v1
+Git commit    : 0a28398
 Workloads     : ['european', 'european_local_vol', 'asian']
-Engines       : ['cpu', 'jax']
+Engines       : ['cpu', 'jax', 'cpp', 'rust']
 Probe M       : 1000
 Full M values : [10000, 50000, 100000]
-Probe runs    : 2  warmup=1
+Probe runs    : 3  warmup=1
 Full runs     : 5  warmup=2
-Top-K         : 3
+Top-K         : 3  score_margin=1.5x
 Instance      : local
+Region/zone   : n/a / n/a
 Hourly rate   : n/a (local)
 ======================================================================
 
-Total candidates: 12
+Total candidate (wl, engine, ad) triples : 16
+Full-grid total runs (x 3 M values): 48
 
 --- PROBE RUNS (M=1000) ---
 
-Probe runs completed: 12 / 12
+Probe runs completed: 16 / 16
 
 --- PROFILER SELECTION ---
 
-  european: 4 probed -> 1 selected
-    cpu/none  score=0.10  rt=0.08ms  price=9.9120
+  european: 6 probed -> 4 selected
+    [SEL] cpp/none  score=0.02  rt=0.02ms  reason: top-3 probe Pareto; diversity guard; fastest probe runtime
+    [SEL] cpu/none  score=0.09  rt=0.08ms  reason: diversity guard
+    [SEL] rust/none  score=1.75  rt=0.69ms  reason: diversity guard
+    [SEL] jax/none  score=0.33  rt=0.60ms  reason: diversity guard
+    [PRN] jax/forward  score=2.04  -> dominated or outside 1.5x margin (score=2.04 vs best=0.02)
+    [PRN] jax/reverse  score=2.32  -> dominated or outside 1.5x margin (score=2.32 vs best=0.02)
 
-  european_local_vol: 4 probed -> 1 selected
-    jax/none  score=10.23  rt=10.01ms  price=10.3382
+  european_local_vol: 6 probed -> 4 selected
+    [SEL] cpp/none  score=5.92  rt=5.88ms  reason: top-3 probe Pareto; diversity guard; fastest probe runtime
+    [SEL] cpu/none  score=17.55  rt=15.13ms  reason: diversity guard
+    [SEL] rust/none  score=7.74  rt=6.39ms  reason: within 1.5x safety margin; diversity guard
+    [SEL] jax/none  score=5.63  rt=10.01ms  reason: within 1.5x safety margin; diversity guard
+    [PRN] jax/forward  score=46.50  -> dominated or outside 1.5x margin (score=46.50 vs best=5.92)
+    [PRN] jax/reverse  score=19.19  -> dominated or outside 1.5x margin (score=19.19 vs best=5.92)
 
-  asian: 4 probed -> 1 selected
-    cpu/none  score=7.87  rt=7.86ms  price=5.8204
+  asian: 4 probed -> 2 selected
+    [SEL] cpu/none  score=9.85  rt=9.21ms  reason: top-3 probe Pareto; diversity guard; fastest probe runtime
+    [SEL] jax/none  score=22.81  rt=71.70ms  reason: diversity guard
+    [PRN] jax/forward  score=343.05  -> dominated or outside 1.5x margin (score=343.05 vs best=9.85)
+    [PRN] jax/reverse  score=288.70  -> dominated or outside 1.5x margin (score=288.70 vs best=9.85)
 
 --- FULL NAIVE GRID SEARCH ---
-Running 12 configs x 3 M values = 36 runs
+Running 16 configs x 3 M values = 48 runs
 
-Full grid completed: 36 runs stored
+Full grid completed: 48 runs stored
 
 --- PARETO FRONTIER (FULL GRID) ---
 
-  european Pareto frontier (1 / 4 configs at M=100000):
-    jax/none  rt=1.81ms
+  european Pareto frontier (1 / 6 configs at M=100,000):
+    rust/none  rt=0.50ms  cost=4.99e-05
 
-  european_local_vol Pareto frontier (1 / 4 configs at M=100000):
-    jax/none  rt=657.86ms
+  european_local_vol Pareto frontier (1 / 6 configs at M=100,000):
+    rust/none  rt=550.77ms  cost=5.51e-02
 
-  asian Pareto frontier (1 / 4 configs at M=100000):
-    jax/none  rt=411.24ms
+  asian Pareto frontier (1 / 4 configs at M=100,000):
+    jax/none  rt=403.61ms  cost=4.04e-02
 
 --- PROFILER vs PARETO OVERLAP ---
 
   european:
     Pareto frontier size       : 1
-    Profiler selected          : 1
-    Recovered Pareto configs   : 0
-    Missed Pareto configs      : 1
-    Missed: ['jax/none']
+    Profiler selected          : 4
+    Recovered Pareto configs   : 1
+    Missed Pareto configs      : 0
 
   european_local_vol:
     Pareto frontier size       : 1
-    Profiler selected          : 1
+    Profiler selected          : 4
     Recovered Pareto configs   : 1
     Missed Pareto configs      : 0
 
   asian:
     Pareto frontier size       : 1
-    Profiler selected          : 1
-    Recovered Pareto configs   : 0
-    Missed Pareto configs      : 1
-    Missed: ['jax/none']
+    Profiler selected          : 2
+    Recovered Pareto configs   : 1
+    Missed Pareto configs      : 0
 
 ======================================================================
 SUMMARY
 ======================================================================
-Total full-grid configs         : 36
-Profiler-selected full configs  : 9
-Full runs saved                 : 27  (75.0%)
-Total Pareto-optimal configs    : 3
-Pareto configs recovered        : 1  (33.3%)
-Pareto configs missed           : 2
+Experiment ID                       : final_local_profiler_v1
+Git commit                          : 0a28398
+Instance                            : local
+Region / zone                       : n/a / n/a
+
+Total grid configurations           : 16
+Number of full-grid configurations  : 48
+Number selected by profiler         : 30
+Full runs saved                     : 18  (37.5%)
+
+Total Pareto-optimal configurations : 3
+Pareto configs recovered            : 3  (100.0%)
+Pareto configs missed               : 0
+
+Full-grid best by runtime           : rust/european/none  0.50 ms at M=100,000
+Full-grid best by cost/run          : rust/european/none  $4.99e-05 at M=100,000
+Profiler selected best config       : rust/european/none  0.50 ms at M=100,000
+
+Runtime regret vs full-grid best    : +0.0%
+Cost regret vs full-grid best       : +0.0%
+Spearman rho (probe -> full rank)   : 0.835
+
+Selected configurations and reasons:
+  european/cpp/none  ->  top-3 probe Pareto; diversity guard; fastest probe runtime
+  european/cpu/none  ->  diversity guard
+  european/rust/none  ->  diversity guard
+  european/jax/none  ->  diversity guard
+  european_local_vol/cpp/none  ->  top-3 probe Pareto; diversity guard; fastest probe runtime
+  european_local_vol/cpu/none  ->  diversity guard
+  european_local_vol/rust/none  ->  within 1.5x safety margin; diversity guard
+  european_local_vol/jax/none  ->  within 1.5x safety margin; diversity guard
+  asian/cpu/none  ->  top-3 probe Pareto; diversity guard; fastest probe runtime
+  asian/jax/none  ->  diversity guard
 ======================================================================

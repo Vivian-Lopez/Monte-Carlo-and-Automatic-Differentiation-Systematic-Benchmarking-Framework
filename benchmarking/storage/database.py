@@ -109,8 +109,19 @@ _FULL_SCHEMA_COLUMNS: list[tuple[str, str]] = [
     ("blas_backend",          "TEXT"),
     # Cloud fields (nullable)
     ("cloud_provider",        "TEXT"),
+    ("region",                "TEXT"),
+    ("zone",                  "TEXT"),
     ("instance_type",         "TEXT"),
+    ("machine_family",        "TEXT"),
+    ("vcpu_count",            "INTEGER"),
     ("cost_per_run",          "REAL"),
+    ("paths_per_dollar",      "REAL"),
+    # Profiler fields (nullable)
+    ("profiler_phase",        "TEXT"),   # probe | full | grid
+    ("profiler_decision",     "TEXT"),   # selected | pruned | full_grid_only
+    ("profiler_reason",       "TEXT"),
+    ("dominated",             "INTEGER"),  # 0/1 boolean
+    ("git_commit_hash",       "TEXT"),
     # Legacy: greeks_json kept for backward-compat with old rows / API
     ("greeks_json",           "TEXT"),
 ]
@@ -303,10 +314,21 @@ class BenchmarkDB:
         jax_version: Optional[str] = None,
         blas_backend: Optional[str] = None,
         vectorization_flag: Optional[str] = None,
-        # cloud (future)
+        # cloud
         cloud_provider: Optional[str] = None,
+        region: Optional[str] = None,
+        zone: Optional[str] = None,
         instance_type: Optional[str] = None,
+        machine_family: Optional[str] = None,
+        vcpu_count: Optional[int] = None,
         cost_per_run: Optional[float] = None,
+        paths_per_dollar: Optional[float] = None,
+        # profiler
+        profiler_phase: Optional[str] = None,
+        profiler_decision: Optional[str] = None,
+        profiler_reason: Optional[str] = None,
+        dominated: Optional[int] = None,
+        git_commit_hash: Optional[str] = None,
     ) -> str:
         """
         Insert a fully-populated completed run in one shot.
@@ -349,7 +371,9 @@ class BenchmarkDB:
                     cpu_model, cpu_architecture, cpu_count, memory_gb,
                     platform, python_version, numpy_version, jax_version, blas_backend,
                     vectorization_flag,
-                    cloud_provider, instance_type, cost_per_run,
+                    cloud_provider, region, zone, instance_type, machine_family, vcpu_count,
+                    cost_per_run, paths_per_dollar,
+                    profiler_phase, profiler_decision, profiler_reason, dominated, git_commit_hash,
                     greeks_json,
                     requested_threads,
                     observed_threads_before_engine_load,
@@ -376,7 +400,9 @@ class BenchmarkDB:
                     ?,?,?,?,
                     ?,?,?,?,?,
                     ?,
-                    ?,?,?,
+                    ?,?,?,?,?,?,
+                    ?,?,
+                    ?,?,?,?,?,
                     ?,
                     ?,?,?,?,?,?,?
                 )""",
@@ -398,7 +424,9 @@ class BenchmarkDB:
                     cpu_model, cpu_architecture, cpu_count, memory_gb,
                     platform, python_version, numpy_version, jax_version, blas_backend,
                     vectorization_flag,
-                    cloud_provider, instance_type, cost_per_run,
+                    cloud_provider, region, zone, instance_type, machine_family, vcpu_count,
+                    cost_per_run, paths_per_dollar,
+                    profiler_phase, profiler_decision, profiler_reason, dominated, git_commit_hash,
                     greeks_json,
                     requested_threads,
                     observed_threads_before_engine_load,

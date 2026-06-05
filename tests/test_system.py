@@ -74,10 +74,10 @@ class TestConfigHash:
 
 
 class TestWorkloadRegistry:
-    """Registry contains the European workload type."""
+    """Registry contains all registered workload types."""
 
     def test_registry_keys(self):
-        assert set(WORKLOAD_REGISTRY.keys()) == {"european"}
+        assert set(WORKLOAD_REGISTRY.keys()) == {"european", "european_local_vol", "asian"}
 
 
 # ── Layer 2: Engine correctness ───────────────────────────────────────────
