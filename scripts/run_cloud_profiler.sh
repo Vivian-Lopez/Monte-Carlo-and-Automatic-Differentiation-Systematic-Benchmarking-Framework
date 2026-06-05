@@ -137,9 +137,12 @@ echo ""
 # Helpers
 # ---------------------------------------------------------------------------
 vm_name_for() {
-    # Sanitise machine type to a valid VM name
+    # Sanitise machine type to a valid VM name (lowercase letters, digits, hyphens only)
     local mt="$1"
-    echo "bench-${mt}-${TIMESTAMP}" | tr '.' '-' | cut -c1-63
+    # Strip timestamp to date-only (YYYYMMDD) to avoid underscore from HHMMSS separator
+    local ts
+    ts=$(echo "$TIMESTAMP" | cut -c1-8)
+    echo "bench-${mt}-${ts}" | tr '_' '-' | tr '.' '-' | tr '[:upper:]' '[:lower:]' | cut -c1-63
 }
 
 vm_ssh() {
@@ -196,7 +199,7 @@ if [[ "$CREATE_VMS" == true ]]; then
     for MT in $MACHINE_TYPES; do
         VM="${VM_NAMES[$MT]}"
         echo "  Creating: $VM ($MT)"
-        gcloud compute instances create "$VM" \
+        if gcloud compute instances create "$VM" \
             --project="$PROJECT" \
             --zone="$ZONE" \
             --machine-type="$MT" \
@@ -207,8 +210,12 @@ if [[ "$CREATE_VMS" == true ]]; then
             --scopes="cloud-platform" \
             --labels="project=mcad,experiment=cloud-profiler,instance-type=${MT}" \
             --metadata="enable-oslogin=true" \
-            --quiet
-        echo "  Created: $VM"
+            --quiet 2>&1; then
+            echo "  Created: $VM"
+        else
+            echo "  [WARN] Failed to create $VM ($MT) — skipping this machine type"
+            unset "VM_NAMES[$MT]"
+        fi
     done
 else
     echo ""
@@ -224,8 +231,11 @@ echo "[3/6] Setting up and running experiments ..."
 declare -A VM_PIDS=()
 
 for MT in $MACHINE_TYPES; do
-    VM="${VM_NAMES[$MT]}"
-    DB_REMOTE="~/benchmark_repo/results/benchmarks.db"
+    VM="${VM_NAMES[$MT]:-}"
+    if [[ -z "$VM" ]]; then
+        echo "  Skipping $MT (VM not created)"
+        continue
+    fi
     DB_LOCAL="${VM_DBS[$MT]}"
 
     # Build CLI args for the profiler
@@ -342,7 +352,8 @@ if [[ "$DELETE_VMS_AFTER" == true ]]; then
     echo ""
     echo "[4/6] Deleting VMs ..."
     for MT in $MACHINE_TYPES; do
-        VM="${VM_NAMES[$MT]}"
+        VM="${VM_NAMES[$MT]:-}"
+        [[ -z "$VM" ]] && continue
         echo "  Deleting: $VM"
         gcloud compute instances delete "$VM" \
             --project="$PROJECT" \
@@ -355,11 +366,15 @@ else
     echo "[4/6] Skipping VM deletion (--no-delete-vms)"
     echo "  Active VMs:"
     for MT in $MACHINE_TYPES; do
-        echo "    ${VM_NAMES[$MT]}"
+        VM="${VM_NAMES[$MT]:-}"
+        [[ -z "$VM" ]] && continue
+        echo "    ${VM}"
     done
     echo "  To delete manually:"
     for MT in $MACHINE_TYPES; do
-        echo "    gcloud compute instances delete ${VM_NAMES[$MT]} --project=$PROJECT --zone=$ZONE"
+        VM="${VM_NAMES[$MT]:-}"
+        [[ -z "$VM" ]] && continue
+        echo "    gcloud compute instances delete ${VM} --project=$PROJECT --zone=$ZONE"
     done
 fi
 
