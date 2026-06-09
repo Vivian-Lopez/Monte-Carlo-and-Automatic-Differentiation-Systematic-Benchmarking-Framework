@@ -52,9 +52,14 @@ PROJECT=""
 ZONE="europe-west2-b"
 REGION="europe-west2"
 # 6 diverse machine types: AMD Milan, Intel Cascade Lake, Google cost-opt, AMD EPYC, AMD compute-opt
-# n2-standard-4 uses europe-west1-b to avoid europe-west2 quota exhaustion
-MACHINE_TYPES="e2-standard-4 e2-standard-8 t2d-standard-4 n2d-standard-4 c2d-standard-4"
-N2_ZONE="europe-west1-b"    # Intel Cascade Lake — different zone for quota
+# All 6 machine types to cover across multiple waves.
+# Organised into quota-safe waves (each wave <= VCPU_BUDGET vCPUs total):
+#   Wave 1: e2-standard-4 (4) + e2-standard-8 (8)       = 12 vCPUs
+#   Wave 2: t2d-standard-4 (4) + n2-standard-4 (4) + c2d-standard-4 (4) = 12 vCPUs
+#   Wave 3: n2d-standard-4 (4)                           = 4  vCPUs
+MACHINE_TYPES="e2-standard-4 e2-standard-8 t2d-standard-4 n2d-standard-4 c2d-standard-4 n2-standard-4"
+VCPU_BUDGET=12   # Max simultaneous vCPUs (matches CPUS_ALL_REGIONS quota)
+WAVE_NUM="all"   # Which wave to run: "all" | "1" | "2" | "3"
 EXPERIMENT_ID="sha_cloud_profiler_v2"
 RUNS=5
 WARMUP=2
@@ -92,6 +97,8 @@ while [[ $# -gt 0 ]]; do
         --zone)           ZONE="$2";                 shift 2 ;;
         --region)         REGION="$2";               shift 2 ;;
         --machine-types)  MACHINE_TYPES="$2";        shift 2 ;;
+        --vcpu-budget)    VCPU_BUDGET="$2";          shift 2 ;;
+        --wave)           WAVE_NUM="$2";             shift 2 ;;
         --experiment-id)  EXPERIMENT_ID="$2";        shift 2 ;;
         --runs)           RUNS="$2";                 shift 2 ;;
         --warmup)         WARMUP="$2";               shift 2 ;;
@@ -132,6 +139,8 @@ echo "========================================================================"
 echo "  Project         : $PROJECT"
 echo "  Region/zone     : $REGION / $ZONE"
 echo "  Machine types   : $MACHINE_TYPES"
+echo "  vCPU budget     : $VCPU_BUDGET (per wave)"
+echo "  Wave            : $WAVE_NUM"
 echo "  Experiment ID   : $EXPERIMENT_ID"
 echo "  Runs/warmup     : $RUNS / $WARMUP"
 echo "  M values        : $M_VALUES"
@@ -144,22 +153,99 @@ echo "========================================================================"
 echo ""
 
 # ---------------------------------------------------------------------------
+# Per-machine-type zone mapping
+# Each machine family is only available in certain zones:
+#   e2  — general-purpose, widely available
+#   n2  — Intel Cascade Lake, europe-west1
+#   t2d — AMD Milan, europe-west1
+#   n2d — AMD EPYC Rome, europe-west4
+#   c2d — AMD Milan high-clock, europe-west1
+# ---------------------------------------------------------------------------
+mt_zone() {
+    case "$1" in
+        e2-*)     echo "europe-west2-b" ;;
+        n2-*)     echo "europe-west1-b" ;;
+        t2d-*)    echo "europe-west1-b" ;;
+        n2d-*)    echo "europe-west4-a" ;;
+        c2d-*)    echo "europe-west1-b" ;;
+        *)        echo "$ZONE" ;;
+    esac
+}
+
+mt_region() {
+    local z; z="$(mt_zone "$1")"
+    echo "${z%-*}"  # strip trailing -b / -a
+}
+
+mt_vcpus() {
+    # Extract vCPU count from machine type string suffix (e.g. e2-standard-4 -> 4)
+    echo "$1" | grep -oE '[0-9]+$'
+}
+
+# ---------------------------------------------------------------------------
+# Wave grouping — pack machine types into waves that each fit VCPU_BUDGET
+# ---------------------------------------------------------------------------
+build_waves() {
+    # Outputs one line per wave: space-separated machine types
+    local budget="$1"; shift
+    local current_wave=""
+    local current_vcpus=0
+
+    for mt in "$@"; do
+        local n; n=$(mt_vcpus "$mt")
+        [[ -z "$n" ]] && n=4   # fallback
+        if (( current_vcpus + n > budget )) && [[ -n "$current_wave" ]]; then
+            echo "$current_wave"
+            current_wave="$mt"
+            current_vcpus=$n
+        else
+            current_wave="${current_wave:+$current_wave }$mt"
+            current_vcpus=$(( current_vcpus + n ))
+        fi
+    done
+    [[ -n "$current_wave" ]] && echo "$current_wave"
+}
+
+# Convert MACHINE_TYPES string to array for wave builder
+read -r -a _MT_ARRAY <<< "$MACHINE_TYPES"
+mapfile -t WAVES < <(build_waves "$VCPU_BUDGET" "${_MT_ARRAY[@]}")
+
+echo "  Wave plan (vCPU budget=$VCPU_BUDGET per wave):"
+for i in "${!WAVES[@]}"; do
+    w_total=0
+    for mt in ${WAVES[$i]}; do
+        n=$(mt_vcpus "$mt"); w_total=$(( w_total + ${n:-4} ))
+    done
+    echo "    Wave $(( i+1 )) [${w_total} vCPUs]: ${WAVES[$i]}"
+done
+echo ""
+
+# Filter to requested wave number
+if [[ "$WAVE_NUM" != "all" ]]; then
+    idx=$(( WAVE_NUM - 1 ))
+    if [[ $idx -lt 0 || $idx -ge ${#WAVES[@]} ]]; then
+        echo "ERROR: --wave $WAVE_NUM is out of range (1..${#WAVES[@]})"
+        exit 1
+    fi
+    WAVES=("${WAVES[$idx]}")
+    echo "  Running wave $WAVE_NUM only: ${WAVES[0]}"
+    echo ""
+fi
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 vm_name_for() {
-    # Sanitise machine type to a valid VM name (lowercase letters, digits, hyphens only)
     local mt="$1"
-    # Strip timestamp to date-only (YYYYMMDD) to avoid underscore from HHMMSS separator
-    local ts
-    ts=$(echo "$TIMESTAMP" | cut -c1-8)
+    local ts; ts=$(echo "$TIMESTAMP" | cut -c1-8)
     echo "bench-${mt}-${ts}" | tr '_' '-' | tr '.' '-' | tr '[:upper:]' '[:lower:]' | cut -c1-63
 }
 
 vm_ssh() {
-    local vm="$1"; shift
+    local vm="$1" vm_zone="$2"; shift 2
     gcloud compute ssh "$vm" \
         --project="$PROJECT" \
-        --zone="$ZONE" \
+        --zone="$vm_zone" \
         --command="$1" \
         --ssh-flag="-o StrictHostKeyChecking=no" \
         --ssh-flag="-o ConnectTimeout=30" \
@@ -167,11 +253,11 @@ vm_ssh() {
 }
 
 wait_for_ssh() {
-    local vm="$1"
-    local max=24   # 4 minutes total
+    local vm="$1" vm_zone="$2"
+    local max=24
     local i=0
     echo "  Waiting for SSH on $vm ..."
-    until vm_ssh "$vm" "echo ok" &>/dev/null; do
+    until vm_ssh "$vm" "$vm_zone" "echo ok" &>/dev/null; do
         i=$(( i + 1 ))
         if [[ $i -ge $max ]]; then
             echo "  ERROR: $vm did not become SSH-ready after $(( max * 10 ))s."
@@ -195,227 +281,259 @@ echo "  OK"
 # Step 2 — Create VMs in parallel
 # ---------------------------------------------------------------------------
 declare -A VM_NAMES=()
+declare -A VM_ZONES=()
 declare -A VM_DBS=()
 
-for MT in $MACHINE_TYPES n2-standard-4; do
-    VM="${VM_NAMES[$MT]:-$(vm_name_for "$MT")}"
-    VM_NAMES[$MT]="$VM"
-    VM_DBS[$MT]="$RESULTS_LOCAL_DIR/benchmarks_${MT}_${TIMESTAMP}.db"
+# Pre-populate the name/zone/db tables for every machine type in all waves
+for _WAVE_MTS in "${WAVES[@]}"; do
+    for MT in $_WAVE_MTS; do
+        [[ -n "${VM_NAMES[$MT]:-}" ]] && continue
+        VM_NAMES[$MT]="$(vm_name_for "$MT")"
+        VM_ZONES[$MT]="$(mt_zone "$MT")"
+        VM_DBS[$MT]="$RESULTS_LOCAL_DIR/benchmarks_${MT}_${TIMESTAMP}.db"
+    done
 done
 
-if [[ "$CREATE_VMS" == true ]]; then
-    echo ""
-    echo "[2/6] Creating VMs ..."
-    for MT in $MACHINE_TYPES; do
-        VM="${VM_NAMES[$MT]}"
-        echo "  Creating: $VM ($MT)"
-        if gcloud compute instances create "$VM" \
-            --project="$PROJECT" \
-            --zone="$ZONE" \
-            --machine-type="$MT" \
-            --image-family="$IMAGE_FAMILY" \
-            --image-project="$IMAGE_PROJECT" \
-            --boot-disk-size="$DISK_SIZE" \
-            --boot-disk-type="pd-ssd" \
-            --scopes="cloud-platform" \
-            --labels="project=mcad,experiment=cloud-profiler,instance-type=${MT}" \
-            --metadata="enable-oslogin=true" \
-            --quiet 2>&1; then
-            echo "  Created: $VM"
-        else
-            echo "  [WARN] Failed to create $VM ($MT) — skipping this machine type"
-            unset "VM_NAMES[$MT]"
-        fi
-    done
-else
-    echo ""
-    echo "[2/6] Skipping VM creation (--no-create-vms)"
-fi
+# ---------------------------------------------------------------------------
+# Step 1 — Enable Compute Engine API (idempotent)
+# ---------------------------------------------------------------------------
+echo "[1/6] Enabling Compute Engine API ..."
+gcloud services enable compute.googleapis.com \
+    --project="$PROJECT" --quiet 2>/dev/null || true
+echo "  OK"
 
 # ---------------------------------------------------------------------------
-# Step 3 — Wait for SSH, install deps, run experiment (per VM)
+# Steps 2-4 repeat for each wave (sequential waves, parallel within wave)
 # ---------------------------------------------------------------------------
-echo ""
-echo "[3/6] Setting up and running experiments ..."
+WAVE_IDX=0
+for _WAVE_MTS in "${WAVES[@]}"; do
+    WAVE_IDX=$(( WAVE_IDX + 1 ))
+    read -r -a WAVE_MTS_ARR <<< "$_WAVE_MTS"
+    echo ""
+    echo "════════════════════════════════════════════════════════════════════"
+    echo "  WAVE ${WAVE_IDX}/${#WAVES[@]}: ${_WAVE_MTS}"
+    echo "════════════════════════════════════════════════════════════════════"
 
-declare -A VM_PIDS=()
-
-for MT in $MACHINE_TYPES n2-standard-4; do
-    VM="${VM_NAMES[$MT]:-}"
-    if [[ -z "$VM" ]]; then
-        echo "  Skipping $MT (VM not created)"
-        continue
+    # ------------------------------------------------------------------
+    # Step 2 — Create VMs for this wave in parallel
+    # ------------------------------------------------------------------
+    if [[ "$CREATE_VMS" == true ]]; then
+        echo ""
+        echo "[2/6] Creating VMs for wave ${WAVE_IDX} ..."
+        WAVE_CREATE_PIDS=()
+        for MT in "${WAVE_MTS_ARR[@]}"; do
+            VM="${VM_NAMES[$MT]}"
+            USE_ZONE="${VM_ZONES[$MT]}"
+            echo "  Creating: $VM ($MT) in zone $USE_ZONE"
+            (
+                if gcloud compute instances create "$VM" \
+                    --project="$PROJECT" \
+                    --zone="$USE_ZONE" \
+                    --machine-type="$MT" \
+                    --image-family="$IMAGE_FAMILY" \
+                    --image-project="$IMAGE_PROJECT" \
+                    --boot-disk-size="$DISK_SIZE" \
+                    --boot-disk-type="pd-ssd" \
+                    --scopes="cloud-platform" \
+                    --labels="project=mcad,experiment=cloud-profiler,instance-type=${MT}" \
+                    --metadata="enable-oslogin=true" \
+                    --quiet 2>&1; then
+                    echo "  Created: $VM"
+                else
+                    echo "  [WARN] Failed to create $VM ($MT) — skipping"
+                    exit 1
+                fi
+            ) &
+            WAVE_CREATE_PIDS[$MT]=$!
+        done
+        # Wait for all creates, remove failures
+        for MT in "${WAVE_MTS_ARR[@]}"; do
+            wait "${WAVE_CREATE_PIDS[$MT]}" || {
+                echo "  [WARN] VM create failed for $MT — removing from wave"
+                unset "VM_NAMES[$MT]"
+            }
+        done
+    else
+        echo ""
+        echo "[2/6] Skipping VM creation for wave ${WAVE_IDX} (--no-create-vms)"
     fi
-    DB_LOCAL="${VM_DBS[$MT]}"
 
-    # Zone for this machine type
-    USE_ZONE="$ZONE"
-    [[ "$MT" == "n2-standard-4" ]] && USE_ZONE="$N2_ZONE"
+    # ------------------------------------------------------------------
+    # Step 3 — Wait for SSH, install deps, run experiment (parallel)
+    # ------------------------------------------------------------------
+    echo ""
+    echo "[3/6] Running experiments for wave ${WAVE_IDX} ..."
 
-    # Build CLI args for the profiler
+    declare -A VM_PIDS=()
+
     M_CLI=$(echo "$M_VALUES" | tr ' ' '\n' | xargs printf " %s")
     SHA_M_CLI=$(echo "$SHA_M_LEVELS" | tr ' ' '\n' | xargs printf " %s")
     SHA_RUNS_CLI=$(echo "$SHA_RUNS_PER_LEVEL" | tr ' ' '\n' | xargs printf " %s")
     SHA_WARMUP_CLI=$(echo "$SHA_WARMUP_PER_LEVEL" | tr ' ' '\n' | xargs printf " %s")
     PROBE_ONLY_FLAG=""
     [[ "$PROBE_ONLY" == true ]] && PROBE_ONLY_FLAG="--probe-only"
-
     API_KEY_ARG=""
     [[ -n "$GCP_API_KEY" ]] && API_KEY_ARG="--gcp-api-key '${GCP_API_KEY}'"
 
-    (
-        echo "  [$VM] Waiting for SSH ..."
-        wait_for_ssh "$VM" || exit 1
-
-        echo "  [$VM] Installing system dependencies ..."
-        vm_ssh "$VM" "
-            sudo apt-get update -qq 2>/dev/null
-            sudo apt-get install -y -qq python3-venv python3-pip git build-essential \
-                libopenblas-dev pkg-config curl ca-certificates 2>/dev/null
-        " || true
-
-        echo "  [$VM] Cloning / updating repository ..."
-        vm_ssh "$VM" "
-            if [[ -d ${REPO_DIR} ]]; then
-                cd ${REPO_DIR} && git pull --quiet
-            else
-                git clone --quiet '${REPO_URL}' ${REPO_DIR}
-            fi
-        "
-
-        echo "  [$VM] Installing Python requirements ..."
-        vm_ssh "$VM" "
-            cd ${REPO_DIR}
-            python3 -m venv venv
-            source venv/bin/activate
-            pip install --quiet --upgrade pip
-            pip install --quiet -r requirements.txt
-        "
-
-        echo "  [$VM] Attempting optional C++ build ..."
-        vm_ssh "$VM" "
-            cd ${REPO_DIR}
-            source venv/bin/activate
-            pip install --quiet -e benchmarking/cpp/ 2>/dev/null && echo 'C++ OK' \
-                || echo 'C++ skipped'
-        " || true
-
-        echo "  [$VM] Attempting Rust build (maturin) ..."
-        vm_ssh "$VM" "
-            cd ${REPO_DIR}
-            source venv/bin/activate
-            pip install --quiet maturin 2>/dev/null
-            cd benchmarking/rust && maturin develop --release --quiet 2>/dev/null \
-                && echo 'Rust OK' || echo 'Rust skipped'
-        " || true
-
-        echo "  [$VM] Running profiler experiment (SHA edition) ..."
-        vm_ssh "$VM" "
-            cd ${REPO_DIR}
-            source venv/bin/activate
-            python experiments/run_profiler_vs_grid.py \
-                --experiment-id '${EXPERIMENT_ID}' \
-                --workloads european european_local_vol asian \
-                --engines cpu jax cpp rust \
-                --m-probe ${M_PROBE} \
-                --m-values ${M_CLI} \
-                --runs ${RUNS} --warmup ${WARMUP} \
-                --top-k ${TOP_K} \
-                --score-margin ${SCORE_MARGIN} \
-                --sha-m-levels ${SHA_M_CLI} \
-                --sha-eta ${SHA_ETA} \
-                --sha-runs-per-level ${SHA_RUNS_CLI} \
-                --sha-warmup-per-level ${SHA_WARMUP_CLI} \
-                --cloud-provider gcp \
-                --region ${REGION} \
-                --zone ${USE_ZONE} \
-                --instance-type ${MT} \
-                --write-db results/benchmarks.db \
-                --export results/ \
-                ${PROBE_ONLY_FLAG} \
-                ${API_KEY_ARG}
-        "
-
-        echo "  [$VM] Copying results ..."
-        mkdir -p "$RESULTS_LOCAL_DIR"
-        gcloud compute scp \
-            "${VM}:${REPO_DIR}/results/benchmarks.db" \
-            "$DB_LOCAL" \
-            --project="$PROJECT" \
-            --zone="$ZONE" \
-            --quiet
-        echo "  [$VM] Results saved to: $DB_LOCAL"
-
-        # Also copy the text summary and SHA progression CSV
-        gcloud compute scp \
-            "${VM}:${REPO_DIR}/results/profiler_summary.txt" \
-            "$RESULTS_LOCAL_DIR/profiler_summary_${MT}_${TIMESTAMP}.txt" \
-            --project="$PROJECT" \
-            --zone="$USE_ZONE" \
-            --quiet 2>/dev/null || true
-
-        gcloud compute scp \
-            "${VM}:${REPO_DIR}/results/sha_progression.csv" \
-            "$RESULTS_LOCAL_DIR/sha_progression_${MT}_${TIMESTAMP}.csv" \
-            --project="$PROJECT" \
-            --zone="$USE_ZONE" \
-            --quiet 2>/dev/null || true
-
-    ) &
-
-    VM_PIDS[$MT]=$!
-    echo "  Launched background job for $MT (PID ${VM_PIDS[$MT]})"
-done
-
-# Wait for all VMs to finish
-echo ""
-echo "  Waiting for all VM jobs to complete ..."
-ALL_OK=true
-for MT in $MACHINE_TYPES n2-standard-4; do
-    [[ -z "${VM_NAMES[$MT]:-}" ]] && continue
-    [[ -z "${VM_PIDS[$MT]:-}" ]] && continue
-    wait "${VM_PIDS[$MT]}" || { echo "  [WARN] VM job for $MT failed"; ALL_OK=false; }
-done
-
-if [[ "$ALL_OK" == false ]]; then
-    echo ""
-    echo "[WARN] One or more VM jobs failed. Check output above."
-    echo "       Continuing with available results ..."
-fi
-
-# ---------------------------------------------------------------------------
-# Step 4 — Delete VMs
-# ---------------------------------------------------------------------------
-if [[ "$DELETE_VMS_AFTER" == true ]]; then
-    echo ""
-    echo "[4/6] Deleting VMs ..."
-    for MT in $MACHINE_TYPES; do
+    for MT in "${WAVE_MTS_ARR[@]}"; do
         VM="${VM_NAMES[$MT]:-}"
-        [[ -z "$VM" ]] && continue
-        echo "  Deleting: $VM"
-        gcloud compute instances delete "$VM" \
-            --project="$PROJECT" \
-            --zone="$ZONE" \
-            --quiet 2>/dev/null || echo "  [WARN] Could not delete $VM"
+        if [[ -z "$VM" ]]; then
+            echo "  Skipping $MT (VM not created)"
+            continue
+        fi
+        USE_ZONE="${VM_ZONES[$MT]}"
+        USE_REGION="$(mt_region "$MT")"
+        DB_LOCAL="${VM_DBS[$MT]}"
+
+        (
+            echo "  [$VM] Waiting for SSH ..."
+            wait_for_ssh "$VM" "$USE_ZONE" || exit 1
+
+            echo "  [$VM] Installing system dependencies ..."
+            vm_ssh "$VM" "$USE_ZONE" "
+                sudo apt-get update -qq 2>/dev/null
+                sudo apt-get install -y -qq python3-venv python3-pip git build-essential \
+                    libopenblas-dev pkg-config curl ca-certificates 2>/dev/null
+            " || true
+
+            echo "  [$VM] Cloning / updating repository ..."
+            vm_ssh "$VM" "$USE_ZONE" "
+                if [[ -d ${REPO_DIR} ]]; then
+                    cd ${REPO_DIR} && git pull --quiet
+                else
+                    git clone --quiet '${REPO_URL}' ${REPO_DIR}
+                fi
+            "
+
+            echo "  [$VM] Installing Python requirements ..."
+            vm_ssh "$VM" "$USE_ZONE" "
+                cd ${REPO_DIR}
+                python3 -m venv venv
+                source venv/bin/activate
+                pip install --quiet --upgrade pip
+                pip install --quiet -r requirements.txt
+            "
+
+            echo "  [$VM] Attempting optional C++ build ..."
+            vm_ssh "$VM" "$USE_ZONE" "
+                cd ${REPO_DIR}
+                source venv/bin/activate
+                pip install --quiet -e benchmarking/cpp/ 2>/dev/null && echo 'C++ OK' \
+                    || echo 'C++ skipped'
+            " || true
+
+            echo "  [$VM] Attempting Rust build (maturin) ..."
+            vm_ssh "$VM" "$USE_ZONE" "
+                cd ${REPO_DIR}
+                source venv/bin/activate
+                pip install --quiet maturin 2>/dev/null
+                cd benchmarking/rust && maturin develop --release --quiet 2>/dev/null \
+                    && echo 'Rust OK' || echo 'Rust skipped'
+            " || true
+
+            echo "  [$VM] Running profiler experiment (SHA edition) ..."
+            vm_ssh "$VM" "$USE_ZONE" "
+                cd ${REPO_DIR}
+                source venv/bin/activate
+                python experiments/run_profiler_vs_grid.py \
+                    --experiment-id '${EXPERIMENT_ID}' \
+                    --workloads european european_local_vol asian \
+                    --engines cpu jax cpp rust \
+                    --m-probe ${M_PROBE} \
+                    --m-values ${M_CLI} \
+                    --runs ${RUNS} --warmup ${WARMUP} \
+                    --top-k ${TOP_K} \
+                    --score-margin ${SCORE_MARGIN} \
+                    --sha-m-levels ${SHA_M_CLI} \
+                    --sha-eta ${SHA_ETA} \
+                    --sha-runs-per-level ${SHA_RUNS_CLI} \
+                    --sha-warmup-per-level ${SHA_WARMUP_CLI} \
+                    --cloud-provider gcp \
+                    --region ${USE_REGION} \
+                    --zone ${USE_ZONE} \
+                    --instance-type ${MT} \
+                    --write-db results/benchmarks.db \
+                    --export results/ \
+                    ${PROBE_ONLY_FLAG} \
+                    ${API_KEY_ARG}
+            "
+
+            echo "  [$VM] Copying results ..."
+            mkdir -p "$RESULTS_LOCAL_DIR"
+            gcloud compute scp \
+                "${VM}:${REPO_DIR}/results/benchmarks.db" \
+                "$DB_LOCAL" \
+                --project="$PROJECT" \
+                --zone="$USE_ZONE" \
+                --quiet
+            echo "  [$VM] Results saved to: $DB_LOCAL"
+
+            gcloud compute scp \
+                "${VM}:${REPO_DIR}/results/profiler_summary.txt" \
+                "$RESULTS_LOCAL_DIR/profiler_summary_${MT}_${TIMESTAMP}.txt" \
+                --project="$PROJECT" \
+                --zone="$USE_ZONE" \
+                --quiet 2>/dev/null || true
+
+            gcloud compute scp \
+                "${VM}:${REPO_DIR}/results/sha_progression.csv" \
+                "$RESULTS_LOCAL_DIR/sha_progression_${MT}_${TIMESTAMP}.csv" \
+                --project="$PROJECT" \
+                --zone="$USE_ZONE" \
+                --quiet 2>/dev/null || true
+
+        ) &
+
+        VM_PIDS[$MT]=$!
+        echo "  Launched background job for $MT (PID ${VM_PIDS[$MT]})"
     done
-    echo "  VMs deleted."
-else
+
+    # Wait for all VMs in this wave
     echo ""
-    echo "[4/6] Skipping VM deletion (--no-delete-vms)"
-    echo "  Active VMs:"
-    for MT in $MACHINE_TYPES n2-standard-4; do
-        VM="${VM_NAMES[$MT]:-}"
-        [[ -z "$VM" ]] && continue
-        echo "    ${VM}"
+    echo "  Waiting for all wave-${WAVE_IDX} jobs to complete ..."
+    WAVE_OK=true
+    for MT in "${WAVE_MTS_ARR[@]}"; do
+        [[ -z "${VM_NAMES[$MT]:-}" ]] && continue
+        [[ -z "${VM_PIDS[$MT]:-}" ]] && continue
+        wait "${VM_PIDS[$MT]}" || { echo "  [WARN] VM job for $MT failed"; WAVE_OK=false; }
     done
-    echo "  To delete manually:"
-    for MT in $MACHINE_TYPES n2-standard-4; do
-        VM="${VM_NAMES[$MT]:-}"
-        [[ -z "$VM" ]] && continue
-        USE_ZONE="$ZONE"; [[ "$MT" == "n2-standard-4" ]] && USE_ZONE="$N2_ZONE"
-        echo "    gcloud compute instances delete ${VM} --project=$PROJECT --zone=${USE_ZONE}"
-    done
-fi
+    [[ "$WAVE_OK" == false ]] && echo "  [WARN] Some jobs in wave ${WAVE_IDX} failed."
+
+    # ------------------------------------------------------------------
+    # Step 4 — Delete VMs for this wave
+    # ------------------------------------------------------------------
+    if [[ "$DELETE_VMS_AFTER" == true ]]; then
+        echo ""
+        echo "[4/6] Deleting wave-${WAVE_IDX} VMs ..."
+        for MT in "${WAVE_MTS_ARR[@]}"; do
+            VM="${VM_NAMES[$MT]:-}"
+            [[ -z "$VM" ]] && continue
+            USE_ZONE="${VM_ZONES[$MT]}"
+            echo "  Deleting: $VM (zone $USE_ZONE)"
+            gcloud compute instances delete "$VM" \
+                --project="$PROJECT" \
+                --zone="$USE_ZONE" \
+                --quiet 2>/dev/null || echo "  [WARN] Could not delete $VM"
+        done
+        echo "  Wave-${WAVE_IDX} VMs deleted."
+    else
+        echo ""
+        echo "[4/6] Skipping VM deletion for wave ${WAVE_IDX} (--no-delete-vms)"
+        echo "  Active VMs:"
+        for MT in "${WAVE_MTS_ARR[@]}"; do
+            VM="${VM_NAMES[$MT]:-}"; [[ -z "$VM" ]] && continue
+            USE_ZONE="${VM_ZONES[$MT]}"
+            echo "    $VM  (zone $USE_ZONE)"
+        done
+        echo "  To delete manually:"
+        for MT in "${WAVE_MTS_ARR[@]}"; do
+            VM="${VM_NAMES[$MT]:-}"; [[ -z "$VM" ]] && continue
+            USE_ZONE="${VM_ZONES[$MT]}"
+            echo "    gcloud compute instances delete $VM --project=$PROJECT --zone=$USE_ZONE"
+        done
+    fi
+
+done  # end wave loop
 
 # ---------------------------------------------------------------------------
 # Step 5 — Merge all VM databases into main DB
@@ -424,8 +542,8 @@ echo ""
 echo "[5/6] Merging VM databases into results/benchmarks.db ..."
 
 MERGE_SOURCES=()
-for MT in $MACHINE_TYPES n2-standard-4; do
-    DB="${VM_DBS[$MT]:-}"
+for MT in "${!VM_DBS[@]}"; do
+    DB="${VM_DBS[$MT]}"
     [[ -z "$DB" ]] && continue
     if [[ -f "$DB" ]]; then
         MERGE_SOURCES+=("$DB")

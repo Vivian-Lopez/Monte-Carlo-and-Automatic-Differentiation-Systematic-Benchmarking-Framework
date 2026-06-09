@@ -307,25 +307,33 @@ def _spearman(x: List[float], y: List[float]) -> Optional[float]:
 # ---------------------------------------------------------------------------
 
 def _fit_scaling_law(
-    m1: int, t1: float,
-    m2: int, t2: float,
+    m_points: List[int],
+    t_points: List[float],
 ) -> Optional[Tuple[float, float]]:
     """
-    Fit t(M) = alpha*M + beta using two (M, runtime_ms) observations.
+    Fit t(M) = alpha*M + beta using n≥2 (M, runtime_ms) observations.
 
-    Returns (alpha, beta) or None if the system is degenerate (m1 == m2).
-    alpha: slope  — ms per path (pure compute cost)
-    beta:  intercept — startup/fixed overhead (ms)
+    For n==2 solves exactly; for n≥3 uses ordinary least squares (numpy
+    polyfit) which reduces sensitivity to a single noisy measurement.
 
-    At large M the serial fraction is beta / (beta + alpha*M).
+    Returns (alpha, beta) or None if degenerate.
+    alpha: slope  — ms per simulation path (pure compute cost)
+    beta:  intercept — JIT/startup overhead (ms)
+    Serial fraction at scale M: beta / (alpha*M + beta)
     """
-    if m1 == m2 or m1 <= 0 or m2 <= 0:
+    import numpy as _np_fit
+    n = len(m_points)
+    if n < 2:
         return None
-    # Solve 2x2 linear system: [[m1,1],[m2,1]] * [alpha,beta]^T = [t1,t2]^T
-    denom = float(m2 - m1)
-    alpha = (t2 - t1) / denom
-    beta  = t1 - alpha * m1
-    return (alpha, beta)
+    m_arr = _np_fit.array(m_points, dtype=float)
+    t_arr = _np_fit.array(t_points, dtype=float)
+    if len(_np_fit.unique(m_arr)) < 2:
+        return None
+    try:
+        coeffs = _np_fit.polyfit(m_arr, t_arr, 1)
+        return (float(coeffs[0]), float(coeffs[1]))
+    except Exception:
+        return None
 
 
 def _serial_fraction(alpha: float, beta: float, M: int) -> Optional[float]:
@@ -427,11 +435,29 @@ def _successive_halving(
             if not wl_rows:
                 continue
 
+            # CI-overlap pruning: use JIT-corrected runtimes so JIT engines
+            # (JAX) are not unfairly eliminated at small M where JIT cost
+            # inflates their measured runtime.
+            def _jit_corrected_rt(r: Dict[str, Any]) -> float:
+                is_jit = r["engine"] in _JIT_ENGINES
+                if not is_jit:
+                    return r["mean_runtime_ms"]
+                jit_ms = jax_warmup_ms.get((r["workload"], r["engine"]), 0.0)
+                return max(r["mean_runtime_ms"] - jit_ms, r["mean_runtime_ms"] * 0.1)
+
+            wl_rows_corrected = [
+                {**r, "mean_runtime_ms": _jit_corrected_rt(r)}
+                for r in wl_rows
+            ]
+
             # CI-overlap pruning against the best config
             survivors_rows = ci_overlap_select(
-                wl_rows, n_runs=n_runs,
+                wl_rows_corrected, n_runs=n_runs,
                 key="mean_runtime_ms", std_key="std_runtime_ms",
             )
+            # Map back to original (uncorrected) rows for logging/DB
+            survivor_corrected_keys = {_config_key(r) for r in survivors_rows}
+            survivors_rows = [r for r in wl_rows if _config_key(r) in survivor_corrected_keys]
 
             # Hard budget cap: ceil(n / eta) — ensures geometric budget decay
             cap = _math.ceil(len(wl_rows) / eta)
@@ -468,26 +494,111 @@ def _successive_halving(
 
         active_by_wl = new_active_by_wl
 
-    # ── Fit scaling laws (using round-0 and round-1 data if available) ───────
+    # ── Fit scaling laws using ALL available rounds' data (OLS n≥2) ──────────
+    # Collect (M, runtime_ms) pairs per config across every round it appeared.
     scaling_laws: Dict[Tuple[str, str, str], Tuple[float, float]] = {}
-    if len(rows_by_round) >= 2 and len(m_levels) >= 2:
-        m0, m1_val = m_levels[0], m_levels[1]
-        for k, row0 in rows_by_round[0].items():
-            row1 = rows_by_round[1].get(k)
-            if row1 is not None:
-                fit = _fit_scaling_law(
-                    m0, row0["mean_runtime_ms"],
-                    m1_val, row1["mean_runtime_ms"],
-                )
-                if fit:
-                    scaling_laws[k] = fit
+    _points_per_key: Dict[Tuple[str, str, str], Tuple[List[int], List[float]]] = {}
+    for r_idx, round_rows in enumerate(rows_by_round):
+        M_r = m_levels[r_idx]
+        for k, row in round_rows.items():
+            ms_list, t_list = _points_per_key.setdefault(k, ([], []))
+            ms_list.append(M_r)
+            t_list.append(row["mean_runtime_ms"])
+    for k, (ms_list, t_list) in _points_per_key.items():
+        fit = _fit_scaling_law(ms_list, t_list)
+        if fit:
+            scaling_laws[k] = fit
 
     # ── Final selected keys: all survivors from last active round ────────────
     selected_keys_sha: List[Tuple[str, str, str]] = []
     for keys in active_by_wl.values():
         selected_keys_sha.extend(keys)
 
-    log_fn(f"\nSHA completed: {len(selected_keys_sha)} configs selected across all workloads")
+    # ── Crossover reinstatement guard ────────────────────────────────────────
+    # Problem: JIT engines (JAX) are expensive at small M but have a shallower
+    # compute slope than CPU once JIT is amortised.  SHA may prune JAX at
+    # round-0 because its raw runtime looks large, then miss it at large M.
+    #
+    # Fix: after SHA finishes, for each workload:
+    #   1. For every eliminated config that has a scaling-law fit (≥2 points),
+    #      predict its runtime at max_M.
+    #   2. If the prediction beats the current winner at max_M (within a
+    #      CROSSOVER_MARGIN tolerance), reinstate the config.
+    #   3. Also reinstate configs where round-0 JIT-correction-adjusted slope
+    #      predicts they would win (single-point estimate for round-0-only elim).
+    CROSSOVER_MARGIN = 1.10   # 10% tolerance — avoids reinstating near-ties
+    max_M_sha = m_levels[-1]
+
+    # Collect all eliminated keys (appeared in round-0 but not in final selection)
+    all_round0_keys = set(rows_by_round[0].keys()) if rows_by_round else set()
+    selected_set = set(selected_keys_sha)
+
+    # Group by workload
+    elim_by_wl: Dict[str, List[Tuple[str, str, str]]] = {}
+    for k in all_round0_keys:
+        wl = k[0]
+        if k not in selected_set:
+            elim_by_wl.setdefault(wl, []).append(k)
+
+    reinstated: List[Tuple[str, str, str]] = []
+    for wl, elim_keys in elim_by_wl.items():
+        # Find winner(s) for this workload
+        wl_selected = [k for k in selected_set if k[0] == wl]
+        if not wl_selected:
+            continue
+
+        # Predict winner runtime at max_M
+        winner_rt_at_max: Optional[float] = None
+        for wk in wl_selected:
+            if wk in scaling_laws:
+                alpha_w, beta_w = scaling_laws[wk]
+                pred_w = alpha_w * max_M_sha + beta_w
+                if pred_w > 0 and (winner_rt_at_max is None or pred_w < winner_rt_at_max):
+                    winner_rt_at_max = pred_w
+        if winner_rt_at_max is None:
+            # Fallback: use last measured runtime of the winner
+            for wk in wl_selected:
+                for r_idx in reversed(range(len(rows_by_round))):
+                    if wk in rows_by_round[r_idx]:
+                        winner_rt_at_max = rows_by_round[r_idx][wk]["mean_runtime_ms"]
+                        break
+                if winner_rt_at_max is not None:
+                    break
+        if winner_rt_at_max is None or winner_rt_at_max <= 0:
+            continue
+
+        for ek in elim_keys:
+            # Predict eliminated config runtime at max_M
+            pred_elim: Optional[float] = None
+            if ek in scaling_laws:
+                alpha_e, beta_e = scaling_laws[ek]
+                pred_elim = alpha_e * max_M_sha + beta_e
+            else:
+                # Single-point JIT-corrected slope estimate from round-0
+                row0 = rows_by_round[0].get(ek) if rows_by_round else None
+                if row0 is not None and m_levels[0] > 0:
+                    rt0 = row0["mean_runtime_ms"]
+                    # Apply JIT correction for JIT engines
+                    is_jit = ek[1] in _JIT_ENGINES
+                    if is_jit:
+                        jit_ms = jax_warmup_ms.get((ek[0], ek[1]), 0.0)
+                        rt0 = max(rt0 - jit_ms, rt0 * 0.1)
+                    # Linear prediction: t = (rt0 / M0) * max_M (zero-intercept)
+                    pred_elim = (rt0 / m_levels[0]) * max_M_sha
+
+            if pred_elim is None or pred_elim <= 0:
+                continue
+
+            if pred_elim < winner_rt_at_max * CROSSOVER_MARGIN:
+                reinstated.append(ek)
+                selected_keys_sha.append(ek)
+                selected_set.add(ek)
+                log_fn(f"  [SHA-REINSTATE] {ek[1]}/{ek[2]}  "
+                       f"pred@M={max_M_sha:,}={pred_elim:.1f}ms  "
+                       f"vs winner={winner_rt_at_max:.1f}ms  (crossover detected)")
+
+    log_fn(f"\nSHA completed: {len(selected_keys_sha)} configs selected across all workloads"
+           f"{f'  ({len(reinstated)} reinstated via crossover check)' if reinstated else ''}")
     log_fn(f"Scaling laws fitted: {len(scaling_laws)}")
     return all_sha_rows, scaling_laws, selected_keys_sha
 
