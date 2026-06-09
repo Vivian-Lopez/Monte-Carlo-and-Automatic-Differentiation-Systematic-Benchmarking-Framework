@@ -51,16 +51,22 @@ set -euo pipefail
 PROJECT=""
 ZONE="europe-west2-b"
 REGION="europe-west2"
-MACHINE_TYPES="n2-standard-4 t2d-standard-4 c2-standard-8"
-EXPERIMENT_ID="final_cloud_profiler_v1"
+# 6 diverse machine types: AMD Milan, Intel Cascade Lake, Google cost-opt, AMD EPYC, AMD compute-opt
+# n2-standard-4 uses europe-west1-b to avoid europe-west2 quota exhaustion
+MACHINE_TYPES="e2-standard-4 e2-standard-8 t2d-standard-4 n2d-standard-4 c2d-standard-4"
+N2_ZONE="europe-west1-b"    # Intel Cascade Lake — different zone for quota
+EXPERIMENT_ID="sha_cloud_profiler_v2"
 RUNS=5
 WARMUP=2
-RUNS_PROBE=3
-WARMUP_PROBE=1
 M_VALUES="10000 50000 100000"
 M_PROBE=1000
 TOP_K=3
 SCORE_MARGIN=1.5
+# SHA parameters
+SHA_M_LEVELS="1000 5000 25000"
+SHA_ETA=2.0
+SHA_RUNS_PER_LEVEL="3 5 7"
+SHA_WARMUP_PER_LEVEL="1 2 2"
 CREATE_VMS=true
 DELETE_VMS_AFTER=true
 PROBE_ONLY=false
@@ -95,11 +101,15 @@ while [[ $# -gt 0 ]]; do
         --m-probe)        M_PROBE="$2";              shift 2 ;;
         --top-k)          TOP_K="$2";                shift 2 ;;
         --score-margin)   SCORE_MARGIN="$2";         shift 2 ;;
-        --no-create-vms)  CREATE_VMS=false;          shift   ;;
-        --no-delete-vms)  DELETE_VMS_AFTER=false;    shift   ;;
-        --probe-only)     PROBE_ONLY=true;           shift   ;;
-        --gcp-api-key)    GCP_API_KEY="$2";          shift 2 ;;
-        --help|-h)        usage ;;
+        --no-create-vms)          CREATE_VMS=false;              shift   ;;
+        --no-delete-vms)          DELETE_VMS_AFTER=false;        shift   ;;
+        --probe-only)             PROBE_ONLY=true;               shift   ;;
+        --gcp-api-key)            GCP_API_KEY="$2";              shift 2 ;;
+        --sha-m-levels)           SHA_M_LEVELS="$2";             shift 2 ;;
+        --sha-eta)                SHA_ETA="$2";                  shift 2 ;;
+        --sha-runs-per-level)     SHA_RUNS_PER_LEVEL="$2";       shift 2 ;;
+        --sha-warmup-per-level)   SHA_WARMUP_PER_LEVEL="$2";    shift 2 ;;
+        --help|-h)                usage ;;
         *) echo "Unknown argument: $1"; usage ;;
     esac
 done
@@ -124,9 +134,9 @@ echo "  Region/zone     : $REGION / $ZONE"
 echo "  Machine types   : $MACHINE_TYPES"
 echo "  Experiment ID   : $EXPERIMENT_ID"
 echo "  Runs/warmup     : $RUNS / $WARMUP"
-echo "  Probe runs      : $RUNS_PROBE / $WARMUP_PROBE"
 echo "  M values        : $M_VALUES"
-echo "  M probe         : $M_PROBE"
+echo "  SHA M levels    : $SHA_M_LEVELS  eta=$SHA_ETA"
+echo "  SHA runs/lvl    : $SHA_RUNS_PER_LEVEL  warmup=$SHA_WARMUP_PER_LEVEL"
 echo "  Create VMs      : $CREATE_VMS"
 echo "  Delete after    : $DELETE_VMS_AFTER"
 echo "  Probe only      : $PROBE_ONLY"
@@ -187,7 +197,7 @@ echo "  OK"
 declare -A VM_NAMES=()
 declare -A VM_DBS=()
 
-for MT in $MACHINE_TYPES; do
+for MT in $MACHINE_TYPES n2-standard-4; do
     VM="${VM_NAMES[$MT]:-$(vm_name_for "$MT")}"
     VM_NAMES[$MT]="$VM"
     VM_DBS[$MT]="$RESULTS_LOCAL_DIR/benchmarks_${MT}_${TIMESTAMP}.db"
@@ -230,7 +240,7 @@ echo "[3/6] Setting up and running experiments ..."
 
 declare -A VM_PIDS=()
 
-for MT in $MACHINE_TYPES; do
+for MT in $MACHINE_TYPES n2-standard-4; do
     VM="${VM_NAMES[$MT]:-}"
     if [[ -z "$VM" ]]; then
         echo "  Skipping $MT (VM not created)"
@@ -238,8 +248,15 @@ for MT in $MACHINE_TYPES; do
     fi
     DB_LOCAL="${VM_DBS[$MT]}"
 
+    # Zone for this machine type
+    USE_ZONE="$ZONE"
+    [[ "$MT" == "n2-standard-4" ]] && USE_ZONE="$N2_ZONE"
+
     # Build CLI args for the profiler
     M_CLI=$(echo "$M_VALUES" | tr ' ' '\n' | xargs printf " %s")
+    SHA_M_CLI=$(echo "$SHA_M_LEVELS" | tr ' ' '\n' | xargs printf " %s")
+    SHA_RUNS_CLI=$(echo "$SHA_RUNS_PER_LEVEL" | tr ' ' '\n' | xargs printf " %s")
+    SHA_WARMUP_CLI=$(echo "$SHA_WARMUP_PER_LEVEL" | tr ' ' '\n' | xargs printf " %s")
     PROBE_ONLY_FLAG=""
     [[ "$PROBE_ONLY" == true ]] && PROBE_ONLY_FLAG="--probe-only"
 
@@ -283,23 +300,35 @@ for MT in $MACHINE_TYPES; do
                 || echo 'C++ skipped'
         " || true
 
-        echo "  [$VM] Running profiler experiment ..."
+        echo "  [$VM] Attempting Rust build (maturin) ..."
+        vm_ssh "$VM" "
+            cd ${REPO_DIR}
+            source venv/bin/activate
+            pip install --quiet maturin 2>/dev/null
+            cd benchmarking/rust && maturin develop --release --quiet 2>/dev/null \
+                && echo 'Rust OK' || echo 'Rust skipped'
+        " || true
+
+        echo "  [$VM] Running profiler experiment (SHA edition) ..."
         vm_ssh "$VM" "
             cd ${REPO_DIR}
             source venv/bin/activate
             python experiments/run_profiler_vs_grid.py \
                 --experiment-id '${EXPERIMENT_ID}' \
                 --workloads european european_local_vol asian \
-                --engines cpu jax \
+                --engines cpu jax cpp rust \
                 --m-probe ${M_PROBE} \
                 --m-values ${M_CLI} \
                 --runs ${RUNS} --warmup ${WARMUP} \
-                --runs-probe ${RUNS_PROBE} --warmup-probe ${WARMUP_PROBE} \
                 --top-k ${TOP_K} \
                 --score-margin ${SCORE_MARGIN} \
+                --sha-m-levels ${SHA_M_CLI} \
+                --sha-eta ${SHA_ETA} \
+                --sha-runs-per-level ${SHA_RUNS_CLI} \
+                --sha-warmup-per-level ${SHA_WARMUP_CLI} \
                 --cloud-provider gcp \
                 --region ${REGION} \
-                --zone ${ZONE} \
+                --zone ${USE_ZONE} \
                 --instance-type ${MT} \
                 --write-db results/benchmarks.db \
                 --export results/ \
@@ -317,12 +346,19 @@ for MT in $MACHINE_TYPES; do
             --quiet
         echo "  [$VM] Results saved to: $DB_LOCAL"
 
-        # Also copy the text summary
+        # Also copy the text summary and SHA progression CSV
         gcloud compute scp \
             "${VM}:${REPO_DIR}/results/profiler_summary.txt" \
             "$RESULTS_LOCAL_DIR/profiler_summary_${MT}_${TIMESTAMP}.txt" \
             --project="$PROJECT" \
-            --zone="$ZONE" \
+            --zone="$USE_ZONE" \
+            --quiet 2>/dev/null || true
+
+        gcloud compute scp \
+            "${VM}:${REPO_DIR}/results/sha_progression.csv" \
+            "$RESULTS_LOCAL_DIR/sha_progression_${MT}_${TIMESTAMP}.csv" \
+            --project="$PROJECT" \
+            --zone="$USE_ZONE" \
             --quiet 2>/dev/null || true
 
     ) &
@@ -335,7 +371,7 @@ done
 echo ""
 echo "  Waiting for all VM jobs to complete ..."
 ALL_OK=true
-for MT in $MACHINE_TYPES; do
+for MT in $MACHINE_TYPES n2-standard-4; do
     [[ -z "${VM_NAMES[$MT]:-}" ]] && continue
     [[ -z "${VM_PIDS[$MT]:-}" ]] && continue
     wait "${VM_PIDS[$MT]}" || { echo "  [WARN] VM job for $MT failed"; ALL_OK=false; }
@@ -367,16 +403,17 @@ else
     echo ""
     echo "[4/6] Skipping VM deletion (--no-delete-vms)"
     echo "  Active VMs:"
-    for MT in $MACHINE_TYPES; do
+    for MT in $MACHINE_TYPES n2-standard-4; do
         VM="${VM_NAMES[$MT]:-}"
         [[ -z "$VM" ]] && continue
         echo "    ${VM}"
     done
     echo "  To delete manually:"
-    for MT in $MACHINE_TYPES; do
+    for MT in $MACHINE_TYPES n2-standard-4; do
         VM="${VM_NAMES[$MT]:-}"
         [[ -z "$VM" ]] && continue
-        echo "    gcloud compute instances delete ${VM} --project=$PROJECT --zone=$ZONE"
+        USE_ZONE="$ZONE"; [[ "$MT" == "n2-standard-4" ]] && USE_ZONE="$N2_ZONE"
+        echo "    gcloud compute instances delete ${VM} --project=$PROJECT --zone=${USE_ZONE}"
     done
 fi
 
@@ -387,8 +424,9 @@ echo ""
 echo "[5/6] Merging VM databases into results/benchmarks.db ..."
 
 MERGE_SOURCES=()
-for MT in $MACHINE_TYPES; do
-    DB="${VM_DBS[$MT]}"
+for MT in $MACHINE_TYPES n2-standard-4; do
+    DB="${VM_DBS[$MT]:-}"
+    [[ -z "$DB" ]] && continue
     if [[ -f "$DB" ]]; then
         MERGE_SOURCES+=("$DB")
         echo "  Found: $DB"
@@ -449,10 +487,26 @@ export_query(
               mean_runtime_ms, std_runtime_ms, throughput_paths_per_sec,
               cost_per_run, paths_per_dollar,
               profiler_phase, profiler_decision, profiler_reason, dominated,
+              sha_round, sha_eliminated,
+              scaling_law_alpha, scaling_law_beta,
+              extrapolated_runtime_ms, extrapolation_error_pct,
+              ad_overhead_ratio,
               instance_type, region, zone, machine_family, vcpu_count,
               result_value, memory_peak_mb, git_commit_hash, created_at
        FROM runs WHERE status = 'completed'
        ORDER BY instance_type, workload_type, engine, ad_mode, M"""
+)
+
+export_query(
+    export_dir / "sha_progression.csv",
+    """SELECT workload_type, engine, ad_mode, M, instance_type,
+              mean_runtime_ms, std_runtime_ms,
+              sha_round, sha_eliminated,
+              scaling_law_alpha, scaling_law_beta,
+              extrapolated_runtime_ms, extrapolation_error_pct,
+              ad_overhead_ratio, profiler_phase, profiler_decision
+       FROM runs WHERE status = 'completed' AND sha_round IS NOT NULL
+       ORDER BY instance_type, sha_round, workload_type, engine, ad_mode"""
 )
 
 export_query(

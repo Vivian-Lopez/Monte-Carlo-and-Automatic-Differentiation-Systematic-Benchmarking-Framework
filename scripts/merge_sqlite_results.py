@@ -59,6 +59,7 @@ _DEDUP_FIELDS = (
     "ad_mode",
     "M",
     "profiler_phase",
+    "sha_round",
     "instance_type",
     "created_at",
 )

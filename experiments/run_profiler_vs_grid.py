@@ -88,7 +88,7 @@ from benchmarking.core.config import (
 )
 from benchmarking.runner.runner import BenchmarkRunner
 from benchmarking.storage.database import BenchmarkDB
-from benchmarking.analysis.pareto import compute_pareto_frontier
+from benchmarking.analysis.pareto import compute_pareto_frontier, ci_overlap_select
 from benchmarking.cloud.metadata import get_instance_metadata
 from benchmarking.cloud.pricing import get_hourly_rate, compute_cost_per_run
 
@@ -303,6 +303,196 @@ def _spearman(x: List[float], y: List[float]) -> Optional[float]:
 
 
 # ---------------------------------------------------------------------------
+# Scaling-law utilities
+# ---------------------------------------------------------------------------
+
+def _fit_scaling_law(
+    m1: int, t1: float,
+    m2: int, t2: float,
+) -> Optional[Tuple[float, float]]:
+    """
+    Fit t(M) = alpha*M + beta using two (M, runtime_ms) observations.
+
+    Returns (alpha, beta) or None if the system is degenerate (m1 == m2).
+    alpha: slope  — ms per path (pure compute cost)
+    beta:  intercept — startup/fixed overhead (ms)
+
+    At large M the serial fraction is beta / (beta + alpha*M).
+    """
+    if m1 == m2 or m1 <= 0 or m2 <= 0:
+        return None
+    # Solve 2x2 linear system: [[m1,1],[m2,1]] * [alpha,beta]^T = [t1,t2]^T
+    denom = float(m2 - m1)
+    alpha = (t2 - t1) / denom
+    beta  = t1 - alpha * m1
+    return (alpha, beta)
+
+
+def _serial_fraction(alpha: float, beta: float, M: int) -> Optional[float]:
+    """
+    Amdahl serial fraction: fraction of runtime that cannot be parallelised
+    (startup/overhead) at a given M.
+
+    Returns None if the denominator is zero or negative (unphysical fit).
+    """
+    total = alpha * M + beta
+    if total <= 0:
+        return None
+    frac = beta / total
+    # Clamp to [0, 1] — a negative beta means the fit extrapolated past zero
+    return max(0.0, min(1.0, frac))
+
+
+# ---------------------------------------------------------------------------
+# Successive Halving (SHA)
+# ---------------------------------------------------------------------------
+
+def _successive_halving(
+    candidates: List[Tuple[str, str, str]],  # (workload, engine, ad_mode)
+    m_levels: List[int],
+    runs_per_level: List[int],
+    warmup_per_level: List[int],
+    eta: float,
+    jax_warmup_ms: Dict[Tuple[str, str], float],
+    hourly_rate: Optional[float],
+    db: "BenchmarkDB",
+    experiment_id: str,
+    cloud_meta: Dict[str, Any],
+    git_commit: Optional[str],
+    log_fn,
+) -> Tuple[
+    List[Dict[str, Any]],                     # all sha rows (every round)
+    Dict[Tuple[str, str, str], Tuple[float, float]],  # scaling_law per config_key
+    List[Tuple[str, str, str]],               # final SHA-selected keys
+]:
+    """
+    Run Successive Halving across *m_levels*.
+
+    Round 0 is the cheap probe; subsequent rounds run on surviving configs
+    only.  Within each workload, configs are pruned using CI-overlap plus
+    a hard cap of ceil(n / eta) survivors per round.
+
+    Returns:
+      all_sha_rows  : flat list of every run dict across all rounds
+      scaling_laws  : map from (workload, engine, ad_mode) to (alpha, beta)
+      selected_keys : final set of surviving (workload, engine, ad_mode) keys
+    """
+    import math as _math
+
+    # Working set: active (wl, eng, ad) triples per workload
+    active_by_wl: Dict[str, List[Tuple[str, str, str]]] = {}
+    for (wl, eng, ad) in candidates:
+        active_by_wl.setdefault(wl, []).append((wl, eng, ad))
+
+    all_sha_rows: List[Dict[str, Any]] = []
+    # rows_by_key[round_idx][(wl, eng, ad)] = result_row
+    rows_by_round: List[Dict[Tuple[str, str, str], Dict[str, Any]]] = []
+
+    for round_idx, (M, n_runs, n_warmup) in enumerate(
+        zip(m_levels, runs_per_level, warmup_per_level)
+    ):
+        round_rows: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+        log_fn(f"\n--- SHA ROUND {round_idx}  M={M:,}  runs={n_runs}  warmup={n_warmup} ---")
+
+        for wl, active_keys in active_by_wl.items():
+            for (wl2, eng, ad) in active_keys:
+                k = (wl2, eng, ad)
+                print(f"  sha[{round_idx}] {eng}/{wl2}/{ad} M={M} ...", end=" ", flush=True)
+                row = run_one(eng, wl2, M, ad, n_warmup, n_runs)
+                if row is None:
+                    print("skipped")
+                    continue
+                if not hourly_rate:
+                    row["cost_per_run"] = _synthetic_cost(row["mean_runtime_ms"], M)
+                print(f"{row['mean_runtime_ms']:.2f} ms")
+                round_rows[k] = row
+                all_sha_rows.append(row)
+                phase_tag = f"sha_round_{round_idx}"
+                save_to_db(
+                    db, row, experiment_id, "sha_probe", hourly_rate, cloud_meta,
+                    profiler_phase=phase_tag, git_commit=git_commit,
+                    sha_round=round_idx, sha_eliminated=0,
+                )
+
+        rows_by_round.append(round_rows)
+
+        # Pruning: only prune after round 0 (need ≥ 2 rounds to use CI)
+        if round_idx == len(m_levels) - 1:
+            # Final round — no pruning, all survivors selected
+            break
+
+        new_active_by_wl: Dict[str, List[Tuple[str, str, str]]] = {}
+        for wl, active_keys in active_by_wl.items():
+            wl_rows = [round_rows[k] for k in active_keys if k in round_rows]
+            if not wl_rows:
+                continue
+
+            # CI-overlap pruning against the best config
+            survivors_rows = ci_overlap_select(
+                wl_rows, n_runs=n_runs,
+                key="mean_runtime_ms", std_key="std_runtime_ms",
+            )
+
+            # Hard budget cap: ceil(n / eta) — ensures geometric budget decay
+            cap = _math.ceil(len(wl_rows) / eta)
+            if len(survivors_rows) > cap:
+                survivors_rows = survivors_rows[:cap]
+
+            survivor_keys = {_config_key(r) for r in survivors_rows}
+            # Mark eliminated configs in DB
+            eliminated = [k for k in active_keys if k in round_rows and k not in survivor_keys]
+            for k in eliminated:
+                elim_row = round_rows[k]
+                phase_tag = f"sha_round_{round_idx}"
+                save_to_db(
+                    db, elim_row, experiment_id, "sha_probe", hourly_rate, cloud_meta,
+                    profiler_phase=phase_tag, git_commit=git_commit,
+                    sha_round=round_idx, sha_eliminated=1,
+                )
+
+            new_active_by_wl[wl] = [k for k in active_keys if k in survivor_keys]
+
+            def _score_for_log(r):
+                is_jit = r["engine"] in _JIT_ENGINES
+                ewms = jax_warmup_ms.get((r["workload"], r["engine"]), 0.0) if is_jit else 0.0
+                return _probe_score(r, jit_correction=is_jit, extra_warmup_ms=ewms)
+
+            log_fn(f"  {wl}: {len(wl_rows)} active -> {len(new_active_by_wl.get(wl, []))} survivors")
+            for r in survivors_rows[:cap]:
+                log_fn(f"    [SHA-KEEP] {r['engine']}/{r['ad_mode']}  "
+                       f"rt={r['mean_runtime_ms']:.2f}ms  score={_score_for_log(r):.2f}")
+            for k in eliminated:
+                r = round_rows[k]
+                log_fn(f"    [SHA-ELIM] {r['engine']}/{r['ad_mode']}  "
+                       f"rt={r['mean_runtime_ms']:.2f}ms  (CI-pruned)")
+
+        active_by_wl = new_active_by_wl
+
+    # ── Fit scaling laws (using round-0 and round-1 data if available) ───────
+    scaling_laws: Dict[Tuple[str, str, str], Tuple[float, float]] = {}
+    if len(rows_by_round) >= 2 and len(m_levels) >= 2:
+        m0, m1_val = m_levels[0], m_levels[1]
+        for k, row0 in rows_by_round[0].items():
+            row1 = rows_by_round[1].get(k)
+            if row1 is not None:
+                fit = _fit_scaling_law(
+                    m0, row0["mean_runtime_ms"],
+                    m1_val, row1["mean_runtime_ms"],
+                )
+                if fit:
+                    scaling_laws[k] = fit
+
+    # ── Final selected keys: all survivors from last active round ────────────
+    selected_keys_sha: List[Tuple[str, str, str]] = []
+    for keys in active_by_wl.values():
+        selected_keys_sha.extend(keys)
+
+    log_fn(f"\nSHA completed: {len(selected_keys_sha)} configs selected across all workloads")
+    log_fn(f"Scaling laws fitted: {len(scaling_laws)}")
+    return all_sha_rows, scaling_laws, selected_keys_sha
+
+
+# ---------------------------------------------------------------------------
 # DB save helper
 # ---------------------------------------------------------------------------
 
@@ -318,6 +508,12 @@ def save_to_db(
     profiler_reason: Optional[str] = None,
     dominated: Optional[int] = None,
     git_commit: Optional[str] = None,
+    sha_round: Optional[int] = None,
+    sha_eliminated: Optional[int] = None,
+    scaling_law_alpha: Optional[float] = None,
+    scaling_law_beta: Optional[float] = None,
+    extrapolated_runtime_ms: Optional[float] = None,
+    extrapolation_error_pct: Optional[float] = None,
 ) -> None:
     meta = row["metadata"]
     cfg  = row["config"]
@@ -363,6 +559,7 @@ def save_to_db(
         python_version=meta.get("python_version"),
         numpy_version=meta.get("numpy_version"),
         jax_version=meta.get("jax_version"),
+        blas_backend=meta.get("blas_backend"),
         cost_per_run=cost if cost else None,
         paths_per_dollar=ppd,
         cloud_provider=cloud_meta.get("cloud_provider"),
@@ -376,6 +573,12 @@ def save_to_db(
         profiler_reason=profiler_reason,
         dominated=dominated,
         git_commit_hash=git_commit,
+        sha_round=sha_round,
+        sha_eliminated=sha_eliminated,
+        scaling_law_alpha=scaling_law_alpha,
+        scaling_law_beta=scaling_law_beta,
+        extrapolated_runtime_ms=extrapolated_runtime_ms,
+        extrapolation_error_pct=extrapolation_error_pct,
     )
 
 
@@ -401,6 +604,10 @@ def _export_results(db: BenchmarkDB, export_dir: Path, experiment_id: str) -> No
                   mean_runtime_ms, std_runtime_ms, throughput_paths_per_sec,
                   cost_per_run, paths_per_dollar,
                   profiler_phase, profiler_decision, profiler_reason, dominated,
+                  sha_round, sha_eliminated,
+                  scaling_law_alpha, scaling_law_beta,
+                  extrapolated_runtime_ms, extrapolation_error_pct,
+                  ad_overhead_ratio,
                   instance_type, region, zone, machine_family, vcpu_count,
                   result_value, memory_peak_mb, git_commit_hash, created_at
            FROM runs
@@ -472,6 +679,28 @@ def _export_results(db: BenchmarkDB, export_dir: Path, experiment_id: str) -> No
             w.writerows(dict(r) for r in rank_rows)
         print(f"  Exported: {rt_path}")
 
+    # sha_progression.csv — SHA elimination trajectory + scaling law predictions
+    sha_rows = conn.execute(
+        """SELECT workload_type, engine, ad_mode, M, instance_type,
+                  mean_runtime_ms, std_runtime_ms,
+                  sha_round, sha_eliminated,
+                  scaling_law_alpha, scaling_law_beta,
+                  extrapolated_runtime_ms, extrapolation_error_pct,
+                  ad_overhead_ratio, profiler_phase, profiler_decision
+           FROM runs
+           WHERE experiment_id = ? AND status = 'completed'
+             AND sha_round IS NOT NULL
+           ORDER BY sha_round, workload_type, engine, ad_mode""",
+        (experiment_id,),
+    ).fetchall()
+    sha_path = export_dir / "sha_progression.csv"
+    if sha_rows:
+        with open(sha_path, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=sha_rows[0].keys())
+            w.writeheader()
+            w.writerows(dict(r) for r in sha_rows)
+        print(f"  Exported: {sha_path}  ({len(sha_rows)} rows)")
+
     conn.close()
 
 
@@ -504,6 +733,15 @@ def main() -> None:
     parser.add_argument("--score-margin", type=float, default=1.5,
                         help="Safety margin: keep configs within margin x best_score")
     parser.add_argument("--probe-only",   action="store_true")
+    # SHA parameters
+    parser.add_argument("--sha-m-levels",        nargs="+", type=int, default=[1_000, 5_000, 25_000],
+                        help="M levels for Successive Halving rounds (default: 1000 5000 25000)")
+    parser.add_argument("--sha-eta",             type=float, default=2.0,
+                        help="Halving rate: ceil(n/eta) survivors per round (default: 2.0)")
+    parser.add_argument("--sha-runs-per-level",  nargs="+", type=int, default=[3, 5, 7],
+                        help="Repetitions per SHA round (default: 3 5 7)")
+    parser.add_argument("--sha-warmup-per-level",nargs="+", type=int, default=[1, 2, 2],
+                        help="Warmup runs per SHA round (default: 1 2 2)")
     parser.add_argument("--dry-run",      action="store_true",
                         help="Smoke-test: tiny M, 1 run, 0 warmup, temp DB")
     # DB / export
@@ -527,6 +765,9 @@ def main() -> None:
         args.warmup_probe = 0
         args.runs       = 1
         args.warmup     = 0
+        args.sha_m_levels        = [500, 1000]
+        args.sha_runs_per_level  = [1, 1]
+        args.sha_warmup_per_level= [0, 0]
         _tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         args.db_path = _tmp.name
         _tmp.close()
@@ -565,6 +806,52 @@ def main() -> None:
         if m:
             vcpu_count = int(m.group(1))
 
+    # Detect BLAS backend (answers RQ1 & RQ2 without extra runs)
+    blas_backend: Optional[str] = None
+    try:
+        import numpy as _np_blas
+        cfg_info = {}
+        try:
+            cfg_info = dict(_np_blas.show_config(mode="dicts").get("blas_opt_info", {}))
+        except Exception:
+            pass
+        libraries = cfg_info.get("libraries", [])
+        if any("mkl" in str(lib).lower() for lib in libraries):
+            blas_backend = "mkl"
+        elif any("openblas" in str(lib).lower() for lib in libraries):
+            blas_backend = "openblas"
+        else:
+            # Fallback: inspect linked libraries via ldd on numpy core
+            import subprocess as _sp, os as _os
+            np_core = _os.path.dirname(_np_blas.__file__)
+            try:
+                ldd_out = _sp.check_output(
+                    ["find", np_core, "-name", "*.so", "-exec", "ldd", "{}", ";"],
+                    stderr=_sp.DEVNULL, timeout=5,
+                ).decode()
+                if "mkl" in ldd_out.lower():
+                    blas_backend = "mkl"
+                elif "openblas" in ldd_out.lower():
+                    blas_backend = "openblas"
+                else:
+                    blas_backend = "unknown"
+            except Exception:
+                blas_backend = "unknown"
+    except Exception:
+        pass
+
+    # Align SHA m_levels[0] with --m-probe for backward compatibility
+    sha_m_levels = list(args.sha_m_levels)
+    if sha_m_levels and sha_m_levels[0] != args.m_probe:
+        sha_m_levels[0] = args.m_probe
+    # Pad runs/warmup lists to match m_levels length
+    sha_runs = list(args.sha_runs_per_level)
+    sha_warmup = list(args.sha_warmup_per_level)
+    while len(sha_runs) < len(sha_m_levels):
+        sha_runs.append(sha_runs[-1] if sha_runs else args.runs_probe)
+    while len(sha_warmup) < len(sha_m_levels):
+        sha_warmup.append(sha_warmup[-1] if sha_warmup else args.warmup_probe)
+
     cloud_meta: Dict[str, Any] = {
         "cloud_provider": cloud_provider,
         "region":         region,
@@ -583,18 +870,19 @@ def main() -> None:
         lines.append(msg)
 
     log("=" * 70)
-    log("Budget-Aware Profiler vs Naive Grid Search")
+    log("Budget-Aware Profiler vs Naive Grid Search (SHA edition)")
     if args.dry_run:
         log("*** DRY-RUN MODE — tiny M, temp DB ***")
     log(f"Experiment ID : {experiment_id}")
     log(f"Git commit    : {git_commit or 'unknown'}")
     log(f"Workloads     : {args.workloads}")
     log(f"Engines       : {args.engines}")
-    log(f"Probe M       : {args.m_probe}")
+    log(f"BLAS backend  : {blas_backend or 'unknown'}")
+    log(f"SHA M levels  : {sha_m_levels}  eta={args.sha_eta}")
+    log(f"SHA runs/lvl  : {sha_runs}  warmup={sha_warmup}")
     log(f"Full M values : {args.m_values}")
-    log(f"Probe runs    : {args.runs_probe}  warmup={args.warmup_probe}")
     log(f"Full runs     : {args.runs}  warmup={args.warmup}")
-    log(f"Top-K         : {args.top_k}  score_margin={args.score_margin}x")
+    log(f"Old profiler  : top-k={args.top_k}  score_margin={args.score_margin}x")
     log(f"Instance      : {instance_type or 'local'}")
     log(f"Region/zone   : {region or 'n/a'} / {zone or 'n/a'}")
     log(f"Hourly rate   : {'${:.4f}'.format(hourly_rate) if hourly_rate else 'n/a (local)'}")
@@ -619,45 +907,53 @@ def main() -> None:
     log(f"Full-grid total runs (x {len(args.m_values)} M values): {total_full_configs}")
 
     # -----------------------------------------------------------------------
-    # Step 2: Probe runs with JIT warmup estimation
+    # Step 2: Successive Halving (SHA) — multi-fidelity probe
+    # Round 0 is identical to the old probe, so SHA and old profiler share
+    # the same round-0 data for a free side-by-side comparison.
     # -----------------------------------------------------------------------
-    log("\n--- PROBE RUNS (M={}) ---".format(args.m_probe))
-    probe_results: List[Dict[str, Any]] = []
 
-    # Extra JIT warmup timing for JAX to estimate compile cost
+    # Extra JIT warmup timing for JAX (used by both SHA and old profiler scoring)
     jax_warmup_ms: Dict[Tuple[str, str], float] = {}
     if "jax" in args.engines and _ENGINES.get("jax"):
         for wl in args.workloads:
             if wl not in _ENGINE_WORKLOADS.get("jax", set()):
                 continue
-            _jit_row = run_one("jax", wl, args.m_probe, "none", 1, 1)
+            _jit_row = run_one("jax", wl, sha_m_levels[0], "none", 1, 1)
             if _jit_row:
                 jax_warmup_ms[(wl, "jax")] = _jit_row["mean_runtime_ms"]
 
-    for wl, eng, ad in candidates:
-        print(f"  probe {eng}/{wl}/{ad} ...", end=" ", flush=True)
-        row = run_one(eng, wl, args.m_probe, ad, args.warmup_probe, args.runs_probe)
-        if row is None:
-            print("skipped")
-            continue
-        if not hourly_rate:
-            row["cost_per_run"] = _synthetic_cost(row["mean_runtime_ms"], args.m_probe)
-        print(f"{row['mean_runtime_ms']:.2f} ms  price={row['result']:.4f}")
-        probe_results.append(row)
-        save_to_db(db, row, experiment_id, "probe_run", hourly_rate, cloud_meta,
-                   profiler_phase="probe", git_commit=git_commit)
+    sha_all_rows, scaling_laws, selected_keys_sha = _successive_halving(
+        candidates=candidates,
+        m_levels=sha_m_levels,
+        runs_per_level=sha_runs,
+        warmup_per_level=sha_warmup,
+        eta=args.sha_eta,
+        jax_warmup_ms=jax_warmup_ms,
+        hourly_rate=hourly_rate,
+        db=db,
+        experiment_id=experiment_id,
+        cloud_meta=cloud_meta,
+        git_commit=git_commit,
+        log_fn=log,
+    )
 
-    log(f"\nProbe runs completed: {len(probe_results)} / {len(candidates)}")
+    # Round-0 rows are the cheap probe — extract for old profiler side-by-side
+    probe_results: List[Dict[str, Any]] = [
+        r for r in sha_all_rows if r["M"] == sha_m_levels[0]
+    ]
+
+    log(f"\nSHA probe runs (round 0, M={sha_m_levels[0]}): {len(probe_results)} / {len(candidates)}")
 
     if args.probe_only:
-        log("\n[probe-only mode] Stopping after probe.")
+        log("\n[probe-only mode] Stopping after SHA probe.")
         _write_summary(summary_path, lines)
         return
 
     # -----------------------------------------------------------------------
-    # Step 3: Score and select promising configurations
+    # Step 3a: OLD profiler selection (from round-0 data only)
+    # Kept for side-by-side comparison — uses same fixed-margin heuristic
     # -----------------------------------------------------------------------
-    log("\n--- PROFILER SELECTION ---")
+    log("\n--- OLD PROFILER SELECTION (from SHA round-0 data) ---")
 
     by_workload: Dict[str, List[Dict[str, Any]]] = {}
     for row in probe_results:
@@ -668,9 +964,9 @@ def main() -> None:
     pruned_reasons: Dict[Tuple[str, str, str], str] = {}
 
     for wl, wl_rows in by_workload.items():
-        def score(r: Dict[str, Any]) -> float:
+        def score(r: Dict[str, Any], _wl: str = wl) -> float:
             is_jit = r["engine"] in _JIT_ENGINES
-            ewms = jax_warmup_ms.get((wl, r["engine"]), 0.0) if is_jit else 0.0
+            ewms = jax_warmup_ms.get((_wl, r["engine"]), 0.0) if is_jit else 0.0
             return _probe_score(r, jit_correction=is_jit, extra_warmup_ms=ewms)
 
         pareto_probe = compute_pareto_frontier(wl_rows, x_key="mean_runtime_ms", y_key="cost_per_run")
@@ -678,12 +974,12 @@ def main() -> None:
             pareto_probe = wl_rows
 
         pareto_scored = sorted(pareto_probe, key=score)
-        best_score = score(pareto_scored[0]) if pareto_scored else float("inf")
+        best_score_val = score(pareto_scored[0]) if pareto_scored else float("inf")
         margin = args.score_margin
-        within_margin = [r for r in pareto_scored if score(r) <= best_score * margin]
+        within_margin = [r for r in pareto_scored if score(r) <= best_score_val * margin]
         top = within_margin[:args.top_k]
 
-        # Diversity guard: at least one config per available engine
+        # Diversity guard
         engines_in_top = {r["engine"] for r in top}
         for eng in {r["engine"] for r in wl_rows} - engines_in_top:
             eng_rows = [r for r in wl_rows if r["engine"] == eng]
@@ -703,9 +999,8 @@ def main() -> None:
             parts = []
             if r in pareto_scored[:args.top_k]:
                 parts.append(f"top-{args.top_k} probe Pareto")
-            if s <= best_score * margin and r not in pareto_scored[:args.top_k]:
+            if s <= best_score_val * margin and r not in pareto_scored[:args.top_k]:
                 parts.append(f"within {margin}x safety margin")
-            # Check diversity: is this the only config for its engine in selected_keys so far?
             eng_in_sel = {k2[1] for k2 in selected_keys[wl] if k2 != k}
             if r["engine"] not in eng_in_sel:
                 parts.append("diversity guard")
@@ -718,23 +1013,47 @@ def main() -> None:
             if k not in selected_keys[wl]:
                 pruned_reasons[k] = (
                     f"dominated or outside {margin}x margin "
-                    f"(score={score(r):.2f} vs best={best_score:.2f})"
+                    f"(score={score(r):.2f} vs best={best_score_val:.2f})"
                 )
 
-        log(f"\n  {wl}: {len(wl_rows)} probed -> {len(top)} selected")
+        log(f"\n  {wl}: {len(wl_rows)} probed -> {len(top)} selected (old profiler)")
         for r in top:
             k = _config_key(r)
-            log(f"    [SEL] {r['engine']}/{r['ad_mode']}  score={score(r):.2f}  "
+            log(f"    [OLD-SEL] {r['engine']}/{r['ad_mode']}  score={score(r):.2f}  "
                 f"rt={r['mean_runtime_ms']:.2f}ms  reason: {selected_reasons[k]}")
-        for r in wl_rows:
-            k = _config_key(r)
-            if k in pruned_reasons:
-                log(f"    [PRN] {r['engine']}/{r['ad_mode']}  score={score(r):.2f}  "
-                    f"-> {pruned_reasons[k]}")
 
     total_selected = sum(len(v) for v in selected_keys.values())
     profiler_full_configs = total_selected * len(args.m_values)
     runs_saved = total_full_configs - profiler_full_configs
+
+    # -----------------------------------------------------------------------
+    # Step 3b: SHA selection summary
+    # -----------------------------------------------------------------------
+    log("\n--- SHA SELECTION SUMMARY ---")
+    sha_selected_by_wl: Dict[str, List[Tuple[str, str, str]]] = {}
+    for k in selected_keys_sha:
+        wl2, eng, ad = k
+        sha_selected_by_wl.setdefault(wl2, []).append(k)
+    sha_total_selected = len(selected_keys_sha)
+    sha_profiler_full_configs = sha_total_selected * len(args.m_values)
+    sha_runs_saved = total_full_configs - sha_profiler_full_configs
+    for wl in args.workloads:
+        sha_sel = sha_selected_by_wl.get(wl, [])
+        log(f"  {wl}: SHA selected {len(sha_sel)} configs:")
+        for (wl2, eng, ad) in sha_sel:
+            log(f"    [SHA-SEL] {eng}/{ad}")
+
+    # Scaling law report (answers RQ5: Amdahl serial fraction)
+    if scaling_laws:
+        log("\n--- SCALING LAW FITS (t = alpha*M + beta) ---")
+        log(f"  {'config':<35} {'alpha(ms/path)':>15} {'beta(ms)':>10} {'serial_frac@100k':>18}")
+        max_M_for_sf = max(args.m_values)
+        for k, (alpha, beta) in sorted(scaling_laws.items()):
+            wl2, eng, ad = k
+            sf = _serial_fraction(alpha, beta, max_M_for_sf)
+            sf_str = f"{sf*100:.1f}%" if sf is not None else "n/a"
+            warn = " ← STARTUP-DOMINATED" if (sf is not None and sf > 0.3) else ""
+            log(f"  {wl2}/{eng}/{ad:<20} {alpha:>15.6f} {beta:>10.2f} {sf_str:>18}{warn}")
 
     # -----------------------------------------------------------------------
     # Step 4: Full naive grid-search
@@ -748,6 +1067,7 @@ def main() -> None:
 
     for wl, eng, ad in candidates:
         for M in args.m_values:
+            ck = (wl, eng, ad)
             print(f"  grid {eng}/{wl}/{ad} M={M} ...", end=" ", flush=True)
             row = run_one(eng, wl, M, ad, args.warmup, args.runs)
             if row is None:
@@ -759,14 +1079,44 @@ def main() -> None:
             if not hourly_rate:
                 row["cost_per_run"] = _synthetic_cost(row["mean_runtime_ms"], M)
 
-            ck = (wl, eng, ad)
-            is_selected = ck in selected_keys.get(wl, [])
-            exp_type = "profiler_selected" if is_selected else "grid_search_full"
-            decision = "selected" if is_selected else "full_grid_only"
-            reason = selected_reasons.get(ck) if is_selected else pruned_reasons.get(ck)
-            save_to_db(db, row, experiment_id, exp_type, hourly_rate, cloud_meta,
-                       profiler_phase="full", profiler_decision=decision,
-                       profiler_reason=reason, git_commit=git_commit)
+            # Compute extrapolation error for scaling law if this is max_M
+            ext_err: Optional[float] = None
+            sl_alpha: Optional[float] = None
+            sl_beta: Optional[float] = None
+            ext_pred: Optional[float] = None
+            if ck in scaling_laws and M == max_M:
+                sl_alpha, sl_beta = scaling_laws[ck]
+                ext_pred = sl_alpha * M + sl_beta
+                if row["mean_runtime_ms"] > 0:
+                    ext_err = abs(ext_pred - row["mean_runtime_ms"]) / row["mean_runtime_ms"] * 100.0
+
+            # per-vCPU throughput stored in metadata (answers RQ1)
+            vc = cloud_meta.get("vcpu_count")
+            if vc and vc > 0 and row.get("throughput", 0) > 0:
+                row["throughput_per_vcpu"] = row["throughput"] / vc
+
+            is_old_selected = ck in selected_keys.get(wl, [])
+            is_sha_selected = ck in selected_keys_sha
+            if is_old_selected and is_sha_selected:
+                exp_type = "profiler_selected"
+                decision = "selected_both"
+            elif is_old_selected:
+                exp_type = "profiler_selected"
+                decision = "selected_old"
+            elif is_sha_selected:
+                exp_type = "sha_selected"
+                decision = "selected_sha"
+            else:
+                exp_type = "grid_search_full"
+                decision = "full_grid_only"
+            reason = selected_reasons.get(ck) if is_old_selected else pruned_reasons.get(ck)
+            save_to_db(
+                db, row, experiment_id, exp_type, hourly_rate, cloud_meta,
+                profiler_phase="full", profiler_decision=decision,
+                profiler_reason=reason, git_commit=git_commit,
+                scaling_law_alpha=sl_alpha, scaling_law_beta=sl_beta,
+                extrapolated_runtime_ms=ext_pred, extrapolation_error_pct=ext_err,
+            )
 
     log(f"\nFull grid completed: {len(full_results)} runs stored")
 
@@ -798,32 +1148,45 @@ def main() -> None:
                 f"cost={r['cost_per_run']:.2e}")
 
     # -----------------------------------------------------------------------
-    # Step 6: Pareto overlap report
+    # Step 6: Pareto overlap — evaluate BOTH old profiler and SHA
     # -----------------------------------------------------------------------
     log("\n--- PROFILER vs PARETO OVERLAP ---")
 
     total_pareto    = 0
     total_recovered = 0
     total_missed    = 0
+    sha_total_pareto    = 0
+    sha_total_recovered = 0
+    sha_total_missed    = 0
 
     for wl in args.workloads:
-        sel = set(selected_keys.get(wl, []))
-        par = set(pareto_keys_by_workload.get(wl, []))
-        recovered = sel & par
-        missed    = par - sel
-        total_pareto    += len(par)
-        total_recovered += len(recovered)
-        total_missed    += len(missed)
+        sel     = set(selected_keys.get(wl, []))
+        sha_sel = set(sha_selected_by_wl.get(wl, []))
+        par     = set(pareto_keys_by_workload.get(wl, []))
+
+        recovered     = sel & par
+        missed        = par - sel
+        sha_recovered = sha_sel & par
+        sha_missed    = par - sha_sel
+
+        total_pareto        += len(par)
+        total_recovered     += len(recovered)
+        total_missed        += len(missed)
+        sha_total_pareto    += len(par)
+        sha_total_recovered += len(sha_recovered)
+        sha_total_missed    += len(sha_missed)
+
         log(f"\n  {wl}:")
-        log(f"    Pareto frontier size       : {len(par)}")
-        log(f"    Profiler selected          : {len(sel)}")
-        log(f"    Recovered Pareto configs   : {len(recovered)}")
-        log(f"    Missed Pareto configs      : {len(missed)}")
+        log(f"    Pareto frontier size          : {len(par)}")
+        log(f"    [OLD] selected / recovered / missed : {len(sel)} / {len(recovered)} / {len(missed)}")
+        log(f"    [SHA] selected / recovered / missed : {len(sha_sel)} / {len(sha_recovered)} / {len(sha_missed)}")
         if missed:
-            log(f"    Missed: {[f'{e}/{a}' for _, e, a in missed]}")
+            log(f"    [OLD] missed: {[f'{e}/{a}' for _, e, a in missed]}")
+        if sha_missed:
+            log(f"    [SHA] missed: {[f'{e}/{a}' for _, e, a in sha_missed]}")
 
     # -----------------------------------------------------------------------
-    # Step 7: Regret + best-config report
+    # Step 7: Regret + best-config report (both old profiler and SHA)
     # -----------------------------------------------------------------------
     all_max_M_rows = [r for (w, e, a, m), r in full_results.items() if m == max_M]
 
@@ -831,6 +1194,7 @@ def main() -> None:
     cost_rows_valid = [r for r in all_max_M_rows if r.get("cost_per_run", 0) > 0]
     best_by_cost = min(cost_rows_valid, key=lambda r: r["cost_per_run"]) if cost_rows_valid else None
 
+    # Old profiler best
     selected_max_M_rows = [
         r for (w, e, a, m), r in full_results.items()
         if m == max_M and (w, e, a) in selected_keys.get(w, [])
@@ -850,8 +1214,33 @@ def main() -> None:
             profiler_best["mean_runtime_ms"], max_M)
         cost_regret = (prof_c - best_by_cost["cost_per_run"]) / best_by_cost["cost_per_run"]
 
+    # SHA best
+    sha_max_M_rows = [
+        r for (w, e, a, m), r in full_results.items()
+        if m == max_M and (w, e, a) in selected_keys_sha
+    ]
+    sha_best = min(sha_max_M_rows, key=lambda r: r["mean_runtime_ms"]) if sha_max_M_rows else None
+
+    sha_runtime_regret: Optional[float] = None
+    if sha_best and best_by_runtime and best_by_runtime["mean_runtime_ms"] > 0:
+        sha_runtime_regret = (
+            (sha_best["mean_runtime_ms"] - best_by_runtime["mean_runtime_ms"])
+            / best_by_runtime["mean_runtime_ms"]
+        )
+
+    sha_cost_regret: Optional[float] = None
+    if sha_best and best_by_cost and best_by_cost.get("cost_per_run", 0) > 0:
+        sha_c = sha_best.get("cost_per_run") or _synthetic_cost(sha_best["mean_runtime_ms"], max_M)
+        sha_cost_regret = (sha_c - best_by_cost["cost_per_run"]) / best_by_cost["cost_per_run"]
+
+    # AD overhead summary (answers RQ2)
+    ad_overhead_rows = [
+        r for (w, e, a, m), r in full_results.items()
+        if m == max_M and a != "none" and r.get("ad_overhead_ratio") is not None
+    ]
+
     # -----------------------------------------------------------------------
-    # Step 8: Spearman rank correlation
+    # Step 8: Spearman rank correlation (probe round-0 → full grid at max_M)
     # -----------------------------------------------------------------------
     probe_scores_for_corr: List[float] = []
     full_runtimes_for_corr: List[float] = []
@@ -869,11 +1258,54 @@ def main() -> None:
 
     rank_corr = _spearman(probe_scores_for_corr, full_runtimes_for_corr)
 
+    # SHA final-round scores vs full-grid runtimes (better predictor)
+    sha_final_m = sha_m_levels[-1] if sha_m_levels else sha_m_levels[0]
+    sha_last_round_rows = [r for r in sha_all_rows if r["M"] == sha_final_m]
+    sha_scores_corr: List[float] = []
+    sha_full_corr: List[float] = []
+    for sha_row in sha_last_round_rows:
+        k = _config_key(sha_row)
+        wl, eng, ad = k
+        full_row = full_results.get((wl, eng, ad, max_M))
+        if full_row is not None:
+            is_jit = eng in _JIT_ENGINES
+            ewms = jax_warmup_ms.get((wl, eng), 0.0) if is_jit else 0.0
+            sha_scores_corr.append(
+                _probe_score(sha_row, jit_correction=is_jit, extra_warmup_ms=ewms)
+            )
+            sha_full_corr.append(full_row["mean_runtime_ms"])
+
+    sha_rank_corr = _spearman(sha_scores_corr, sha_full_corr)
+
+    # Extrapolation accuracy summary
+    ext_errors = [
+        r.get("ext_err") for r in [
+            {"ext_err": (
+                abs((scaling_laws[k][0]*max_M + scaling_laws[k][1]) - full_results[(k[0],k[1],k[2],max_M)]["mean_runtime_ms"])
+                / full_results[(k[0],k[1],k[2],max_M)]["mean_runtime_ms"] * 100.0
+            )}
+            for k in scaling_laws
+            if (k[0],k[1],k[2],max_M) in full_results
+               and full_results[(k[0],k[1],k[2],max_M)]["mean_runtime_ms"] > 0
+        ]
+        if r.get("ext_err") is not None
+    ]
+    mean_ext_err = (sum(ext_errors) / len(ext_errors)) if ext_errors else None
+
     # -----------------------------------------------------------------------
-    # Step 9: Summary
+    # Step 9: Side-by-side summary
     # -----------------------------------------------------------------------
     pct_saved     = 100.0 * runs_saved / total_full_configs if total_full_configs > 0 else 0.0
-    pct_recovered = 100.0 * total_recovered / total_pareto  if total_pareto > 0 else 0.0
+    sha_pct_saved = 100.0 * sha_runs_saved / total_full_configs if total_full_configs > 0 else 0.0
+    pct_recovered     = 100.0 * total_recovered / total_pareto if total_pareto > 0 else 0.0
+    sha_pct_recovered = 100.0 * sha_total_recovered / sha_total_pareto if sha_total_pareto > 0 else 0.0
+
+    # SHA total probe budget (all rounds combined)
+    sha_probe_paths = sum(
+        r["M"] for r in sha_all_rows
+    )
+    grid_paths = sum(M * total_grid_configs for M in args.m_values)
+    sha_budget_savings_pct = 100.0 * (1.0 - sha_probe_paths / grid_paths) if grid_paths > 0 else 0.0
 
     log("\n" + "=" * 70)
     log("SUMMARY")
@@ -882,59 +1314,71 @@ def main() -> None:
     log(f"Git commit                          : {git_commit or 'unknown'}")
     log(f"Instance                            : {instance_type or 'local'}")
     log(f"Region / zone                       : {region or 'n/a'} / {zone or 'n/a'}")
+    log(f"BLAS backend                        : {blas_backend or 'unknown'}")
     log("")
     log(f"Total grid configurations           : {total_grid_configs}")
     log(f"Number of full-grid configurations  : {total_full_configs}")
-    log(f"Number selected by profiler         : {profiler_full_configs}")
-    log(f"Full runs saved                     : {runs_saved}  ({pct_saved:.1f}%)")
     log("")
-    log(f"Total Pareto-optimal configurations : {total_pareto}")
-    log(f"Pareto configs recovered            : {total_recovered}  ({pct_recovered:.1f}%)")
-    log(f"Pareto configs missed               : {total_missed}")
+    log(f"{'Metric':<45} {'Old Profiler':>15} {'SHA':>15}")
+    log(f"  {'-'*73}")
+    log(f"  {'Deployed full runs selected':<43} {profiler_full_configs:>15} {sha_profiler_full_configs:>15}")
+    log(f"  {'Full runs saved vs naive grid':<43} {runs_saved:>14} {sha_runs_saved:>14}")
+    log(f"  {'% runs saved':<43} {pct_saved:>14.1f}% {sha_pct_saved:>14.1f}%")
+    log(f"  {'Pareto recovery':<43} {pct_recovered:>14.1f}% {sha_pct_recovered:>14.1f}%")
+    _old_rr = f"{runtime_regret*100:+.1f}%" if runtime_regret is not None else "n/a"
+    _sha_rr = f"{sha_runtime_regret*100:+.1f}%" if sha_runtime_regret is not None else "n/a"
+    log(f"  {'Runtime regret vs grid best':<43} {_old_rr:>15} {_sha_rr:>15}")
+    _old_cr = f"{cost_regret*100:+.1f}%" if cost_regret is not None else "n/a"
+    _sha_cr = f"{sha_cost_regret*100:+.1f}%" if sha_cost_regret is not None else "n/a"
+    log(f"  {'Cost regret vs grid best':<43} {_old_cr:>15} {_sha_cr:>15}")
+    _old_sp = f"{rank_corr:.3f}" if rank_corr is not None else "n/a"
+    _sha_sp = f"{sha_rank_corr:.3f}" if sha_rank_corr is not None else "n/a"
+    log(f"  {'Spearman ρ (probe → full rank)':<43} {_old_sp:>15} {_sha_sp:>15}")
+    log(f"  {'SHA budget savings (probe vs grid)':<43} {'n/a':>15} {sha_budget_savings_pct:>14.1f}%")
+    if mean_ext_err is not None:
+        log(f"  {'Mean scaling-law extrap. error':<43} {'n/a':>15} {mean_ext_err:>14.1f}%")
     log("")
     if best_by_runtime:
         r = best_by_runtime
-        log(f"Full-grid best by runtime           : "
-            f"{r['engine']}/{r['workload']}/{r['ad_mode']}  "
+        log(f"Full-grid best by runtime  : {r['engine']}/{r['workload']}/{r['ad_mode']}  "
             f"{r['mean_runtime_ms']:.2f} ms at M={max_M:,}")
-    if best_by_cost:
-        r = best_by_cost
-        log(f"Full-grid best by cost/run          : "
-            f"{r['engine']}/{r['workload']}/{r['ad_mode']}  "
-            f"${r['cost_per_run']:.2e} at M={max_M:,}")
     if profiler_best:
         r = profiler_best
-        log(f"Profiler selected best config       : "
-            f"{r['engine']}/{r['workload']}/{r['ad_mode']}  "
+        log(f"Old profiler best          : {r['engine']}/{r['workload']}/{r['ad_mode']}  "
             f"{r['mean_runtime_ms']:.2f} ms at M={max_M:,}")
+    if sha_best:
+        r = sha_best
+        log(f"SHA best                   : {r['engine']}/{r['workload']}/{r['ad_mode']}  "
+            f"{r['mean_runtime_ms']:.2f} ms at M={max_M:,}")
+    if ad_overhead_rows:
+        log("")
+        log("AD overhead (RQ2) at max M:")
+        for r in sorted(ad_overhead_rows, key=lambda x: x.get("ad_overhead_ratio", 0)):
+            ratio = r.get("ad_overhead_ratio", 0)
+            log(f"  {r['engine']}/{r['workload']}/{r['ad_mode']:<12} overhead={ratio:.2f}x")
     log("")
-    if runtime_regret is not None:
-        log(f"Runtime regret vs full-grid best    : {runtime_regret*100:+.1f}%")
-    else:
-        log("Runtime regret vs full-grid best    : n/a")
-    if cost_regret is not None:
-        log(f"Cost regret vs full-grid best       : {cost_regret*100:+.1f}%")
-    else:
-        log("Cost regret vs full-grid best       : n/a (local/synthetic cost only)")
-    if rank_corr is not None:
-        log(f"Spearman rho (probe -> full rank)   : {rank_corr:.3f}")
-    else:
-        log("Spearman rho (probe -> full rank)   : n/a (< 3 matched pairs)")
-    log("")
-    log("Selected configurations and reasons:")
+    log("SHA selected configurations:")
     for wl in args.workloads:
-        for k in selected_keys.get(wl, []):
-            _, eng, ad = k
-            log(f"  {wl}/{eng}/{ad}  ->  {selected_reasons.get(k, '')}")
+        for (wl2, eng, ad) in sha_selected_by_wl.get(wl, []):
+            log(f"  {wl2}/{eng}/{ad}")
+    if sha_total_missed > 0:
+        log("")
+        log("Missed Pareto configurations [SHA]:")
+        for wl in args.workloads:
+            sha_sel2 = set(sha_selected_by_wl.get(wl, []))
+            par2 = set(pareto_keys_by_workload.get(wl, []))
+            for k in (par2 - sha_sel2):
+                _, eng, ad = k
+                log(f"  {wl}/{eng}/{ad}  (in full-grid Pareto, not selected by SHA)")
     if total_missed > 0:
         log("")
-        log("Missed Pareto configurations:")
+        log("Missed Pareto configurations [Old profiler]:")
         for wl in args.workloads:
-            sel = set(selected_keys.get(wl, []))
-            par = set(pareto_keys_by_workload.get(wl, []))
-            for k in (par - sel):
+            sel2 = set(selected_keys.get(wl, []))
+            par2 = set(pareto_keys_by_workload.get(wl, []))
+            for k in (par2 - sel2):
                 _, eng, ad = k
-                log(f"  {wl}/{eng}/{ad}  (in full-grid Pareto, not selected by profiler)")
+                log(f"  {wl}/{eng}/{ad}")
     log("=" * 70)
 
     _write_summary(summary_path, lines)

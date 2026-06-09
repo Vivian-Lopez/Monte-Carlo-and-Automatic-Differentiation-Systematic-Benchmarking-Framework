@@ -61,3 +61,59 @@ def compute_pareto_frontier(
             frontier.append(candidate)
     frontier.sort(key=lambda r: (float(r[x_key]), float(r[y_key])))
     return frontier
+
+
+def ci_overlap_select(
+    rows: List[Dict[str, Any]],
+    n_runs: int,
+    key: str = "mean_runtime_ms",
+    std_key: str = "std_runtime_ms",
+    z: float = 1.96,
+) -> List[Dict[str, Any]]:
+    """
+    Select configs whose 95% CI overlaps with the best config's CI.
+
+    A config *survives* if its CI lower bound is less than the best
+    config's CI upper bound — i.e., it could plausibly be as fast as the
+    best config given measurement noise.
+
+    This replaces a hard score-margin constant (e.g. 1.5×) with a
+    statistically principled criterion that adapts to measurement noise:
+    more runs → tighter CIs → more aggressive pruning.
+
+    Parameters
+    ----------
+    rows    : list of result dicts with `key` and `std_key` fields
+    n_runs  : number of timed repetitions used to compute mean/std
+    key     : column for the mean runtime (lower = better)
+    std_key : column for the std runtime
+    z       : z-score for the CI (default 1.96 → 95%)
+
+    Returns the subset of rows that survive the overlap test, sorted by key.
+    Rows with missing/invalid key or std_key are excluded.
+    """
+    import math as _math
+
+    def _half_width(row: Dict[str, Any]) -> float:
+        try:
+            s = float(row.get(std_key) or 0.0)
+            return z * s / _math.sqrt(max(n_runs, 1))
+        except (TypeError, ValueError):
+            return 0.0
+
+    valid = [
+        r for r in rows
+        if _valid(r.get(key)) and r.get(std_key) is not None
+    ]
+    if not valid:
+        return list(rows)  # fallback: keep all
+
+    best = min(valid, key=lambda r: float(r[key]))
+    best_upper = float(best[key]) + _half_width(best)
+
+    survivors = [
+        r for r in valid
+        if (float(r[key]) - _half_width(r)) <= best_upper
+    ]
+    survivors.sort(key=lambda r: float(r[key]))
+    return survivors

@@ -117,11 +117,19 @@ _FULL_SCHEMA_COLUMNS: list[tuple[str, str]] = [
     ("cost_per_run",          "REAL"),
     ("paths_per_dollar",      "REAL"),
     # Profiler fields (nullable)
-    ("profiler_phase",        "TEXT"),   # probe | full | grid
+    ("profiler_phase",        "TEXT"),   # probe | full | grid | sha_round_N
     ("profiler_decision",     "TEXT"),   # selected | pruned | full_grid_only
     ("profiler_reason",       "TEXT"),
     ("dominated",             "INTEGER"),  # 0/1 boolean
     ("git_commit_hash",       "TEXT"),
+    # Successive Halving (SHA) fields (nullable)
+    ("sha_round",             "INTEGER"),  # 0,1,2,… or NULL for full-grid
+    ("sha_eliminated",        "INTEGER"),  # 0/1: was this config eliminated at sha_round?
+    # Scaling-law fit: t(M) = alpha*M + beta (2-point linear fit)
+    ("scaling_law_alpha",     "REAL"),  # slope (ms per path)
+    ("scaling_law_beta",      "REAL"),  # intercept (startup cost ms)
+    ("extrapolated_runtime_ms", "REAL"),  # predicted runtime at max_M
+    ("extrapolation_error_pct", "REAL"),  # |predicted - actual| / actual * 100
     # Legacy: greeks_json kept for backward-compat with old rows / API
     ("greeks_json",           "TEXT"),
 ]
@@ -329,6 +337,13 @@ class BenchmarkDB:
         profiler_reason: Optional[str] = None,
         dominated: Optional[int] = None,
         git_commit_hash: Optional[str] = None,
+        # SHA / scaling law
+        sha_round: Optional[int] = None,
+        sha_eliminated: Optional[int] = None,
+        scaling_law_alpha: Optional[float] = None,
+        scaling_law_beta: Optional[float] = None,
+        extrapolated_runtime_ms: Optional[float] = None,
+        extrapolation_error_pct: Optional[float] = None,
     ) -> str:
         """
         Insert a fully-populated completed run in one shot.
@@ -374,6 +389,9 @@ class BenchmarkDB:
                     cloud_provider, region, zone, instance_type, machine_family, vcpu_count,
                     cost_per_run, paths_per_dollar,
                     profiler_phase, profiler_decision, profiler_reason, dominated, git_commit_hash,
+                    sha_round, sha_eliminated,
+                    scaling_law_alpha, scaling_law_beta,
+                    extrapolated_runtime_ms, extrapolation_error_pct,
                     greeks_json,
                     requested_threads,
                     observed_threads_before_engine_load,
@@ -403,6 +421,8 @@ class BenchmarkDB:
                     ?,?,?,?,?,?,
                     ?,?,
                     ?,?,?,?,?,
+                    ?,?,
+                    ?,?,?,?,
                     ?,
                     ?,?,?,?,?,?,?
                 )""",
@@ -427,6 +447,9 @@ class BenchmarkDB:
                     cloud_provider, region, zone, instance_type, machine_family, vcpu_count,
                     cost_per_run, paths_per_dollar,
                     profiler_phase, profiler_decision, profiler_reason, dominated, git_commit_hash,
+                    sha_round, sha_eliminated,
+                    scaling_law_alpha, scaling_law_beta,
+                    extrapolated_runtime_ms, extrapolation_error_pct,
                     greeks_json,
                     requested_threads,
                     observed_threads_before_engine_load,
