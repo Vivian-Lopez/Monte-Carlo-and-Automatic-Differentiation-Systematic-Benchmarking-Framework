@@ -320,7 +320,7 @@ for _WAVE_MTS in "${WAVES[@]}"; do
     if [[ "$CREATE_VMS" == true ]]; then
         echo ""
         echo "[2/6] Creating VMs for wave ${WAVE_IDX} ..."
-        WAVE_CREATE_PIDS=()
+        declare -A WAVE_CREATE_PIDS=()
         for MT in "${WAVE_MTS_ARR[@]}"; do
             VM="${VM_NAMES[$MT]}"
             USE_ZONE="${VM_ZONES[$MT]}"
