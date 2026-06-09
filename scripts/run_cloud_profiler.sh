@@ -418,7 +418,7 @@ for _WAVE_MTS in "${WAVES[@]}"; do
             vm_ssh "$VM" "$USE_ZONE" "
                 cd ${REPO_DIR}
                 source venv/bin/activate
-                pip install --quiet pybind11
+                pip install --quiet wheel setuptools pybind11
                 pip install --quiet --no-build-isolation benchmarking/cpp/ && echo 'C++ OK' \
                     || echo 'C++ skipped'
             " || true
