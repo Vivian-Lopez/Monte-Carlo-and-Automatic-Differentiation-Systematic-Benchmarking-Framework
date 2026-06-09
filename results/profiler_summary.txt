@@ -1,120 +1,112 @@
 ======================================================================
-Budget-Aware Profiler vs Naive Grid Search
-Experiment ID : final_local_profiler_v1
-Git commit    : 0a28398
-Workloads     : ['european', 'european_local_vol', 'asian']
-Engines       : ['cpu', 'jax', 'cpp', 'rust']
-Probe M       : 1000
-Full M values : [10000, 50000, 100000]
-Probe runs    : 3  warmup=1
-Full runs     : 5  warmup=2
-Top-K         : 3  score_margin=1.5x
+Budget-Aware Profiler vs Naive Grid Search (SHA edition)
+*** DRY-RUN MODE — tiny M, temp DB ***
+Experiment ID : sha_cloud_profiler_v4
+Git commit    : 13789b8
+Workloads     : ['european']
+Engines       : ['cpu', 'jax']
+BLAS backend  : openblas
+SHA M levels  : [500, 1000]  eta=2.0
+SHA runs/lvl  : [1, 1]  warmup=[0, 0]
+Full M values : [500, 1000]
+Full runs     : 1  warmup=0
+Old profiler  : top-k=3  score_margin=1.5x
 Instance      : local
 Region/zone   : n/a / n/a
 Hourly rate   : n/a (local)
 ======================================================================
 
-Total candidate (wl, engine, ad) triples : 16
-Full-grid total runs (x 3 M values): 48
+Total candidate (wl, engine, ad) triples : 4
+Full-grid total runs (x 2 M values): 8
 
---- PROBE RUNS (M=1000) ---
+--- SHA ROUND 0  M=500  runs=1  warmup=0 ---
+  european/none: 2 active -> 1 survivors
+    [SHA-KEEP] jax/none  rt=0.39ms  score=0.04
+    [SHA-ELIM] cpu/none  rt=0.23ms  (CI-pruned)
+  european/forward: 1 active -> 1 survivors
+    [SHA-KEEP] jax/forward  rt=2.43ms  score=1.44
+  european/reverse: 1 active -> 1 survivors
+    [SHA-KEEP] jax/reverse  rt=3.35ms  score=1.52
 
-Probe runs completed: 16 / 16
+--- SHA ROUND 1  M=1,000  runs=1  warmup=0 ---
+  [SHA-REINSTATE] cpu/none  pred@M=1,000=0.5ms  vs winner=292.4ms  (crossover detected)
 
---- PROFILER SELECTION ---
+SHA completed: 4 configs selected across all workloads  (1 reinstated via crossover check)
+Scaling laws fitted: 3
 
-  european: 6 probed -> 4 selected
-    [SEL] cpp/none  score=0.02  rt=0.02ms  reason: top-3 probe Pareto; diversity guard; fastest probe runtime
-    [SEL] cpu/none  score=0.09  rt=0.08ms  reason: diversity guard
-    [SEL] rust/none  score=1.75  rt=0.69ms  reason: diversity guard
-    [SEL] jax/none  score=0.33  rt=0.60ms  reason: diversity guard
-    [PRN] jax/forward  score=2.04  -> dominated or outside 1.5x margin (score=2.04 vs best=0.02)
-    [PRN] jax/reverse  score=2.32  -> dominated or outside 1.5x margin (score=2.32 vs best=0.02)
+SHA probe runs (round 0, M=500): 4 / 4
 
-  european_local_vol: 6 probed -> 4 selected
-    [SEL] cpp/none  score=5.92  rt=5.88ms  reason: top-3 probe Pareto; diversity guard; fastest probe runtime
-    [SEL] cpu/none  score=17.55  rt=15.13ms  reason: diversity guard
-    [SEL] rust/none  score=7.74  rt=6.39ms  reason: within 1.5x safety margin; diversity guard
-    [SEL] jax/none  score=5.63  rt=10.01ms  reason: within 1.5x safety margin; diversity guard
-    [PRN] jax/forward  score=46.50  -> dominated or outside 1.5x margin (score=46.50 vs best=5.92)
-    [PRN] jax/reverse  score=19.19  -> dominated or outside 1.5x margin (score=19.19 vs best=5.92)
+--- OLD PROFILER SELECTION (from SHA round-0 data) ---
 
-  asian: 4 probed -> 2 selected
-    [SEL] cpu/none  score=9.85  rt=9.21ms  reason: top-3 probe Pareto; diversity guard; fastest probe runtime
-    [SEL] jax/none  score=22.81  rt=71.70ms  reason: diversity guard
-    [PRN] jax/forward  score=343.05  -> dominated or outside 1.5x margin (score=343.05 vs best=9.85)
-    [PRN] jax/reverse  score=288.70  -> dominated or outside 1.5x margin (score=288.70 vs best=9.85)
+  european: 4 probed -> 2 selected (old profiler)
+    [OLD-SEL] cpu/none  score=0.23  rt=0.23ms  reason: top-3 probe Pareto; diversity guard; fastest probe runtime
+    [OLD-SEL] jax/none  score=0.04  rt=0.39ms  reason: within 1.5x safety margin; diversity guard
+
+--- SHA SELECTION SUMMARY ---
+  european: SHA selected 4 configs:
+    [SHA-SEL] jax/none
+    [SHA-SEL] jax/forward
+    [SHA-SEL] jax/reverse
+    [SHA-SEL] cpu/none
+
+--- SCALING LAW FITS (t = alpha*M + beta) ---
+  config                               alpha(ms/path)   beta(ms)   serial_frac@100k
+  european/jax/forward                     0.191336     -93.23               0.0%
+  european/jax/none                        0.584033    -291.62               0.0%
+  european/jax/reverse                     0.376565    -184.93               0.0%
 
 --- FULL NAIVE GRID SEARCH ---
-Running 16 configs x 3 M values = 48 runs
+Running 4 configs x 2 M values = 8 runs
 
-Full grid completed: 48 runs stored
+Full grid completed: 8 runs stored
 
 --- PARETO FRONTIER (FULL GRID) ---
 
-  european Pareto frontier (1 / 6 configs at M=100,000):
-    rust/none  rt=0.50ms  cost=4.99e-05
-
-  european_local_vol Pareto frontier (1 / 6 configs at M=100,000):
-    rust/none  rt=550.77ms  cost=5.51e-02
-
-  asian Pareto frontier (1 / 4 configs at M=100,000):
-    jax/none  rt=403.61ms  cost=4.04e-02
+  european Pareto frontier (1 / 4 configs at M=1,000):
+    cpu/none  rt=0.17ms  cost=1.74e-07
 
 --- PROFILER vs PARETO OVERLAP ---
 
   european:
-    Pareto frontier size       : 1
-    Profiler selected          : 4
-    Recovered Pareto configs   : 1
-    Missed Pareto configs      : 0
-
-  european_local_vol:
-    Pareto frontier size       : 1
-    Profiler selected          : 4
-    Recovered Pareto configs   : 1
-    Missed Pareto configs      : 0
-
-  asian:
-    Pareto frontier size       : 1
-    Profiler selected          : 2
-    Recovered Pareto configs   : 1
-    Missed Pareto configs      : 0
+    Pareto frontier size          : 1
+    [OLD] selected / recovered / missed : 2 / 1 / 0
+    [SHA] selected / recovered / missed : 4 / 1 / 0
 
 ======================================================================
 SUMMARY
 ======================================================================
-Experiment ID                       : final_local_profiler_v1
-Git commit                          : 0a28398
+Experiment ID                       : sha_cloud_profiler_v4
+Git commit                          : 13789b8
 Instance                            : local
 Region / zone                       : n/a / n/a
+BLAS backend                        : openblas
 
-Total grid configurations           : 16
-Number of full-grid configurations  : 48
-Number selected by profiler         : 30
-Full runs saved                     : 18  (37.5%)
+Total grid configurations           : 4
+Number of full-grid configurations  : 8
 
-Total Pareto-optimal configurations : 3
-Pareto configs recovered            : 3  (100.0%)
-Pareto configs missed               : 0
+Metric                                           Old Profiler             SHA
+  -------------------------------------------------------------------------
+  Deployed full runs selected                               4               8
+  Full runs saved vs naive grid                            4              0
+  % runs saved                                          50.0%            0.0%
+  Pareto recovery                                      100.0%          100.0%
+  Runtime regret vs grid best                           +0.0%           +0.0%
+  Cost regret vs grid best                              +0.0%           +0.0%
+  Spearman ρ (probe → full rank)                        0.800          -0.500
+  SHA budget savings (probe vs grid)                      n/a           16.7%
+  Mean scaling-law extrap. error                          n/a        19612.5%
 
-Full-grid best by runtime           : rust/european/none  0.50 ms at M=100,000
-Full-grid best by cost/run          : rust/european/none  $4.99e-05 at M=100,000
-Profiler selected best config       : rust/european/none  0.50 ms at M=100,000
+Full-grid best by runtime  : cpu/european/none  0.17 ms at M=1,000
+Old profiler best          : cpu/european/none  0.17 ms at M=1,000
+SHA best                   : cpu/european/none  0.17 ms at M=1,000
 
-Runtime regret vs full-grid best    : +0.0%
-Cost regret vs full-grid best       : +0.0%
-Spearman rho (probe -> full rank)   : 0.835
+AD overhead (RQ2) at max M:
+  jax/european/forward      overhead=4.71x
+  jax/european/reverse      overhead=5.73x
 
-Selected configurations and reasons:
-  european/cpp/none  ->  top-3 probe Pareto; diversity guard; fastest probe runtime
-  european/cpu/none  ->  diversity guard
-  european/rust/none  ->  diversity guard
-  european/jax/none  ->  diversity guard
-  european_local_vol/cpp/none  ->  top-3 probe Pareto; diversity guard; fastest probe runtime
-  european_local_vol/cpu/none  ->  diversity guard
-  european_local_vol/rust/none  ->  within 1.5x safety margin; diversity guard
-  european_local_vol/jax/none  ->  within 1.5x safety margin; diversity guard
-  asian/cpu/none  ->  top-3 probe Pareto; diversity guard; fastest probe runtime
-  asian/jax/none  ->  diversity guard
+SHA selected configurations:
+  european/jax/none
+  european/jax/forward
+  european/jax/reverse
+  european/cpu/none
 ======================================================================

@@ -361,13 +361,14 @@ def _successive_halving(
     runs_per_level: List[int],
     warmup_per_level: List[int],
     eta: float,
-    jax_warmup_ms: Dict[Tuple[str, str], float],
+    jax_warmup_ms: Dict[Tuple[str, str, str], float],
     hourly_rate: Optional[float],
     db: "BenchmarkDB",
     experiment_id: str,
     cloud_meta: Dict[str, Any],
     git_commit: Optional[str],
     log_fn,
+    full_m_max: Optional[int] = None,
 ) -> Tuple[
     List[Dict[str, Any]],                     # all sha rows (every round)
     Dict[Tuple[str, str, str], Tuple[float, float]],  # scaling_law per config_key
@@ -376,9 +377,10 @@ def _successive_halving(
     """
     Run Successive Halving across *m_levels*.
 
-    Round 0 is the cheap probe; subsequent rounds run on surviving configs
-    only.  Within each workload, configs are pruned using CI-overlap plus
-    a hard cap of ceil(n / eta) survivors per round.
+    Configs are grouped by (workload, ad_mode) so that AD configs (which
+    inherently do more work: computing greeks in addition to option price)
+    are never penalised against no-AD configs.  Each (wl, ad_mode) pool
+    runs its own independent SHA competition.
 
     Returns:
       all_sha_rows  : flat list of every run dict across all rounds
@@ -387,10 +389,11 @@ def _successive_halving(
     """
     import math as _math
 
-    # Working set: active (wl, eng, ad) triples per workload
-    active_by_wl: Dict[str, List[Tuple[str, str, str]]] = {}
+    # Working set keyed by (workload, ad_mode) so AD and no-AD configs
+    # are never compared against each other during pruning.
+    active_by_wl: Dict[Tuple[str, str], List[Tuple[str, str, str]]] = {}
     for (wl, eng, ad) in candidates:
-        active_by_wl.setdefault(wl, []).append((wl, eng, ad))
+        active_by_wl.setdefault((wl, ad), []).append((wl, eng, ad))
 
     all_sha_rows: List[Dict[str, Any]] = []
     # rows_by_key[round_idx][(wl, eng, ad)] = result_row
@@ -402,7 +405,7 @@ def _successive_halving(
         round_rows: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
         log_fn(f"\n--- SHA ROUND {round_idx}  M={M:,}  runs={n_runs}  warmup={n_warmup} ---")
 
-        for wl, active_keys in active_by_wl.items():
+        for _wl_ad_key, active_keys in active_by_wl.items():
             for (wl2, eng, ad) in active_keys:
                 k = (wl2, eng, ad)
                 print(f"  sha[{round_idx}] {eng}/{wl2}/{ad} M={M} ...", end=" ", flush=True)
@@ -429,20 +432,25 @@ def _successive_halving(
             # Final round — no pruning, all survivors selected
             break
 
-        new_active_by_wl: Dict[str, List[Tuple[str, str, str]]] = {}
-        for wl, active_keys in active_by_wl.items():
+        new_active_by_wl: Dict[Tuple[str, str], List[Tuple[str, str, str]]] = {}
+        for wl_ad_key, active_keys in active_by_wl.items():
+            wl_log = f"{wl_ad_key[0]}/{wl_ad_key[1]}"
             wl_rows = [round_rows[k] for k in active_keys if k in round_rows]
             if not wl_rows:
                 continue
 
             # CI-overlap pruning: use JIT-corrected runtimes so JIT engines
-            # (JAX) are not unfairly eliminated at small M where JIT cost
-            # inflates their measured runtime.
+            # are not unfairly penalised by compilation cost at small M.
+            # jax_warmup_ms is keyed (wl, engine, ad_mode) so forward/reverse
+            # compile times are accounted for separately from no-AD.
             def _jit_corrected_rt(r: Dict[str, Any]) -> float:
                 is_jit = r["engine"] in _JIT_ENGINES
                 if not is_jit:
                     return r["mean_runtime_ms"]
-                jit_ms = jax_warmup_ms.get((r["workload"], r["engine"]), 0.0)
+                jit_ms = jax_warmup_ms.get(
+                    (r["workload"], r["engine"], r["ad_mode"]),
+                    jax_warmup_ms.get((r["workload"], r["engine"], "none"), 0.0),
+                )
                 return max(r["mean_runtime_ms"] - jit_ms, r["mean_runtime_ms"] * 0.1)
 
             wl_rows_corrected = [
@@ -476,14 +484,17 @@ def _successive_halving(
                     sha_round=round_idx, sha_eliminated=1,
                 )
 
-            new_active_by_wl[wl] = [k for k in active_keys if k in survivor_keys]
+            new_active_by_wl[wl_ad_key] = [k for k in active_keys if k in survivor_keys]
 
             def _score_for_log(r):
                 is_jit = r["engine"] in _JIT_ENGINES
-                ewms = jax_warmup_ms.get((r["workload"], r["engine"]), 0.0) if is_jit else 0.0
+                ewms = jax_warmup_ms.get(
+                    (r["workload"], r["engine"], r["ad_mode"]),
+                    jax_warmup_ms.get((r["workload"], r["engine"], "none"), 0.0),
+                ) if is_jit else 0.0
                 return _probe_score(r, jit_correction=is_jit, extra_warmup_ms=ewms)
 
-            log_fn(f"  {wl}: {len(wl_rows)} active -> {len(new_active_by_wl.get(wl, []))} survivors")
+            log_fn(f"  {wl_log}: {len(wl_rows)} active -> {len(new_active_by_wl.get(wl_ad_key, []))} survivors")
             for r in survivors_rows[:cap]:
                 log_fn(f"    [SHA-KEEP] {r['engine']}/{r['ad_mode']}  "
                        f"rt={r['mean_runtime_ms']:.2f}ms  score={_score_for_log(r):.2f}")
@@ -526,24 +537,26 @@ def _successive_halving(
     #      CROSSOVER_MARGIN tolerance), reinstate the config.
     #   3. Also reinstate configs where round-0 JIT-correction-adjusted slope
     #      predicts they would win (single-point estimate for round-0-only elim).
-    CROSSOVER_MARGIN = 1.10   # 10% tolerance — avoids reinstating near-ties
-    max_M_sha = m_levels[-1]
+    CROSSOVER_MARGIN = 1.20   # 20% tolerance — catches crossovers at full-grid scale
+    # Predict at the actual full-grid evaluation horizon (not just the last SHA level)
+    max_M_sha = full_m_max if full_m_max and full_m_max > m_levels[-1] else m_levels[-1]
 
     # Collect all eliminated keys (appeared in round-0 but not in final selection)
     all_round0_keys = set(rows_by_round[0].keys()) if rows_by_round else set()
     selected_set = set(selected_keys_sha)
 
-    # Group by workload
-    elim_by_wl: Dict[str, List[Tuple[str, str, str]]] = {}
+    # Group eliminated configs by (workload, ad_mode) — matching the SHA pool
+    # grouping so crossover checks stay within the same competition context.
+    elim_by_wl: Dict[Tuple[str, str], List[Tuple[str, str, str]]] = {}
     for k in all_round0_keys:
-        wl = k[0]
+        wl_ad = (k[0], k[2])  # (workload, ad_mode)
         if k not in selected_set:
-            elim_by_wl.setdefault(wl, []).append(k)
+            elim_by_wl.setdefault(wl_ad, []).append(k)
 
     reinstated: List[Tuple[str, str, str]] = []
-    for wl, elim_keys in elim_by_wl.items():
-        # Find winner(s) for this workload
-        wl_selected = [k for k in selected_set if k[0] == wl]
+    for (wl_group, ad_group), elim_keys in elim_by_wl.items():
+        # Find winner(s) for this (workload, ad_mode) group
+        wl_selected = [k for k in selected_set if k[0] == wl_group and k[2] == ad_group]
         if not wl_selected:
             continue
 
@@ -581,7 +594,10 @@ def _successive_halving(
                     # Apply JIT correction for JIT engines
                     is_jit = ek[1] in _JIT_ENGINES
                     if is_jit:
-                        jit_ms = jax_warmup_ms.get((ek[0], ek[1]), 0.0)
+                        jit_ms = jax_warmup_ms.get(
+                            (ek[0], ek[1], ek[2]),
+                            jax_warmup_ms.get((ek[0], ek[1], "none"), 0.0),
+                        )
                         rt0 = max(rt0 - jit_ms, rt0 * 0.1)
                     # Linear prediction: t = (rt0 / M0) * max_M (zero-intercept)
                     pred_elim = (rt0 / m_levels[0]) * max_M_sha
@@ -973,7 +989,7 @@ def main() -> None:
     }
 
     git_commit = _git_commit()
-    experiment_id = args.experiment_id or str(uuid.uuid4())
+    experiment_id = args.experiment_id or "sha_cloud_profiler_v4"
     lines: List[str] = []
 
     def log(msg: str = "") -> None:
@@ -1023,15 +1039,18 @@ def main() -> None:
     # the same round-0 data for a free side-by-side comparison.
     # -----------------------------------------------------------------------
 
-    # Extra JIT warmup timing for JAX (used by both SHA and old profiler scoring)
-    jax_warmup_ms: Dict[Tuple[str, str], float] = {}
+    # Extra JIT warmup timing for JAX, measured per (workload, ad_mode).
+    # This ensures forward/reverse AD compilation costs are measured separately
+    # from no-AD, so the JIT correction is accurate within each SHA pool.
+    jax_warmup_ms: Dict[Tuple[str, str, str], float] = {}
     if "jax" in args.engines and _ENGINES.get("jax"):
         for wl in args.workloads:
             if wl not in _ENGINE_WORKLOADS.get("jax", set()):
                 continue
-            _jit_row = run_one("jax", wl, sha_m_levels[0], "none", 1, 1)
-            if _jit_row:
-                jax_warmup_ms[(wl, "jax")] = _jit_row["mean_runtime_ms"]
+            for ad in _ENGINE_AD_MODES.get("jax", ["none"]):
+                _jit_row = run_one("jax", wl, sha_m_levels[0], ad, 1, 1)
+                if _jit_row:
+                    jax_warmup_ms[(wl, "jax", ad)] = _jit_row["mean_runtime_ms"]
 
     sha_all_rows, scaling_laws, selected_keys_sha = _successive_halving(
         candidates=candidates,
@@ -1046,6 +1065,7 @@ def main() -> None:
         cloud_meta=cloud_meta,
         git_commit=git_commit,
         log_fn=log,
+        full_m_max=max(args.m_values),
     )
 
     # Round-0 rows are the cheap probe — extract for old profiler side-by-side
@@ -1077,7 +1097,10 @@ def main() -> None:
     for wl, wl_rows in by_workload.items():
         def score(r: Dict[str, Any], _wl: str = wl) -> float:
             is_jit = r["engine"] in _JIT_ENGINES
-            ewms = jax_warmup_ms.get((_wl, r["engine"]), 0.0) if is_jit else 0.0
+            ewms = jax_warmup_ms.get(
+                (_wl, r["engine"], r["ad_mode"]),
+                jax_warmup_ms.get((_wl, r["engine"], "none"), 0.0),
+            ) if is_jit else 0.0
             return _probe_score(r, jit_correction=is_jit, extra_warmup_ms=ewms)
 
         pareto_probe = compute_pareto_frontier(wl_rows, x_key="mean_runtime_ms", y_key="cost_per_run")
@@ -1361,7 +1384,10 @@ def main() -> None:
         full_row = full_results.get((wl, eng, ad, max_M))
         if full_row is not None:
             is_jit = eng in _JIT_ENGINES
-            ewms = jax_warmup_ms.get((wl, eng), 0.0) if is_jit else 0.0
+            ewms = jax_warmup_ms.get(
+                (wl, eng, ad),
+                jax_warmup_ms.get((wl, eng, "none"), 0.0),
+            ) if is_jit else 0.0
             probe_scores_for_corr.append(
                 _probe_score(probe_row, jit_correction=is_jit, extra_warmup_ms=ewms)
             )
