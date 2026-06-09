@@ -60,7 +60,7 @@ REGION="europe-west2"
 MACHINE_TYPES="e2-standard-4 e2-standard-8 t2d-standard-4 n2d-standard-4 c2d-standard-4 n2-standard-4"
 VCPU_BUDGET=12   # Max simultaneous vCPUs (matches CPUS_ALL_REGIONS quota)
 WAVE_NUM="all"   # Which wave to run: "all" | "1" | "2" | "3"
-EXPERIMENT_ID="sha_cloud_profiler_v2"
+EXPERIMENT_ID="sha_cloud_profiler_v3"
 RUNS=5
 WARMUP=2
 M_VALUES="10000 50000 100000"
@@ -418,7 +418,8 @@ for _WAVE_MTS in "${WAVES[@]}"; do
             vm_ssh "$VM" "$USE_ZONE" "
                 cd ${REPO_DIR}
                 source venv/bin/activate
-                pip install --quiet -e benchmarking/cpp/ 2>/dev/null && echo 'C++ OK' \
+                pip install --quiet pybind11
+                pip install --quiet --no-build-isolation benchmarking/cpp/ && echo 'C++ OK' \
                     || echo 'C++ skipped'
             " || true
 
@@ -426,6 +427,10 @@ for _WAVE_MTS in "${WAVES[@]}"; do
             vm_ssh "$VM" "$USE_ZONE" "
                 cd ${REPO_DIR}
                 source venv/bin/activate
+                command -v cargo >/dev/null 2>&1 || \
+                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+                    sh -s -- -y --default-toolchain stable --quiet 2>/dev/null
+                export PATH="\$HOME/.cargo/bin:\$PATH"
                 pip install --quiet maturin 2>/dev/null
                 cd benchmarking/rust && maturin develop --release --quiet 2>/dev/null \
                     && echo 'Rust OK' || echo 'Rust skipped'
