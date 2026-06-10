@@ -1,0 +1,28 @@
+\chapter{Appendix}
+
+\section{Additional Results}
+
+Additional result tables and plots are generated from the stored benchmark
+database and CSV artefacts rather than manually transcribed. The primary
+generated artefacts used in the final evaluation are:
+
+\begin{itemize}
+    \item \code{evaluation/tables/correctness_validation.tex};
+    \item \code{evaluation/tables/ad_overhead.tex};
+    \item \code{evaluation/tables/cloud_cost_performance.tex};
+    \item \code{evaluation/tables/profiler_comparison.tex};
+    \item \code{evaluation/figures/cloud_cost_performance_priced.png};
+    \item \code{evaluation/figures/pareto_runtime_cost_n2.png};
+    \item \code{evaluation/figures/sha_progression_n2.png}.
+\end{itemize}
+
+\section{Configuration Files}
+
+The report artefact generator is
+\code{evaluation/generate\_report\_assets.py}. It reads the stored benchmark
+results and regenerates the tables and figures used in the final cloud
+evaluation. This supports the reproducibility goal of keeping report claims
+traceable to result files.
+
+\section{Extended Tables}
+\section{Code Snippets}

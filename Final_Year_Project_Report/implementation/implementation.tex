@@ -1,0 +1,621 @@
+\chapter{Implementation}
+\label{chap:implementation}
+
+\section{Overview}
+\label{sec:impl-overview}
+
+This chapter describes the concrete implementation of the framework laid out in
+Chapter~\ref{chap:system-design}. The codebase is hosted on GitHub at
+\url{https://github.com/Vivian-Lopez/Monte-Carlo-and-Automatic-Differentiation-Systematic-Benchmarking-Framework}
+and is organised as a single Python package with optional native subpackages.
+The top-level directory structure is:
+
+\begin{verbatim}
+benchmarking/
+    workloads/        # WorkloadConfig dataclasses + registry
+    engines/          # Python wrappers for each engine
+    cpp/              # native C++ implementation (pybind11)
+    rust/             # native Rust implementation (PyO3)
+    runner.py         # BenchmarkRunner
+    db.py             # BenchmarkDB (SQLite)
+    api/              # Flask REST API
+frontend/             # React + TypeScript + Vite
+experiments/          # CLI experiment drivers
+results/              # SQLite database, generated tables
+tests/                # pytest suite
+\end{verbatim}
+
+The Python package is pure-Python apart from optional native extensions. The C++
+extension is built with \texttt{pip install -e benchmarking/cpp/} (using a
+\texttt{setup.py} that invokes pybind11); the Rust extension is built with
+\texttt{maturin develop --release} inside \texttt{benchmarking/rust/}. If either
+extension is not built, the corresponding engine is silently excluded from the
+engine registry at runtime, so the framework remains fully functional on systems
+without a C++ or Rust toolchain.
+
+\section{Core Modules}
+\label{sec:core-modules}
+
+\subsection{Workload Registry}
+\label{sec:impl-registry}
+
+The workload registry is implemented in \texttt{benchmarking/workloads/base.py}.
+The decorator \texttt{@workload(name)} performs three actions in a single pass:
+it applies \texttt{dataclass} to the decorated class, sets a class-level
+attribute \texttt{workload\_type = name}, and registers the resulting class in
+the module-level dictionary \texttt{WORKLOAD\_REGISTRY}. The base class
+\texttt{WorkloadConfig} provides concrete implementations of \texttt{validate()},
+\texttt{to\_dict()}, \texttt{from\_dict()} and \texttt{config\_hash()} so that no
+subclass is required to override anything except its field list and (optionally)
+its validation logic.
+
+The free function \texttt{config\_from\_dict(d)} reads \texttt{d["workload\_type"]},
+looks up the corresponding class in \texttt{WORKLOAD\_REGISTRY}, and delegates
+to that class's \texttt{from\_dict()}. Unknown keys are silently dropped during
+deserialisation, so configurations stored by older versions of the framework
+continue to load even after new fields are added. \texttt{config\_hash()}
+serialises the configuration with \texttt{json.dumps(\dots, sort\_keys=True)}
+and returns the first eight characters of the SHA-256 digest as a stable,
+machine-independent fingerprint.
+
+\subsection{Monte Carlo Engine Interface}
+\label{sec:impl-engine-interface}
+
+All engines are subclasses of the abstract base class \texttt{MonteCarloEngine}
+defined in \texttt{benchmarking/engines/base.py}:
+
+\begin{verbatim}
+class MonteCarloEngine:
+    name: str
+    language: str
+    backend: str
+
+    def supports(self, workload_type: str) -> bool: ...
+    def supported_ad_modes(self) -> tuple[str, ...]: ...
+    def run(self, config: WorkloadConfig,
+            ad_mode: str = "none") -> tuple[float, dict | None]: ...
+\end{verbatim}
+
+The class attributes \texttt{name}, \texttt{language} and \texttt{backend} are
+the values written to the corresponding columns of \texttt{benchmarks.db},
+enabling later queries such as ``all Rust runs'' or ``all GPU runs''. The
+\texttt{run()} method is the only computational entry point: it accepts a
+fully-validated \texttt{WorkloadConfig} and an AD mode string, and returns
+$(\text{price},\ \text{greeks})$. The \texttt{greeks} component is either
+\texttt{None} (for \texttt{ad\_mode = "none"}) or a dictionary mapping Greek
+names (\texttt{"delta"}, \texttt{"vega"}, \texttt{"rho"}, \ldots) to floats.
+
+\subsection{NumPy Engine}
+\label{sec:impl-numpy}
+
+\texttt{CPUMonteCarloEngine} (\texttt{benchmarking/engines/mc\_cpu.py}) is the
+single-threaded NumPy reference implementation. For the European workload it
+draws all $M$ standard normals in one call to
+\texttt{np.random.default\_rng(seed).standard\_normal(M)}, evaluates the closed
+form for $S_T$ vectorially and computes the discounted mean payoff. For the
+local-volatility workload it runs the $N$-step log-Euler loop in Python, with
+each iteration operating on a NumPy array of $M$ paths and using the stable
+softplus
+
+\begin{verbatim}
+def softplus(z):
+    return np.maximum(z, 0.0) + np.log1p(np.exp(-np.abs(z)))
+\end{verbatim}
+
+The same module exposes Black--Scholes closed-form helpers for price, Delta,
+Vega and Rho, which the runner calls to populate the analytical reference
+columns of every database row.
+
+\subsection{JAX Engine}
+\label{sec:impl-jax}
+
+\texttt{JAXMonteCarloEngine} (\texttt{benchmarking/engines/mc\_jax.py}) is the
+only engine that implements AD. The European kernel is declared at module level
+to maximise compilation cache hits:
+
+\begin{verbatim}
+@functools.partial(jax.jit, static_argnames=("option_type",))
+def _european_price(S0, r, sigma, K, T, Z, option_type):
+    sqrtT = jnp.sqrt(T)
+    ST = S0 * jnp.exp((r - 0.5 * sigma**2) * T + sigma * sqrtT * Z)
+    payoff = jnp.where(option_type == "call",
+                       jnp.maximum(ST - K, 0.0),
+                       jnp.maximum(K - ST, 0.0))
+    return jnp.exp(-r * T) * jnp.mean(payoff)
+\end{verbatim}
+
+Reverse-mode Greeks for the European workload are obtained from a single
+backward pass:
+
+\begin{verbatim}
+grad_fn = jax.jit(jax.grad(_european_price, argnums=(0, 1, 2)),
+                  static_argnames=("option_type",))
+delta, rho, vega = grad_fn(S0, r, sigma, K, T, Z, option_type)
+\end{verbatim}
+
+Forward-mode uses three \texttt{jax.jvp} calls, one per input direction, each
+probing the corresponding basis tangent vector. The local-volatility kernel
+expresses the $N$-step loop as \texttt{jax.lax.scan}:
+
+\begin{verbatim}
+def _step(carry, z):
+    S, t = carry
+    x = jnp.log(S / S0)
+    raw = a0 + a1 * x + a2 * x * x + b1 * t
+    sigma = sigma_min + softplus(raw)
+    S_next = S * jnp.exp((r - 0.5 * sigma**2) * dt
+                         + sigma * jnp.sqrt(dt) * z)
+    return (S_next, t + dt), None
+
+(S_T, _), _ = jax.lax.scan(_step, (S0_arr, 0.0), Z_matrix)
+\end{verbatim}
+
+\texttt{jax.lax.scan} produces a single loop in the XLA graph; tracing time and
+peak memory remain constant in $N$, in contrast with a Python \texttt{for} loop
+which would unroll the graph to size $\Theta(N)$ and substantially increase
+compile time and memory for $N=252$.
+
+The AD overhead is computed by the runner as the ratio of the mean timed
+runtime of the AD run to that of an identically-configured no-AD baseline run.
+Crucially, both legs use the same warmup count, so XLA cache state is
+equivalent and the ratio reflects only the differentiation cost.
+
+\subsection{C++ Engine}
+\label{sec:impl-cpp}
+
+The native implementation lives in
+\texttt{benchmarking/cpp/cpu\_engine.cpp}~/~\texttt{cpu\_engine.hpp} and is exposed
+to Python via pybind11 bindings in
+\texttt{benchmarking/cpp/bindings/pybind\_module.cpp}. The Python wrapper
+\texttt{benchmarking/engines/mc\_cpp.py} loads the compiled module lazily and
+falls back to a not-available stub if the import fails.
+
+Parallelisation is via OpenMP. Each thread owns its own
+\texttt{std::mt19937\_64} generator, seeded as \texttt{seed + thread\_id} to
+guarantee statistical independence across threads while remaining reproducible
+for any fixed thread count. The European inner loop is:
+
+\begin{verbatim}
+double sum = 0.0;
+#pragma omp parallel reduction(+:sum)
+{
+    int tid = omp_get_thread_num();
+    std::mt19937_64 rng(seed + tid);
+    std::normal_distribution<double> N01(0.0, 1.0);
+    #pragma omp for
+    for (int i = 0; i < M; ++i) {
+        double Z = N01(rng);
+        double ST = S0 * std::exp((r - 0.5 * sigma * sigma) * T
+                                  + sigma * std::sqrt(T) * Z);
+        sum += std::max(option_type == 0 ? ST - K : K - ST, 0.0);
+    }
+}
+double price = std::exp(-r * T) * sum / M;
+\end{verbatim}
+
+The local-volatility kernel reuses the same RNG strategy and implements the
+log-Euler loop with the numerically stable softplus
+\texttt{(raw > 0 ? raw : 0) + std::log1p(std::exp(-std::abs(raw)))}, identical
+to the Python and Rust formulations.
+
+\subsection{Rust Engine}
+\label{sec:impl-rust}
+
+The native implementation lives in \texttt{benchmarking/rust/src/lib.rs} and is
+exposed to Python via PyO3 bindings, built with \texttt{maturin develop
+--release}. The Python wrapper \texttt{benchmarking/engines/mc\_rust.py} mirrors
+the C++ wrapper: lazy import, graceful fallback, identical engine interface.
+
+The Rust implementation uses \texttt{SmallRng} (Xoshiro128++) from the
+\texttt{rand} crate for high-throughput sampling, with each Rayon worker thread
+seeded as \texttt{seed XOR thread\_index}. The simulation is expressed as a
+data-parallel iterator over the path range:
+
+\begin{verbatim}
+let price: f64 = (0..M).into_par_iter()
+    .map_init(
+        || SmallRng::seed_from_u64(seed ^ rayon::current_thread_index()
+                                            .unwrap_or(0) as u64),
+        |rng, _| {
+            let z: f64 = StandardNormal.sample(rng);
+            let s_t = s0 * ((r - 0.5 * sigma * sigma) * t
+                            + sigma * t.sqrt() * z).exp();
+            (s_t - k).max(0.0)
+        })
+    .sum::<f64>() * (-r * t).exp() / (M as f64);
+\end{verbatim}
+
+The softplus is implemented inline as
+\texttt{z.max(0.0) + (-z.abs()).exp().ln\_1p()}, matching the Python, C++ and JAX
+formulations bit-for-bit.
+
+\subsection{CUDA Engine}
+\label{sec:impl-cuda}
+
+\texttt{CUDAMonteCarloEngine} (\texttt{benchmarking/engines/mc\_cuda.py}) uses
+PyCUDA to compile and launch CUDA kernels at runtime. At import time, the engine
+runs a minimal 128-path trial; if CUDA initialisation, kernel compilation, or
+the trial run fails, the engine sets its availability flag to \texttt{False} and
+is excluded from \texttt{/api/engines}.
+
+The European kernel uses one thread per Monte Carlo path:
+
+\begin{verbatim}
+__global__ void price_kernel(double S0, double r, double sigma,
+                             double K, double T, double sqrtT,
+                             unsigned long long seed,
+                             int option_type, int M,
+                             double *payoffs) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= M) return;
+    curandState state;
+    curand_init(seed, idx, 0, &state);
+    double Z = curand_normal_double(&state);
+    double ST = S0 * exp((r - 0.5 * sigma * sigma) * T + sigma * sqrtT * Z);
+    double payoff = option_type == 0
+                    ? fmax(ST - K, 0.0) : fmax(K - ST, 0.0);
+    payoffs[idx] = exp(-r * T) * payoff;
+}
+\end{verbatim}
+
+Using the thread index as the \texttt{curand\_init} sequence guarantees
+statistical independence regardless of block or grid layout. The host averages
+the resulting payoff array with \texttt{np.mean}.
+
+Pathwise forward-mode Delta is implemented in a second kernel. Using the
+identity $\partial S_T / \partial S_0 = S_T / S_0$ for GBM, the pathwise
+Delta integrand is
+
+\[
+\mathbf{1}_{\{S_T > K\}} \cdot \frac{S_T}{S_0} \qquad (\text{call}), \qquad
+-\mathbf{1}_{\{S_T < K\}} \cdot \frac{S_T}{S_0} \qquad (\text{put}),
+\]
+
+and the engine returns
+$\Delta = e^{-rT}\,\mathbb{E}[d(\text{payoff})/dS_0]$. Note that this is a
+\emph{pathwise} estimator, not a finite-difference approximation; it produces
+unbiased Greeks with the same variance characteristics as a single-pass
+forward-mode AD.
+
+\subsection{Benchmark Runner}
+\label{sec:impl-runner}
+
+\texttt{BenchmarkRunner} (\texttt{benchmarking/runner.py}) is a small class.
+Construction takes an engine instance, an optional display name and the warmup
+and repetition counts. The \texttt{run()} method implements the protocol of
+Section~\ref{sec:runner-layer}. Timed repetitions use \texttt{time.perf\_counter()}
+which provides nanosecond resolution on Linux and macOS. The runner separately
+computes the analytical reference values (by calling the Black--Scholes helpers
+in \texttt{mc\_cpu.py}) and the absolute and relative errors for the price and
+each Greek, so that the database row produced is self-contained.
+
+When \texttt{ad\_mode != "none"} the runner first performs the AD timed run,
+then a matched no-AD baseline run using the same engine, same configuration,
+same warmup count and same repetition count. This ensures that the AD overhead
+ratio reflects only the cost of differentiation, not the cost of XLA
+recompilation or any other one-time setup.
+
+\subsection{Metrics Collection}
+\label{sec:impl-metrics}
+
+The runner collects four classes of metrics:
+
+\begin{itemize}
+    \item \textbf{Timing:} mean, standard deviation, min, max of the timed
+          repetitions, in milliseconds, plus the derived
+          \texttt{throughput\_paths\_per\_sec = M / mean\_runtime\_s}.
+    \item \textbf{AD overhead:} the matched baseline mean runtime
+          (\texttt{baseline\_mean\_ms}) and the overhead ratio
+          $\overline{t}_{\text{AD}}/\overline{t}_{\text{baseline}}$
+          (\texttt{ad\_overhead\_ratio}).
+    \item \textbf{Memory:} process RSS sampled before and after the timed
+          repetitions via \texttt{psutil}; the recorded value is the difference.
+    \item \textbf{Numerical accuracy:} absolute and relative error for the
+          price and for each Greek against the Black--Scholes reference, when
+          applicable.
+\end{itemize}
+
+Environment metadata is captured once per \texttt{run()} call: the wall-clock
+timestamp, the Python version and implementation, the platform string, the CPU
+model and architecture, the logical CPU count, total RAM in GB, the NumPy
+version and the JAX version.
+
+\subsection{Storage Layer}
+\label{sec:impl-storage}
+
+\texttt{BenchmarkDB} (\texttt{benchmarking/db.py}) is a thin SQLite wrapper. A
+new connection is opened for each call with \texttt{check\_same\_thread=False},
+and an explicit \texttt{threading.Lock} serialises write operations. The database
+is created in WAL mode the first time it is opened. The schema is described in
+detail in Section~\ref{sec:storage-layer}; it is defined declaratively in the
+\texttt{\_FULL\_SCHEMA\_COLUMNS} constant, and any missing columns are added
+automatically at startup via \texttt{PRAGMA table\_info} followed by
+\texttt{ALTER TABLE}.
+
+Two write paths coexist. Experiment scripts use \texttt{store\_run\_full()},
+which writes a fully-populated \texttt{completed} row in a single transaction.
+The REST API uses the three-step lifecycle
+\texttt{create\_run()} $\to$ \texttt{mark\_running()} $\to$
+\texttt{mark\_completed()} (or \texttt{mark\_failed()}) to support asynchronous
+execution from a background worker thread.
+
+\subsection{REST API}
+\label{sec:impl-api}
+
+The Flask application (\texttt{benchmarking/api/server.py}) registers the seven
+endpoints listed in Table~\ref{tab:api-endpoints} and starts a single daemon
+background thread on startup. The worker polls the \texttt{runs} table for
+\texttt{pending} rows in FIFO order, dispatches each through the appropriate
+engine via \texttt{BenchmarkRunner.run()}, and updates the row with the result.
+Engine availability is probed once at startup: C++ and CUDA engines that fail
+to load or fail their probe runs are removed from the registry.
+
+The API returns JSON in all cases and uses standard HTTP status codes. Flask-CORS
+is configured to allow requests from the Vite development server (port 5173) so
+that the frontend can be developed locally without a reverse proxy.
+
+\subsection{Frontend / Dashboard}
+\label{sec:impl-frontend}
+
+The frontend is a React~+~TypeScript single-page application built with Vite
+and styled with Material UI. The directory layout follows the conventional
+\texttt{src/pages/}, \texttt{src/components/} and \texttt{src/api/} structure.
+A typed HTTP client in \texttt{src/api/client.ts} wraps every API endpoint with
+a TypeScript function whose return type mirrors the corresponding Python
+dataclass.
+
+Pages:
+
+\begin{itemize}
+    \item \texttt{SimulatePage} --- submits a new run via POST
+          \texttt{/api/runs} and polls GET \texttt{/api/runs/:id} until the
+          status becomes \texttt{completed} or \texttt{failed}.
+    \item \texttt{ComparePage} --- consumes \texttt{/api/compare\_matrix} to
+          render a multi-engine, multi-AD-mode comparison grid.
+    \item \texttt{HistoryPage} --- filterable table backed by GET
+          \texttt{/api/runs}.
+    \item \texttt{SummaryPage} --- consumes \texttt{/api/summary}.
+    \item \texttt{AnalysisPage} --- focused view of AD overhead and Greek
+          accuracy.
+\end{itemize}
+
+Components are factored to be workload-agnostic: \texttt{SimulationForm} is
+generated dynamically from the workload \texttt{SCHEMA} returned by the API, so
+adding a new workload class (or even a new field) requires \emph{no} frontend
+changes.
+
+\section{Supported Workloads}
+\label{sec:impl-workloads}
+
+Three workloads are implemented and validated end-to-end:
+
+\begin{itemize}
+    \item \texttt{european} (\texttt{EuropeanOptionConfig}): single-step exact
+          GBM. Supported by all five engines. Used for AD overhead, Greek
+          accuracy, language comparison and throughput scaling experiments.
+    \item \texttt{european\_local\_vol} (\texttt{EuropeanLocalVolConfig}):
+          $N$-step log-Euler simulation of GBM with a parametric
+          local-volatility surface. Supported by NumPy, JAX, C++ and Rust;
+          CUDA support is not implemented in the current iteration. Used to
+          stress-test AD on a deeper computation graph and to expose the cost
+          of multi-step over single-step simulation.
+    \item \texttt{asian} (\texttt{AsianOptionConfig}): arithmetic-average
+          path-dependent option workload. Supported by the Python and JAX
+          engines in the final cloud-profiler experiments. Used to check that
+          backend rankings and AD overheads are not inferred only from
+          terminal-payoff European workloads.
+\end{itemize}
+
+\section{AD Integration}
+\label{sec:impl-ad}
+
+Automatic differentiation is implemented exclusively in the JAX and CUDA
+engines. The JAX engine supports both forward and reverse mode for both
+workloads; the CUDA engine implements only forward-mode pathwise Delta on the
+European workload.
+
+For the European workload the AD output is a three-tuple
+$(\Delta, \rho, \mathrm{Vega}) = (\partial P/\partial S_0,\ \partial P/\partial r,\ \partial P/\partial \sigma)$.
+Forward mode is implemented as three \texttt{jax.jvp} calls (one per input
+direction), and reverse mode as a single \texttt{jax.grad} call with
+\texttt{argnums=(0,1,2)}.
+
+For the local-volatility workload the AD output is a six-tuple
+$(\partial P/\partial S_0,\ \partial P/\partial a_0,\ \partial P/\partial a_1,\ \partial P/\partial a_2,\ \partial P/\partial b_1,\ \partial P/\partial \sigma_{\min})$.
+Forward mode therefore requires six \texttt{jax.jvp} calls, while reverse mode
+again computes the full gradient in a single backward pass.
+
+Both modes feed into the runner's overhead-ratio computation. Because the
+gradient and the baseline price share the same forward computation, the
+overhead ratio is a clean measure of the marginal cost of differentiation.
+
+\section{GPU Support}
+\label{sec:impl-gpu}
+
+CUDA support is implemented for the European workload via PyCUDA. The kernel
+launch configuration is determined at runtime: the host queries the device for
+the maximum number of threads per block and chooses the largest power of two
+not exceeding it, then computes the number of blocks as
+$\lceil M / \text{threads\_per\_block} \rceil$. The host allocates a single
+device array of size $M$ for the payoffs and reduces it to a scalar with
+\texttt{np.mean} after copying back. The CUDA engine is probed at server
+startup with a 128-path trial run; if the probe fails (no GPU, no CUDA
+toolkit, PyCUDA import failure, etc.) the engine is silently excluded.
+
+JAX inherits GPU support transparently when JAX is installed with CUDA wheels.
+The same JAX engine code paths execute on GPU without modification; the
+benchmark database simply records a different platform string. Switching
+between CPU and GPU JAX is therefore a deployment decision rather than a code
+change.
+
+\section{Challenges}
+\label{sec:impl-challenges}
+
+Several issues arose during implementation and shaped the final design.
+
+\paragraph{XLA caching across runs.}
+A naive initial JAX implementation defined the kernel inside the engine's
+\texttt{run()} method. Each call created a fresh function object, defeating
+the JIT cache: every timed repetition paid the full $\approx115$~ms compile
+cost. Moving the kernel to module level reduced warm execution time to
+$\approx0.6$~ms and made the JAX engine genuinely competitive on small $M$.
+
+\paragraph{Triple AD passes.}
+An earlier reverse-mode implementation invoked \texttt{jax.grad} three times
+with \texttt{argnums=0,1,2}. The result was numerically correct but tripled
+both the measured AD wall time and the AD overhead ratio. Consolidating into a
+single \texttt{jax.grad(..., argnums=(0,1,2))} call eliminated this artefact;
+this single change halved the reverse-mode overhead in early measurements and
+brought the framework into line with how reverse-mode AD is deployed in
+practice.
+
+\paragraph{\texttt{for}-loop unrolling in JAX.}
+The first local-volatility implementation used a Python \texttt{for} loop over
+the $N=252$ Euler steps. Compilation time grew linearly in $N$ and peak memory
+reached several gigabytes during tracing. Rewriting the loop as
+\texttt{jax.lax.scan} produced a single fused loop in the XLA graph; compile
+time and memory became effectively independent of $N$.
+
+\paragraph{Numerically stable softplus.}
+A naive softplus implementation $\log(1 + e^{z})$ overflows for $z \gtrsim 700$
+in double precision and loses precision near $z = 0$. The stable form
+$\max(z, 0) + \log(1 + e^{-|z|})$ is used identically in NumPy, JAX, C++ and
+Rust, so any cross-engine numerical discrepancy can only be attributed to the
+RNG or the floating-point order of operations, not to the activation function
+itself.
+
+\paragraph{Per-thread RNG reproducibility.}
+Both the C++ and Rust engines use per-thread RNG streams seeded from the global
+seed plus the thread index. Changing the thread count therefore changes the
+RNG assignment and produces statistically equivalent but numerically different
+results. This is recorded by storing \texttt{num\_threads} on every run, so
+that runs at different thread counts are treated as distinct configurations.
+
+\paragraph{Optional native components.}
+Both the C++ and Rust engines require non-trivial native toolchains
+(a C++17 compiler with OpenMP, or the Rust toolchain plus maturin) that are not
+present in every environment. The engines are loaded lazily and degrade
+gracefully: a missing build is reported only when the user explicitly requests
+that engine via the API, and the corresponding rows simply do not appear in the
+engine list.
+
+\paragraph{Schema evolution.}
+During development, several new columns were added to the database (notably
+the AD-overhead, error-metric and cloud columns). Rather than write migration
+scripts, the database opens with a self-migrating \texttt{\_init\_schema()}
+that compares the existing columns against the authoritative list and
+\texttt{ALTER TABLE}s any missing columns into existence. This has allowed every
+historical database file to remain readable across schema changes.
+
+\section{Cloud Metadata and Cost Support}
+\label{sec:impl-cloud}
+
+Cloud support is implemented as metadata attached to ordinary benchmark rows
+rather than as a separate execution path. Experiment drivers can record the
+cloud provider, instance type, region, zone, hourly price assumption, git
+commit, and derived cost per run. This preserves the same framework invariants
+as local execution: every cloud result still has a workload configuration, an
+engine, an AD mode, timing statistics, numerical outputs, and environment
+metadata.
+
+The final cloud experiment uses Google Cloud instance metadata recorded in the
+result files, including \texttt{n2-standard-4} in
+\texttt{europe-west1-b}. Cost per run is derived from measured runtime and the
+stored hourly price. The implementation deliberately avoids hard-coding a claim
+that one instance is universally cheapest: prices and availability can change,
+so the report treats cost as experiment metadata associated with a particular
+run.
+
+\section{Profiler Implementation}
+\label{sec:impl-profiler}
+
+The final profiler-versus-grid experiment is driven by
+\texttt{experiments/run\_profiler\_vs\_grid.py}. The script constructs the
+candidate grid, filters unsupported workload/engine/AD combinations, executes
+probe runs, applies the old profiler and SHA selection policies, and records
+which configurations would be promoted to full benchmarking. The report
+artefact generator
+\texttt{Final\_Year\_Project\_Report/evaluation/generate\_report\_assets.py}
+then converts the stored results into the tables and figures used in
+Chapter~\ref{chap:results}.
+
+In the final \texttt{sha\_cloud\_profiler\_v4} experiment, the full-grid
+baseline contains 16 candidate configurations evaluated at three full path
+counts, for 48 full benchmark cells. The old probe-based profiler selects 30
+full cells, while SHA selects 24. The SHA implementation records intermediate
+promotion rounds, including the active configuration count at each probe path
+budget. This metadata is used to generate the SHA progression plot and to
+compute probe-budget savings.
+
+The profiler implementation also computes decision-quality metrics against the
+full grid: Pareto-frontier recovery, runtime regret, cost regret, and Spearman
+rank correlation between probe and full-scale rankings. This is important
+because the profiler is an optimisation of the benchmarking process, not a
+replacement for evaluation. Its success is judged by whether it reduces
+expensive full runs while preserving the decisions that the full grid would
+have supported.
+
+\section{Testing}
+\label{sec:impl-testing}
+
+The framework ships with $55$ tests across two pytest files in \texttt{tests/}.
+
+\texttt{test\_system.py} covers:
+
+\begin{itemize}
+    \item Six parametric tests for configuration validation (invalid field
+          values, rejected \texttt{option\_type}).
+    \item Configuration serialisation: round-trip \texttt{to\_dict} /
+          \texttt{from\_dict}, exclusion of \texttt{SCHEMA} from the serialised
+          form, \texttt{config\_from\_dict} dispatch, and the expected
+          \texttt{ValueError} on an unknown \texttt{workload\_type}.
+    \item Engine correctness: NumPy and JAX pricing accuracy against
+          Black--Scholes within tolerance.
+    \item Runner statistics: structure of the timing record and
+          reproducibility under fixed seed.
+    \item Database round-trips: \texttt{create\_run},
+          \texttt{mark\_running}, \texttt{mark\_completed}, \texttt{get\_run},
+          \texttt{get\_all\_runs}, \texttt{summary}.
+    \item API endpoint contracts: status codes and response structure for all
+          seven endpoints.
+    \item An end-to-end flow from configuration through engine and runner to
+          database insert and API read-back.
+\end{itemize}
+
+\texttt{test\_ad\_framework.py} covers:
+
+\begin{itemize}
+    \item JAX engine executes without error for each of
+          \(\texttt{ad\_mode} \in \{\texttt{none}, \texttt{forward}, \texttt{reverse}\}\)
+          on the European
+          workload.
+    \item The standalone differentiated price function exposes the expected
+          JAX function signature.
+    \item Analytical Greek computations agree with their closed-form
+          definitions.
+    \item Computed gradients fall within the expected analytical bounds.
+\end{itemize}
+
+\section{Dependencies}
+\label{sec:impl-deps}
+
+Core Python dependencies: \texttt{numpy>=1.26}, \texttt{scipy>=1.11},
+\texttt{jax[cpu]>=0.4.28}, \texttt{flask>=3.0}, \texttt{flask-cors>=4.0},
+\texttt{pytest>=8.0}, \texttt{pybind11>=2.11} (for the C++ build). \texttt{psutil}
+is optional and enables RSS-based memory profiling when present. The Rust
+engine requires the Rust toolchain (\texttt{rustup}), \texttt{maturin>=1.0},
+\texttt{PyO3}, and the \texttt{rand}, \texttt{rand\_distr} and \texttt{rayon}
+crates. The CUDA engine requires the NVIDIA CUDA toolkit and \texttt{PyCUDA}.
+The frontend depends on \texttt{react}, \texttt{react-dom}, \texttt{@mui/material}
+and a Vite-based toolchain.
+
+\section{Summary}
+\label{sec:impl-summary}
+
+The implementation realises the design of Chapter~\ref{chap:system-design} in
+roughly $4{,}000$ lines of Python plus native C++ and Rust extensions and a
+TypeScript frontend. Five engines (NumPy, JAX, C++, Rust, CUDA), two workloads
+(European GBM, European local volatility) and three AD modes (none, forward,
+reverse) are supported, with full SQLite persistence, a REST API, a React
+dashboard and a $55$-test pytest suite. The next chapter describes the
+experimental protocol applied to this implementation.

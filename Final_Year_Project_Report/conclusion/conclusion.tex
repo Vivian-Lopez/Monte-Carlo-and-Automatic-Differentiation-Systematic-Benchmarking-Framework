@@ -1,0 +1,115 @@
+\chapter{Conclusion}
+\label{chap:conclusion}
+
+\section{Summary of Work}
+
+This project designed, implemented, and evaluated a reproducible benchmarking
+framework for Monte Carlo option-pricing engines with automatic
+differentiation. The framework supports explicit workload configurations,
+engine abstraction, deterministic seeding, warm-up and repeated timing,
+analytical validation where available, SQLite result storage, environment
+metadata capture, cloud cost metadata, and generated report artefacts.
+
+The completed implementation compares NumPy, JAX/XLA, C++/OpenMP, and
+Rust/Rayon engines across European GBM, parametric local-volatility, and Asian
+option workloads where supported. The local experimental campaign provides
+detailed evidence on validation, runtime, throughput, AD overhead,
+path-count scaling, time-step scaling, thread scaling, memory pressure,
+surface-shape sensitivity, and timing stability. The final cloud experiment
+extends this with cost-performance analysis, Pareto-frontier analysis, and
+profiler-versus-grid evaluation.
+
+\section{Key Findings}
+
+The results show that MC+AD performance cannot be reduced to a single backend
+ranking. The simple European GBM workload is useful for correctness checks, but
+the more demanding local-volatility and Asian workloads change the observed
+trade-offs. Rust/Rayon is the strongest no-AD engine in the main
+local-volatility results and in the highlighted European/local-volatility cloud
+rows, while JAX/XLA remains essential for AD and is competitive for some
+path-dependent configurations.
+
+The AD results show a clear runtime-memory trade-off. Reverse-mode AD is
+substantially cheaper than forward mode for the scalar-output
+local-volatility workload at moderate sizes, but it reaches practical memory
+limits at larger \(M,N\) combinations. In the final cloud comparison at
+\(M=100{,}000\), JAX AD overhead ranges from \(1.81\times\) for Asian reverse
+mode to \(4.42\times\) for local-volatility forward mode.
+
+The cloud-profiler result is the strongest final systems contribution. In the
+\code{sha\_cloud\_profiler\_v4} experiment on \code{n2-standard-4}, the full
+grid requires 48 full benchmark cells. SHA selects 24, saving 50.0\% of full
+runs while preserving 100.0\% Pareto recovery and 0.0\% runtime and cost regret
+relative to the full grid. The old profiler also preserves the best decisions,
+but selects 30 full runs, so SHA achieves the same measured decision quality
+with fewer full-scale evaluations.
+
+\section{Answering Research Questions}
+
+\paragraph{Hardware and software stacks.}
+The local and cloud results show that runtime depends strongly on workload
+structure, engine implementation, and runtime system. Compiled CPU engines are
+very strong for no-AD workloads, while JAX/XLA is necessary for the reported AD
+measurements and can be competitive when the workload has enough structure to
+benefit from compilation.
+
+\paragraph{Programming languages and AD libraries.}
+C++/OpenMP and Rust/Rayon provide high no-AD throughput and explicit CPU
+parallelism. JAX provides the main AD capability and exposes the practical
+difference between forward and reverse mode. The trade-off is therefore not
+only language performance, but also derivative support, memory behaviour, and
+ease of integration into a reproducible benchmark runner.
+
+\paragraph{Cloud cost-performance.}
+The final priced comparison shows that runtime and cost should be considered
+together. For the measured no-AD rows at \(M=100{,}000\),
+\code{t2d-standard-4} is faster and lower cost per run than
+\code{n2-standard-4}. This is a measured result under the stored pricing and
+environment assumptions, not a universal claim about all cloud hardware.
+
+\paragraph{AI/ML techniques.}
+JAX/XLA demonstrates that compiler and AD techniques from the AI/ML ecosystem
+are relevant to MC workloads, especially when the computation is expressed in a
+form such as \code{jax.lax.scan} that the compiler can optimise. The project
+does not complete mixed precision, GPU auto-tuning, or broader hardware-aware
+scheduling experiments, so the conclusion is deliberately limited to the
+measured XLA and AD evidence.
+
+\paragraph{Parallelism and bottlenecks.}
+The thread-scaling experiments show effective scaling for C++ and Rust under
+OpenMP/Rayon-style parallelism, while JAX's CPU runtime is less directly
+controlled by requested thread counts. The stress tests show that memory, not
+only arithmetic throughput, becomes a limiting factor for reverse-mode AD on
+large local-volatility workloads.
+
+\section{Future Work}
+
+The most direct next step is to broaden the cloud study. More instance types,
+regions, repeated cloud runs, and up-to-date pricing snapshots would test
+whether the SHA profiler remains reliable on larger and noisier grids. The
+profiler could also incorporate uncertainty estimates so that promotion
+decisions account explicitly for timing variance and Monte Carlo noise.
+
+GPU execution, distributed execution, mixed precision, and hardware counters
+remain important extensions. The framework already has a CUDA scaffold and
+metadata structure, but the final evaluation does not claim GPU results.
+Extending the benchmark suite to GPUs and distributed workers would make the
+hardware-comparison part of the original proposal much stronger.
+
+Further AD systems and languages would also be valuable. The project evaluates
+JAX AD, but future work could compare Enzyme, C++ AD tools, Rust AD libraries,
+Mojo, or domain-specific quant libraries. Finally, the frontend and API could
+be developed into a more complete dashboard for interactive profiler
+configuration and report artefact generation.
+
+\section{Final Remarks}
+
+Overall, the project contributes both a working engineering artefact and an
+empirical methodology. The artefact makes MC+AD experiments reproducible,
+queryable, and extensible across engines. The methodology shows how detailed
+local benchmarking can be combined with cloud cost metadata and successive
+halving to reduce expensive full-grid benchmarking while preserving measured
+selection quality. The final report therefore represents an expanded and
+completed version of the original framework work: it retains the detailed
+technical and experimental narrative, while adding the final cloud,
+cost-performance, Pareto-frontier, AD-overhead, and SHA-profiler results.

@@ -17,6 +17,7 @@
 
 %% Packages
 \usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{tabularx}
@@ -66,13 +67,15 @@
 % \end{abstract}
 \begin{abstract}
 
-Monte Carlo (MC) simulation with automatic differentiation (AD) is important in quantitative finance because both prices and sensitivities must be computed efficiently.  Its performance is difficult to reason about in isolation: workload structure, AD mode, implementation language, compiler/runtime behaviour, and cloud hardware can all change the best engineering choice.  This project addresses that problem by building a reproducible benchmarking framework for MC+AD option-pricing workloads and using it to evaluate engine/runtime performance, AD overhead, cloud cost-performance, and budget-aware profiling.
+Monte Carlo (MC) simulation with automatic differentiation (AD) is widely used in quantitative finance and scientific computing, where both numerical estimates and parameter sensitivities must be computed efficiently. However, the performance characteristics of MC+AD workloads are difficult to evaluate systematically. Runtime, scalability, memory behaviour, and numerical stability depend not only on the underlying stochastic model, but also on differentiation mode, execution backend, compiler/runtime behaviour, threading strategy, and hardware configuration. Existing studies often evaluate these factors in isolation, making it difficult to determine which software and hardware choices are appropriate for a given workload and deployment budget.
 
-The framework provides typed workload configurations, a common engine interface, controlled warm-up and repeated timing, deterministic seeding, correctness validation, SQLite result storage, CSV export, and environment metadata capture.  It supports European, Asian, and parametric local-volatility option workloads, with NumPy, JAX/XLA, C++/OpenMP, and Rust/Rayon engines where available.  JAX provides forward- and reverse-mode AD measurements.
+This project develops a reproducible benchmarking and profiling framework for MC+AD option-pricing workloads across modern software and hardware environments. The framework provides explicit workload specifications, a common engine interface, controlled warm-up and repeated measurement, deterministic random seeding, numerical validation against reference solutions, structured result storage, and environment metadata capture. Using this framework, a set of representative workloads is evaluated across Python/NumPy, JAX, C++, and Rust implementations on both local and cloud-based hardware platforms.
 
-The strongest contribution is a Successive Halving style cloud profiler for selecting promising full-scale benchmark configurations from cheap probes.  In the final cloud experiment \texttt{sha\_cloud\_profiler\_v4} on an \texttt{n2-standard-4} VM in \texttt{europe-west1-b}, the full grid contained 16 configurations and 48 full benchmark runs.  The previous profiler selected 30 full runs, whereas SHA selected 24, saving 50.0\% of the full-grid runs while recovering 100.0\% of the full-grid Pareto frontier and incurring 0.0\% runtime and cost regret relative to the grid best.  The best runtime configuration was \texttt{rust/european/none}, taking 0.54 ms at \(M=100{,}000\), and was selected by the full grid, old profiler, and SHA.
+The experimental study focuses on workload regimes rather than isolated headline timings. Constant-volatility European options are used as a baseline terminal-payoff workload, while parametric local-volatility models introduce additional arithmetic complexity and state-dependent dynamics. A path-dependent Asian option workload is further used to stress memory usage and expose differences in backend scaling behaviour. Across these workloads, the project investigates how backend rankings change with workload scale, how forward- and reverse-mode AD alter runtime and memory costs, and how cloud hardware selection affects cost-performance trade-offs.
 
-The results suggest that no single engine is best for every workload.  Rust/Rayon is strongest for no-AD European and local-volatility CPU runs in the reported experiments, while JAX remains essential for AD.  At \(M=100{,}000\), JAX AD overhead ranged from 1.81\(\times\) for Asian reverse mode to 4.42\(\times\) for local-volatility forward mode.  The project therefore contributes both an engineering artefact and an empirical methodology for cost-aware MC+AD benchmarking, while leaving GPU execution, Mojo, wider BLAS comparisons, hardware counters, wider cloud regions, and distributed execution as future work.
+The primary contribution of the project is a workload-aware profiling methodology for MC+AD systems. Rather than treating backend and hardware selection as a naive exhaustive grid search problem, the proposed approach uses short probe runs to identify dominated configurations and approximate the runtime-cost Pareto frontier before performing more expensive benchmark evaluations. This reframes cloud resource selection as a reproducible, budget-aware systems problem and enables more efficient exploration of hardware/software design choices.
+
+The results demonstrate that no single backend or hardware configuration is uniformly optimal across all workloads. Instead, effective deployment depends on workload structure, differentiation requirements, execution scale, and cost constraints. Overall, the project contributes both a practical benchmarking framework and an empirical methodology for analysing MC+AD workloads, providing evidence-based guidance for the design and selection of efficient Monte Carlo simulation systems with automatic differentiation.
 
 \end{abstract}
 
@@ -137,7 +140,7 @@ Finally, I would like to thank the Department of Computing at Imperial College L
 %% =========================
 \input{appendix/appendix.tex}
 
-\bibliographystyle{unsrt}
+\bibliographystyle{alpha}
 \bibliography{bibs/sample}
 
 \end{document}

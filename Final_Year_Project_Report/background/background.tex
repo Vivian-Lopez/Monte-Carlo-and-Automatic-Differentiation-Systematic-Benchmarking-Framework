@@ -1,0 +1,97 @@
+\chapter{Background and Related Work}
+
+\section{Monte Carlo Simulation}
+
+Monte Carlo (MC) simulation is a widely used technique for estimating expectations of stochastic systems through repeated random sampling. It is particularly valuable in settings where analytical solutions are unavailable or intractable, such as the pricing of financial derivatives under complex dynamics. In such applications, MC methods approximate quantities of interest by simulating a large number of independent sample paths and averaging the resulting payoffs.
+
+A key property of MC simulation is that its statistical error decreases at a rate proportional to $O(N^{-1/2})$, where $N$ is the number of samples. As a result, achieving high accuracy typically requires a large number of simulations, making computational efficiency a primary concern. At the same time, MC workloads are often described as ``embarrassingly parallel'', since individual simulation paths can be evaluated independently. This makes them well-suited to modern parallel hardware, including multi-core CPUs and GPUs.
+
+In practice, Monte Carlo \emph{engines} extend basic simulations by providing configurable, reusable implementations that support parameter variation, reproducibility through controlled random number generation, and repeated execution for statistical aggregation. Benchmarking such engines therefore requires not only measuring raw execution time, but also understanding how performance scales with workload size, parallelism, and implementation choices.
+
+\section{Automatic Differentiation}
+
+Automatic differentiation (AD) is a technique for computing derivatives of numerical programs by systematically applying the chain rule to the sequence of elementary operations that define the computation. Unlike finite difference methods, AD produces derivatives accurate up to floating-point precision while avoiding numerical instability.
+
+Two primary modes of AD are commonly used. Forward-mode AD propagates derivatives alongside values during the forward execution of a program and is typically efficient when the number of input parameters is small relative to the number of outputs. In contrast, reverse-mode AD records intermediate computations during a forward pass and then propagates sensitivities backwards, making it more efficient when a small number of outputs depend on many inputs.
+
+Modern AD systems, such as those integrated into scientific computing and machine learning frameworks, enable gradients to be computed directly from program implementations. This is particularly useful in simulation-based contexts, where sensitivities (e.g., financial ``Greeks'') can be obtained without manual derivation.
+
+However, the choice between forward- and reverse-mode AD introduces important trade-offs in computational cost and memory usage. Forward-mode typically incurs moderate overhead with minimal additional memory requirements, while reverse-mode can significantly increase memory usage due to the need to store intermediate states. These trade-offs become especially important in large-scale simulations.
+
+\section{Monte Carlo + AD Challenges}
+
+Combining Monte Carlo simulation with automatic differentiation enables flexible and general sensitivity analysis, but introduces several non-trivial computational challenges.
+
+First, the computational cost of AD compounds with the cost of simulation. In MC workloads, each sample path may consist of many time steps and numerical operations. Applying AD to such computations increases the amount of work performed per path, with the overhead depending on the differentiation mode and implementation. As a result, throughput (e.g., paths per second) can be significantly reduced compared to non-differentiated simulations.
+
+Second, memory usage becomes a critical concern, particularly for reverse-mode AD. Reverse-mode requires storing intermediate values during the forward execution in order to compute gradients during the backward pass. In long-horizon simulations with many time steps, this can lead to substantial memory growth, potentially exceeding cache capacity and degrading performance due to increased memory traffic. In extreme cases, memory limitations may prevent scaling to larger workloads altogether.
+
+Third, the interaction between AD and parallelism is complex. While Monte Carlo simulation is naturally parallel across independent paths, AD introduces dependencies within each path that may limit opportunities for parallel execution. Furthermore, reverse-mode AD can introduce additional synchronisation points and data movement, particularly in GPU or distributed settings, reducing the effectiveness of parallelisation strategies.
+
+Finally, the combination of stochastic computation and differentiation introduces challenges for reproducibility and numerical stability. Ensuring that differentiated simulations produce consistent and meaningful results requires careful control of random number generation, seeding, and execution order.
+
+These challenges motivate the need for systematic evaluation of MC+AD workloads, where both computational performance and memory behaviour are measured under controlled and reproducible conditions.
+
+\section{Existing Frameworks}
+
+Several frameworks exist for Monte Carlo simulation and high-performance numerical computing, though few explicitly target the combination of MC and AD across heterogeneous environments.
+
+Carlo.jl is a notable example of a Monte Carlo framework designed for high-performance simulations in Julia. It provides abstractions for defining simulation workloads, managing parallel execution, and handling reproducibility through structured configuration and checkpointing. Its design emphasises separation between the Monte Carlo algorithm and the surrounding execution infrastructure, enabling reuse and composability of simulation components.
+
+However, Carlo.jl is intentionally scoped to a single language ecosystem and does not directly address cross-language benchmarking, automatic differentiation, or heterogeneous hardware support. While it demonstrates effective scheduling strategies and reproducible execution, it does not provide a general framework for comparing implementations across different programming languages, AD systems, or hardware architectures.
+
+More broadly, existing benchmarking efforts in scientific computing and machine learning often focus on specific domains or workloads, such as linear algebra kernels or neural network training. While these benchmarks provide valuable insights into hardware and compiler performance, they do not capture the unique characteristics of MC+AD workloads, particularly the interaction between stochastic simulation, differentiation, and parallel execution.
+
+This highlights the need for a benchmarking framework that treats Monte Carlo simulation and automatic differentiation as first-class concerns, while enabling fair and reproducible comparison across implementations.
+
+\section{Hardware Considerations}
+
+The performance of Monte Carlo and MC+AD workloads is strongly influenced by the underlying hardware architecture. While MC simulations are often considered compute-intensive, in practice their performance can be limited by a combination of arithmetic throughput, memory bandwidth, and parallel execution efficiency.
+
+On modern CPUs, performance depends on effective utilisation of vectorisation (SIMD), multi-threading, and cache hierarchies. Poor memory locality or inefficient vectorisation can significantly reduce achievable performance, even for otherwise simple workloads. In the presence of reverse-mode AD, increased memory usage can exacerbate these issues by placing additional pressure on caches and memory bandwidth.
+
+GPUs offer high throughput for data-parallel workloads and are well-suited to large-scale Monte Carlo simulations. However, their performance depends on careful management of memory access patterns, kernel launch overheads, and control-flow divergence. The introduction of AD can further complicate GPU execution, as differentiation may require additional kernel passes, increased memory usage, or limited compiler optimisation opportunities.
+
+In heterogeneous and cloud environments, additional factors such as data transfer overheads, resource contention, and cost efficiency become relevant. High raw performance does not necessarily translate to optimal cost-performance, particularly when specialised hardware incurs higher operational costs.
+
+Understanding these hardware-level effects is essential for interpreting benchmark results and identifying performance bottlenecks in MC+AD workloads.
+
+\section{Budget-Aware Benchmark Selection}
+
+Full-grid benchmarking is attractive because it gives a direct comparison of
+all candidate workloads, engines, AD modes, and hardware choices. However, it
+becomes expensive when each candidate must be evaluated at production-scale path
+counts on cloud instances. A practical benchmarking system therefore needs not
+only accurate measurement, but also a way to decide which configurations deserve
+the most expensive measurements.
+
+This motivates the use of cheap probe runs. A probe run evaluates a candidate
+configuration at a smaller path count or reduced budget and uses that result as
+evidence about whether the configuration is likely to remain competitive at full
+scale. The central risk is selection error: a configuration that is slow at low
+budget may become competitive at high budget, or a noisy probe may give an
+incorrect ranking. Any profiler must therefore be evaluated against a full-grid
+baseline rather than assumed to be correct.
+
+Successive halving is a natural fit for this setting. It begins by evaluating
+all candidates at a low budget, promotes a smaller active set to a larger budget,
+and repeats until only the strongest candidates remain for full evaluation. In
+the context of MC+AD benchmarking, the budget can be interpreted as the number
+of simulated paths. This connects the statistical structure of Monte Carlo
+experiments with the systems problem of cloud cost control: most configurations
+receive only cheap measurements, while promising configurations receive enough
+budget to support reliable final decisions.
+
+\section{Summary of Gaps}
+
+Despite extensive work in Monte Carlo simulation, automatic differentiation, and high-performance benchmarking, several gaps remain in the literature.
+
+First, there is a lack of standardised benchmarking frameworks that support Monte Carlo workloads with integrated automatic differentiation across multiple programming languages and execution environments. Existing tools typically focus on a single language or domain, limiting their ability to support fair cross-system comparisons.
+
+Second, the performance characteristics of AD in stochastic simulation contexts are not well understood. While AD has been extensively studied in machine learning, its interaction with Monte Carlo workloads—particularly in terms of memory usage, scaling behaviour, and parallel execution—has received comparatively little attention.
+
+Third, existing benchmarks often fail to capture the full range of factors influencing performance, including hardware configuration, software stack, differentiation mode, and execution strategy. This makes it difficult to draw general conclusions or reproduce results across different environments.
+
+Finally, there is limited support for integrating performance, resource utilisation, and cost considerations into a unified evaluation framework. For practical applications, particularly in cloud environments, understanding cost-performance trade-offs is as important as measuring raw execution speed.
+
+This project addresses these gaps by developing a modular, language-agnostic benchmarking framework for MC+AD workloads, enabling systematic and reproducible evaluation across hardware architectures, software stacks, and differentiation strategies. The framework is designed to expose non-obvious trade-offs in performance, scalability, and resource usage, providing insights that are not readily obtainable from existing tools or benchmarks.

@@ -1,0 +1,649 @@
+\chapter{System Design}
+\label{chap:system-design}
+
+\section{Design Goals}
+\label{sec:design-goals}
+
+The framework is designed around four guiding principles: \emph{reproducibility},
+\emph{extensibility}, \emph{fairness}, and \emph{traceability}. Together these principles
+constrain almost every interface, data structure and naming convention in the codebase.
+
+\paragraph{Reproducibility.}
+Every benchmark run is fully described by a single, serialisable
+\texttt{WorkloadConfig} object. The \texttt{config\_hash()} method serialises this
+object into canonically sorted JSON and computes a truncated (8-character) SHA-256
+digest. The hash is stable across machines and Python versions and is used to group
+repeated runs of the same experiment for statistical comparison.
+
+All sources of randomness are explicitly seeded. For a given engine on a given
+machine, the same configuration produces bit-identical prices and paths. Different
+engines use different RNG implementations (NumPy \texttt{default\_rng}, JAX
+\texttt{PRNGKey}, C++ \texttt{mt19937\_64}, Rust \texttt{SmallRng}, CUDA \texttt{curand}),
+so the same seed produces statistically equivalent but numerically distinct results
+across engines --- this is an intentional design choice rather than a defect, and is
+documented in the codebase. Cross-engine validation is therefore performed against
+the Black--Scholes analytical solution rather than against bit-equal outputs.
+
+\paragraph{Extensibility.}
+The framework is organised around two minimal abstractions:
+\texttt{WorkloadConfig} (what to simulate) and \texttt{MonteCarloEngine}
+(how to simulate it). Adding a workload requires only declaring a new
+\texttt{@workload}-decorated dataclass. Adding an engine requires only subclassing
+\texttt{MonteCarloEngine} and implementing \texttt{run()}, \texttt{supports()} and
+\texttt{supported\_ad\_modes()}. A central \texttt{WORKLOAD\_REGISTRY} maps string
+identifiers to workload constructors and is consumed by both the REST API and the
+React frontend, so new workloads appear automatically in the UI without
+backend--frontend duplication.
+
+\paragraph{Fairness.}
+All engines are evaluated under a single benchmarking protocol implemented in
+\texttt{BenchmarkRunner}. Each trial consists of a configurable warmup phase whose
+results are discarded, followed by a fixed number of timed repetitions. Warmup is
+essential for JIT-compiled backends: a cold JAX call at $M=10{,}000$ takes
+approximately $115$~ms, compared to approximately $0.6$~ms once XLA has cached the
+compiled binary. Excluding the cold compile cost from timing isolates the
+steady-state computational performance that is relevant in a production setting.
+
+\paragraph{Traceability.}
+Every row in the SQLite database carries the full serialised configuration
+(\texttt{config\_json}), the analytical reference values, all timing statistics,
+and a complete snapshot of the execution environment (Python version, platform,
+CPU model and core count, RAM, NumPy version, JAX version). Any historical run
+can be reconstructed exactly, even if the corresponding \texttt{WorkloadConfig}
+class is later modified.
+
+\section{High-Level Architecture}
+\label{sec:architecture}
+
+The framework follows a strict four-layer architecture, with two additional layers
+providing the REST API and the React frontend. Each layer depends only on the
+layers below it, so any component can be replaced or extended in isolation.
+
+\begin{figure}[h]
+\centering
+\fbox{
+\parbox{0.9\textwidth}{
+\textbf{Diagram Placeholder: System Architecture}
+
+\vspace{0.5em}
+The architecture is composed of six vertically stacked layers:
+
+\begin{enumerate}
+    \item \textbf{Frontend} (React + TypeScript + Material UI, Vite, port 5173).
+    \item \textbf{REST API} (Flask, port 5050) with a background worker thread.
+    \item \textbf{Experiment scripts} (\texttt{run\_european\_baseline.py},
+          \texttt{run\_european\_ad\_analysis.py},
+          \texttt{run\_european\_scalability.py}) that bypass the API and call
+          the runner directly.
+    \item \textbf{BenchmarkRunner} (warmup, timed repetitions, AD overhead,
+          memory and metadata capture).
+    \item \textbf{Engine layer}, horizontally split into five variants:
+          \begin{itemize}
+              \item \texttt{CPUMonteCarloEngine} (NumPy)
+              \item \texttt{JAXMonteCarloEngine} (XLA, JIT, AD)
+              \item \texttt{CPPMonteCarloEngine} (OpenMP, pybind11)
+              \item \texttt{RustMonteCarloEngine} (Rayon, PyO3)
+              \item \texttt{CUDAMonteCarloEngine} (PyCUDA, curand)
+          \end{itemize}
+    \item \textbf{BenchmarkDB} (SQLite with WAL, single \texttt{runs} table).
+\end{enumerate}
+
+Configuration objects (\texttt{WorkloadConfig}) flow downwards from layers 1--3
+into the runner; engines return \texttt{(price, greeks)} tuples to the runner;
+the runner writes fully-populated \texttt{BenchmarkResult} rows into the
+database; the API serves both writes (new runs) and reads (history, summary,
+compare-matrix) for the frontend.
+}
+}
+\caption{High-level system architecture and data flow.}
+\label{fig:arch}
+\end{figure}
+
+\section{Layer~1 --- Workload Configuration}
+\label{sec:workload-layer}
+
+The workload layer uses a registry pattern implemented via a single Python
+decorator. The \texttt{@workload(name)} decorator simultaneously applies
+\texttt{@dataclass} to the class, sets a class-level \texttt{workload\_type}
+attribute, and registers the class in a global \texttt{WORKLOAD\_REGISTRY}
+dictionary. Adding a new workload therefore requires only writing a new class:
+no boilerplate, no changes to the runner, storage, API or frontend.
+
+The base class \texttt{WorkloadConfig} provides four concrete inherited methods
+used by every workload:
+
+\begin{itemize}
+    \item \texttt{validate()} --- a no-op by default, overridden for cross-field
+          constraints (e.g.\ enforcing $\sigma > 0$, $T > 0$, valid
+          \texttt{option\_type}).
+    \item \texttt{to\_dict()} --- full serialisation via
+          \texttt{dataclasses.asdict()} with \texttt{workload\_type} injection.
+    \item \texttt{from\_dict()} --- safe deserialisation, ignoring unknown keys
+          so that schema migrations do not break older saved configurations.
+    \item \texttt{config\_hash()} --- the 8-character SHA-256 fingerprint of the
+          sorted serialised configuration.
+\end{itemize}
+
+There are no abstract methods on \texttt{WorkloadConfig}; every subclass inherits
+working implementations. The free function \texttt{config\_from\_dict()} is the
+single deserialisation entry point: it reads the \texttt{workload\_type} key,
+looks up the corresponding class in \texttt{WORKLOAD\_REGISTRY}, and delegates
+to that class's \texttt{from\_dict()}.
+
+\subsection{Workload~1 --- European Option}
+\label{sec:workload-european}
+
+\texttt{EuropeanOptionConfig} (\texttt{workload\_type = "european"}) describes a
+plain vanilla European call or put under constant-volatility geometric Brownian
+motion (GBM). Its fields are summarised in Table~\ref{tab:european-fields}.
+
+\begin{table}[h]
+\centering
+\caption{Fields of \texttt{EuropeanOptionConfig}.}
+\label{tab:european-fields}
+\begin{tabular}{lll}
+\hline
+Field & Default & Description \\
+\hline
+\texttt{S0} & 100.0 & initial spot price \\
+\texttt{K} & 100.0 & strike price \\
+\texttt{r} & 0.05 & continuously-compounded risk-free rate \\
+\texttt{sigma} & 0.20 & annualised volatility \\
+\texttt{T} & 1.0 & time to maturity (years) \\
+\texttt{option\_type} & \texttt{"call"} & \texttt{"call"} or \texttt{"put"} \\
+\texttt{N} & 1 & number of time steps (single-step exact) \\
+\texttt{M} & 10\,000 & number of Monte Carlo paths \\
+\texttt{seed} & 42 & RNG seed for reproducibility \\
+\hline
+\end{tabular}
+\end{table}
+
+The pricing model uses single-step exact GBM. The terminal stock price is
+\[
+S_T \;=\; S_0\,\exp\!\left(\left(r - \tfrac{1}{2}\sigma^2\right)T \;+\; \sigma\sqrt{T}\,Z\right),
+\qquad Z \sim \mathcal{N}(0,1),
+\]
+and the option price is the discounted expected payoff. This is the reference
+workload for all engine and AD comparisons because Black--Scholes provides an
+exact analytical benchmark for both prices and Greeks.
+
+Analytical validation is built directly into the framework. The
+\texttt{CPUMonteCarloEngine} module exposes Black--Scholes closed-form
+functions for the call/put price, Delta, Vega and Rho:
+\[
+\Delta_{\text{call}} = \Phi(d_1), \qquad
+\mathrm{Vega} = S_0\,\phi(d_1)\sqrt{T}, \qquad
+\rho_{\text{call}} = K\,T\,e^{-rT}\Phi(d_2),
+\]
+where $d_1 = \bigl(\ln(S_0/K) + (r+\tfrac{1}{2}\sigma^2)T\bigr) / (\sigma\sqrt{T})$
+and $d_2 = d_1 - \sigma\sqrt{T}$. These values are computed and stored alongside
+every Monte Carlo result, enabling automatic absolute and relative error metrics.
+
+\subsection{Workload~2 --- European Local-Volatility Option}
+\label{sec:workload-localvol}
+
+\texttt{EuropeanLocalVolConfig} (\texttt{workload\_type = "european\_local\_vol"})
+extends the European workload to a multi-step local-volatility model. The
+configuration adds the parameters in Table~\ref{tab:localvol-fields}.
+
+\begin{table}[h]
+\centering
+\caption{Additional fields of \texttt{EuropeanLocalVolConfig}.}
+\label{tab:localvol-fields}
+\begin{tabular}{lll}
+\hline
+Field & Default & Description \\
+\hline
+\texttt{M} & 100\,000 & paths (larger than European for multi-step precision) \\
+\texttt{N} & 252 & Euler steps (daily over one year) \\
+\texttt{sigma\_min} & 0.01 & volatility floor \\
+\texttt{theta} & auto & polynomial parameters $[a_0, a_1, a_2, b_1]$ \\
+\hline
+\end{tabular}
+\end{table}
+
+The default $\theta$ is set in \texttt{\_\_post\_init\_\_} so that
+$\sigma_{\min} + \mathrm{softplus}(a_0) = 0.20$, i.e.\ the model reduces to a
+$20\%$ flat-volatility GBM. The closed-form solution is
+$a_0 = \log(\mathrm{expm1}(0.20 - \sigma_{\min}))$. When
+$a_1 = a_2 = b_1 = 0$, the model collapses to constant-volatility GBM and the
+Monte Carlo price converges to the Black--Scholes price as $M$ and $N$ increase.
+This provides an automatic regression test embedded in the default configuration.
+
+The dynamics are
+\[
+dS \;=\; r\,S\,dt \;+\; \sigma(S, t;\theta)\,S\,dW,
+\]
+discretised in log-space using a log-Euler scheme:
+\[
+S_{n+1} \;=\; S_n \exp\!\left(\left(r - \tfrac{1}{2}\sigma_n^2\right)\Delta t \;+\; \sigma_n\sqrt{\Delta t}\,Z_n\right).
+\]
+At each step the local volatility is computed from a parametric monomial surface:
+\[
+x_n = \ln(S_n / S_0), \qquad
+\mathrm{raw}_n = a_0 + a_1 x_n + a_2 x_n^2 + b_1 t_n, \qquad
+\sigma_n = \sigma_{\min} + \mathrm{softplus}(\mathrm{raw}_n).
+\]
+The softplus activation is implemented in a numerically stable form
+$\max(\mathrm{raw},0) + \log(1 + \exp(-|\mathrm{raw}|))$, which avoids overflow
+for large positive inputs and catastrophic cancellation for large negative
+inputs. This formulation is reproduced \emph{identically} in NumPy, JAX, C++
+and Rust so that the engines are differentiated only by their execution model,
+not by numerical behaviour.
+
+The AD targets for this workload are Delta (\(\partial P / \partial S_0\)) plus
+the full $\theta$-gradient \(\partial P / \partial a_0\), \(\partial P / \partial a_1\),
+\(\partial P / \partial a_2\), \(\partial P / \partial b_1\),
+\(\partial P / \partial \sigma_{\min}\) --- six inputs in total, computed in a
+single reverse-mode backward pass.
+
+\section{Layer~2 --- Engine Interface}
+\label{sec:engine-layer}
+
+The \texttt{MonteCarloEngine} abstract base class defines a minimal interface:
+
+\begin{verbatim}
+class MonteCarloEngine:
+    def run(self, config, ad_mode) -> tuple[float, dict | None]
+    def supports(self, workload_type: str) -> bool
+    def supported_ad_modes(self) -> tuple[str, ...]
+\end{verbatim}
+
+The \texttt{ad\_mode} argument takes one of three string values:
+\texttt{"none"}, \texttt{"forward"} or \texttt{"reverse"}. When \texttt{ad\_mode}
+is \texttt{"none"} or the engine does not implement AD for the given workload,
+the returned \texttt{greeks} dictionary is \texttt{None}. The runner inspects
+\texttt{supports()} and \texttt{supported\_ad\_modes()} before dispatching a
+configuration, so engines that cannot service a request are silently skipped
+rather than raising errors.
+
+\paragraph{Engine~1 --- NumPy / CPU.}
+\texttt{CPUMonteCarloEngine} is the single-threaded NumPy reference
+implementation. It supports both workloads and \texttt{ad\_mode = "none"} only.
+For the European workload it uses \texttt{np.random.default\_rng(seed)} to
+generate all $M$ standard normals as a single array and evaluates the terminal
+price and payoff vectorially --- no Python-level loop over paths. For the
+local-volatility workload it implements the $N$-step log-Euler scheme in
+Python, with each step operating vectorially on an array of $M$ paths. The
+correctness of all other engines is verified against this implementation.
+
+\paragraph{Engine~2 --- JAX / XLA.}
+\texttt{JAXMonteCarloEngine} is the only engine that exposes
+\(\texttt{ad\_mode} \in \{\texttt{none}, \texttt{forward}, \texttt{reverse}\}\).
+The European kernel is a
+\emph{module-level} \texttt{@jax.jit} function decorated with
+\texttt{functools.partial(jax.jit, static\_argnames=("option\_type",))}. Defining
+the kernel at module scope ensures JAX traces and compiles it exactly once per
+\texttt{(shape, dtype, option\_type)} signature; the random sample $Z$ is passed
+as an argument rather than captured in a closure, so the compiled XLA
+computation is reused across every timed repetition. The local-volatility
+kernel uses \texttt{jax.lax.scan} to implement the $N$-step Euler loop, with
+\texttt{static\_argnames=("option\_type", "N")} so XLA emits specialised code
+for each call/put and step-count combination.
+
+For the European workload, reverse-mode AD is implemented as a \emph{single}
+\texttt{jax.grad(price\_fn, argnums=(0,1,2))} call returning
+$(\partial P/\partial S_0,\; \partial P/\partial r,\; \partial P/\partial \sigma)$
+in one backward pass. An earlier version invoked \texttt{jax.grad} three times
+with \texttt{argnums=0,1,2}, which was correct but tripled both compute time and
+peak memory --- a result that materially distorts the AD overhead measurement.
+Forward-mode uses three \texttt{jax.jvp} calls probing the standard basis tangent
+vectors $(1,0,0)$, $(0,1,0)$ and $(0,0,1)$, exploiting the fact that forward mode
+is cheaper than reverse when the number of inputs is small relative to the
+number of outputs.
+
+For the local-volatility workload, reverse-mode uses a single
+\texttt{jax.grad(price\_fn, argnums=(0,1,2,3,4,5))} call that differentiates
+through the full $N$-step \texttt{scan}; forward-mode uses six \texttt{jax.jvp}
+calls. JAX differentiates through \texttt{jax.lax.scan} efficiently via its
+reverse-mode accumulation, avoiding the explosion in graph size that would occur
+if the loop were unrolled.
+
+\paragraph{Engine~3 --- C++ / OpenMP.}
+\texttt{CPPMonteCarloEngine} is a thin Python wrapper around a native
+implementation in \texttt{cpu\_engine.cpp} / \texttt{cpu\_engine.hpp}, exposed via
+\texttt{pybind11} bindings. Each OpenMP thread owns its own \texttt{std::mt19937\_64}
+generator seeded as \texttt{seed + thread\_id}; an explicit \texttt{\#pragma omp
+parallel} block with a reduction clause accumulates partial sums without locks.
+Results are fully deterministic for a given \texttt{(M, seed, thread\_count)}
+triple; changing the thread count changes the per-path RNG assignment and produces
+statistically equivalent but numerically different results. The local-vol kernel
+reproduces exactly the same log-Euler discretisation and stable softplus formula
+as the NumPy and JAX engines.
+
+\paragraph{Engine~4 --- Rust / Rayon.}
+\texttt{RustMonteCarloEngine} wraps a native implementation in
+\texttt{benchmarking/rust/src/lib.rs}, exposed via PyO3 bindings and built with
+\texttt{maturin}. The engine uses \texttt{SmallRng} (Xoshiro128++) from the
+\texttt{rand} crate, with each Rayon worker thread seeded as
+\texttt{seed XOR thread\_index} to mirror the C++ per-thread offset pattern.
+Sampling uses \texttt{rand\_distr::StandardNormal}. The per-path simulation is a
+pure scalar loop with no heap allocation; the entire $M$-path simulation is
+expressed as a Rayon \texttt{into\_par\_iter} chain with \texttt{map\_init} for
+per-thread RNG initialisation and a \texttt{sum} reduction. The softplus
+is implemented inline as \texttt{z.max(0.0) + (-z.abs()).exp().ln\_1p()}.
+
+\paragraph{Engine~5 --- CUDA / PyCUDA.}
+\texttt{CUDAMonteCarloEngine} compiles and launches CUDA kernels at runtime via
+PyCUDA. The engine is probed at server startup with a 128-path trial run; if
+CUDA initialisation fails it is silently marked unavailable and excluded from
+the engine registry. The kernel uses one thread per Monte Carlo path. Each
+thread initialises its own \texttt{curandState} via
+\texttt{curand\_init(seed, thread\_index, 0, \&state)}, using the thread index
+as the sequence number so that statistical independence is guaranteed
+regardless of the block/grid layout. Each thread draws $Z$ via
+\texttt{curand\_normal\_double}, computes the GBM terminal price, and writes
+the discounted payoff to a global output array which the host reduces with
+\texttt{np.mean}. Forward-mode Delta is implemented in a separate kernel using
+the pathwise estimator: $\partial S_T / \partial S_0 = S_T/S_0$, so the pathwise
+Delta is $\mathbf{1}_{\{S_T > K\}}(S_T/S_0)$ for a call and
+$-\mathbf{1}_{\{S_T < K\}}(S_T/S_0)$ for a put. The CUDA engine supports the
+European workload only.
+
+\section{Layer~3 --- Benchmark Runner}
+\label{sec:runner-layer}
+
+\texttt{BenchmarkRunner} encapsulates the full benchmarking protocol. Given an
+engine instance and an optional display name, its \texttt{run()} method executes
+the following sequence:
+
+\begin{enumerate}
+    \item Call \texttt{config.validate()}; abort early on failure.
+    \item Execute \texttt{num\_warmup} warmup runs whose results are discarded;
+          this excludes XLA compilation from timed measurements.
+    \item Execute \texttt{num\_runs} timed runs, recording individual wall-clock
+          times via \texttt{time.perf\_counter()}.
+    \item If \texttt{ad\_mode != "none"}, repeat steps 2--3 for a matched
+          no-AD baseline (same engine, same config, identical warmup count) and
+          compute the AD overhead ratio
+          $r_{\text{AD}} = \overline{t}_{\text{AD}} / \overline{t}_{\text{baseline}}$.
+    \item Snapshot environment metadata: timestamp, Python version and
+          implementation, platform, CPU model and architecture, logical CPU
+          count, total RAM in GB, NumPy version, JAX version.
+    \item Aggregate timings into mean, standard deviation, min and max
+          (in milliseconds), and compute
+          \texttt{throughput\_paths\_per\_sec = M / mean\_runtime\_s}.
+    \item Return a \texttt{BenchmarkResult} dataclass containing all of the
+          above plus the price, the Greeks (if any), the analytical reference
+          values, and the absolute and relative errors.
+\end{enumerate}
+
+Memory peak is measured via \texttt{psutil}: the process resident-set size is
+snapshotted before and after the timed run set, and the peak is reported as
+$\max(\mathrm{rss}_{\text{during}}) - \mathrm{rss}_{\text{before}}$. If
+\texttt{psutil} is unavailable the field is left blank, degrading gracefully.
+
+\section{Layer~4 --- Storage}
+\label{sec:storage-layer}
+
+\texttt{BenchmarkDB} is a thread-safe SQLite wrapper using a per-call connection
+with \texttt{check\_same\_thread=False} and an explicit
+\texttt{threading.Lock} that serialises writes. The database is opened in
+Write-Ahead Logging (WAL) mode, which allows concurrent reads during writes ---
+important because the Flask API serves read requests from the main thread while
+the background worker writes results. The database file lives at
+\texttt{results/benchmarks.db} and is created on first use.
+
+\paragraph{Schema.}
+The schema consists of a single \texttt{runs} table whose columns are defined
+declaratively by the \texttt{\_FULL\_SCHEMA\_COLUMNS} list. Columns are grouped as
+follows:
+
+\begin{itemize}
+    \item \textbf{Identity:} \texttt{id} (UUID, primary key), \texttt{experiment\_id},
+          \texttt{experiment\_type}, \texttt{config\_hash}.
+    \item \textbf{Status lifecycle:} \texttt{status} (\texttt{pending}/\texttt{running}/%
+          \texttt{completed}/\texttt{failed}), \texttt{error\_message},
+          \texttt{created\_at}, \texttt{started\_at}, \texttt{completed\_at}
+          (all UTC ISO-8601).
+    \item \textbf{Workload definition:} \texttt{workload\_type}, \texttt{M},
+          \texttt{N}, \texttt{seed}, \texttt{config\_json}.
+    \item \textbf{Engine / implementation:} \texttt{engine}, \texttt{language},
+          \texttt{backend}.
+    \item \textbf{Parallelism metadata:} \texttt{num\_threads},
+          \texttt{vectorization\_flag}, \texttt{batch\_size}.
+    \item \textbf{Runtime performance:} \texttt{mean\_runtime\_ms},
+          \texttt{std\_runtime\_ms}, \texttt{min\_runtime\_ms},
+          \texttt{max\_runtime\_ms}, \texttt{throughput\_paths\_per\_sec}.
+    \item \textbf{AD metadata:} \texttt{ad\_mode}, \texttt{baseline\_mean\_ms},
+          \texttt{ad\_overhead\_ratio}.
+    \item \textbf{Numerical results:} \texttt{result\_value}, \texttt{greek\_delta},
+          \texttt{greek\_vega}, \texttt{greek\_rho}.
+    \item \textbf{Analytical reference:} \texttt{analytical\_price},
+          \texttt{analytical\_delta}, \texttt{analytical\_vega},
+          \texttt{analytical\_rho}.
+    \item \textbf{Error metrics:} \texttt{abs\_price\_error}, \texttt{rel\_price\_error}
+          and matching columns for Delta, Vega and Rho.
+    \item \textbf{Resources:} \texttt{memory\_peak\_mb}.
+    \item \textbf{Environment:} \texttt{cpu\_model}, \texttt{cpu\_architecture},
+          \texttt{cpu\_count}, \texttt{memory\_gb}, \texttt{platform},
+          \texttt{python\_version}, \texttt{numpy\_version},
+          \texttt{jax\_version}, \texttt{blas\_backend}.
+    \item \textbf{Cloud and profiling:} \texttt{cloud\_provider},
+          \texttt{instance\_type}, \texttt{cloud\_region},
+          \texttt{cloud\_zone}, \texttt{hourly\_price\_usd},
+          \texttt{cost\_per\_run}, profiler-selection fields, and
+          SHA promotion metadata where available.
+\end{itemize}
+
+\paragraph{Auto-migration.}
+On startup, \texttt{\_init\_schema()} compares the existing table columns
+against the authoritative list using \texttt{PRAGMA table\_info} and issues an
+\texttt{ALTER TABLE ADD COLUMN} for any missing column. Existing databases
+therefore continue to work unmodified as the schema evolves --- a property that
+has proved valuable while iterating on the AD and cloud columns during
+development.
+
+\paragraph{Write paths.}
+Experiment scripts use \texttt{store\_run\_full()}, which inserts a fully-populated
+\texttt{completed} row in a single transaction, bypassing the pending/running
+state machine. The API uses the
+\texttt{create\_run()} $\rightarrow$ \texttt{mark\_running()} $\rightarrow$
+\texttt{mark\_completed()} lifecycle to support asynchronous execution.
+
+\section{Layer~5 --- REST API}
+\label{sec:api-layer}
+
+The Flask server (\texttt{benchmarking/api/server.py}, port 5050) is intentionally
+small. Flask-CORS is enabled for cross-origin requests from the frontend. A single
+daemon background thread polls \texttt{BenchmarkDB} for pending runs and executes
+them sequentially via \texttt{BenchmarkRunner}, transitioning the row through the
+\texttt{running} and \texttt{completed} (or \texttt{failed}) states. The endpoints
+are summarised in Table~\ref{tab:api-endpoints}.
+
+\begin{table}[h]
+\centering
+\caption{REST API endpoints.}
+\label{tab:api-endpoints}
+\begin{tabular}{lll}
+\hline
+Endpoint & Method & Purpose \\
+\hline
+\texttt{/api/runs} & POST & submit a new benchmark run \\
+\texttt{/api/runs} & GET & list runs (filter by workload/engine/status) \\
+\texttt{/api/runs/:id} & GET & poll a single run by UUID \\
+\texttt{/api/engines} & GET & list available engines, workloads and AD modes \\
+\texttt{/api/workloads} & GET & list registered workload types \\
+\texttt{/api/summary} & GET & aggregate counts, fastest run, breakdowns \\
+\texttt{/api/compare\_matrix} & GET & matrix aggregated by (engine, ad\_mode, config) \\
+\hline
+\end{tabular}
+\end{table}
+
+Engine availability is determined at startup. The C++ and CUDA engines may not
+be present in every environment; they are excluded from \texttt{/api/engines}
+without erroring if their initialisation probe fails.
+
+\section{Layer~6 --- Frontend}
+\label{sec:frontend-layer}
+
+The frontend is a React~+~TypeScript single-page application built with Vite
+and styled with Material UI, listening on port 5173. It communicates with the
+Flask backend through a typed HTTP client in \texttt{src/api/client.ts}. The
+application has five pages:
+
+\begin{itemize}
+    \item \textbf{SimulatePage} --- submit a new run and poll for completion.
+          The \texttt{SimulationForm} component is generated dynamically from
+          the workload \texttt{SCHEMA} returned by the API, so new workloads
+          appear automatically without frontend changes.
+    \item \textbf{ComparePage} --- engine comparison matrix backed by
+          \texttt{/api/compare\_matrix}.
+    \item \textbf{HistoryPage} --- filterable table of every run.
+    \item \textbf{SummaryPage} --- aggregate dashboard.
+    \item \textbf{AnalysisPage} --- AD overhead and Greek-accuracy analysis.
+\end{itemize}
+
+\section{Cloud Cost-Performance Design}
+\label{sec:cloud-cost-design}
+
+The original proposal emphasised cloud resource selection as a practical
+systems question rather than a purely local benchmark. The final design
+therefore extends each benchmark row with cloud metadata whenever the run is
+executed on a cloud instance. The relevant fields record the provider, instance
+type, region, zone, hourly price assumption, git commit, and derived cost per
+run. This keeps cost-performance analysis tied to the exact environment in
+which a run was measured.
+
+The cost model is intentionally simple:
+\[
+    \text{cost per run}
+    =
+    \frac{\text{runtime seconds}}{3600}
+    \times
+    \text{hourly instance price}.
+\]
+This does not attempt to model billing granularity, storage, data transfer, or
+queueing costs. Its purpose is to compare benchmark configurations under a
+common pricing assumption. This is sufficient for identifying whether a faster
+instance is also cheaper per run for the measured workload, while avoiding
+unsupported claims about long-term cloud bills or all future machine prices.
+
+Cloud fields are stored alongside the same workload, engine, timing, numerical,
+and environment metadata as local runs. As a result, cloud and local experiments
+share the same analysis path: report artefacts can be regenerated from the
+database without manually copying console output into tables.
+
+\section{Budget-Aware Profiler Design}
+\label{sec:profiler-design}
+
+Full-grid benchmarking gives the cleanest reference point, but it scales poorly
+with the number of workloads, engines, AD modes, path counts, and instance
+types. The framework therefore includes profiler logic that uses cheaper probe
+runs to select a subset of configurations for full-scale benchmarking. The
+important design principle is that the profiler is not trusted by construction:
+it is evaluated against a full-grid baseline using explicit selection-quality
+metrics.
+
+\subsection{Probe-Based Baseline}
+\label{sec:old-profiler-design}
+
+The first profiler uses low-budget probes to rank all candidate configurations
+and then selects a conservative subset for full benchmarking. It includes
+diversity safeguards so that selection is not determined only by a single global
+top-\(k\) ranking. This makes it a useful baseline: it can save full runs, but
+it still evaluates a relatively large selected subset to protect against probe
+noise and workload-specific crossover behaviour.
+
+\subsection{Successive Halving Profiler}
+\label{sec:sha-profiler-design}
+
+The successive-halving (SHA) profiler evaluates all candidate configurations at
+the cheapest probe budget, promotes a smaller active set to a larger probe
+budget, and repeats this process before choosing the final full-scale runs. In
+the final cloud experiment, the budget is the number of Monte Carlo paths, so
+the profiler asks whether small-path measurements are sufficiently predictive of
+full-path performance.
+
+The design deliberately records intermediate SHA state rather than only the
+final selected set. For each promotion stage, the database or generated
+artefacts capture the active configuration count and probe budget. These records
+allow the report to show how many candidates are discarded at each stage and to
+measure the probe path budget consumed by the profiler.
+
+Selection quality is measured using:
+\begin{itemize}
+    \item \textbf{full runs saved}: the reduction in expensive full-scale
+          benchmark evaluations relative to the full grid;
+    \item \textbf{Pareto recovery}: the fraction of full-grid non-dominated
+          configurations retained by the profiler;
+    \item \textbf{runtime regret}: the percentage loss relative to the fastest
+          full-grid configuration;
+    \item \textbf{cost regret}: the percentage loss relative to the cheapest
+          full-grid configuration; and
+    \item \textbf{rank correlation}: Spearman agreement between probe rankings
+          and full-scale rankings.
+\end{itemize}
+
+These metrics make the profiler result falsifiable. A profiler that saves runs
+but misses the Pareto frontier or introduces high regret would not be considered
+successful. Conversely, a profiler that preserves the full-grid decisions while
+reducing full runs contributes directly to the cloud resource-selection goal of
+the project.
+
+\section{Design Decisions and Trade-offs}
+\label{sec:design-decisions}
+
+\paragraph{Decorator-based workload registration.}
+An earlier design made \texttt{WorkloadConfig} an abstract base class with
+abstract properties (\texttt{workload\_type}, \texttt{M}, \texttt{seed}) and
+abstract methods (\texttt{validate()}, \texttt{to\_dict()}, \texttt{from\_dict()}).
+That design forced every workload to re-implement the same boilerplate and
+produced a class of bugs in which abstract method implementations drifted out
+of sync. The refactored design replaces all of this with a single
+\texttt{@workload(name)} decorator that wires up dataclass conversion, sets
+\texttt{workload\_type}, and registers the class. New workloads need only declare
+their fields and optionally override \texttt{validate()}.
+
+\paragraph{Module-level JAX kernels.}
+Placing JAX kernels at module level (rather than as instance methods or nested
+functions) is critical for compilation caching. JAX traces and compiles based
+on function identity and on argument shapes and dtypes. If the kernel were a
+nested function inside \texttt{run()}, each call to \texttt{run()} would create
+a fresh function object and defeat the JIT cache, regenerating the XLA binary
+on every timed repetition.
+
+\paragraph{Single-pass reverse-mode AD.}
+Using a single \texttt{jax.grad(price\_fn, argnums=(0,1,2))} call rather than
+three separate \texttt{jax.grad} calls is functionally equivalent but materially
+changes the measured AD overhead. The single-pass form shares the backward
+graph across all output partial derivatives and is consistent with how AD is
+deployed in production quant systems; this is the form benchmarked in this
+project.
+
+\paragraph{\texttt{jax.lax.scan} for the local-volatility loop.}
+The $N$-step Euler loop must be expressed as \texttt{jax.lax.scan} rather than
+as a Python \texttt{for} loop. A Python loop would cause JAX to unroll the
+entire computation during tracing, producing an XLA graph with $N=252$ copies
+of the step body --- both compile time and memory consumption grow with $N$.
+\texttt{jax.lax.scan} compiles to a single loop in the XLA graph and lets the
+compiler treat it as a unit.
+
+\paragraph{SQLite over PostgreSQL.}
+SQLite with WAL is sufficient for the expected single-machine workload (up to a
+few hundred runs per day). It requires no external service, ships as part of
+Python, and is straightforward to back up by copying a single file. WAL allows
+concurrent reads during writes, which is the only concurrency requirement
+imposed by the architecture. Should the framework be scaled out to a
+distributed Ray-based execution model (Stage~8 of the future-work plan),
+PostgreSQL would be a natural replacement.
+
+\paragraph{Per-thread RNG streams.}
+The C++ and Rust engines seed each worker thread independently. This sacrifices
+bitwise reproducibility across thread counts in exchange for lock-free parallel
+sampling. The framework records \texttt{num\_threads} in the database so that
+runs at different thread counts are treated as statistically distinct
+configurations rather than as repeats.
+
+\section{Summary}
+\label{sec:design-summary}
+
+The framework consists of six clearly separated layers: workload configuration,
+engine, runner, storage, API and frontend. The four implementation layers are
+strictly decoupled through two minimal abstractions
+(\texttt{WorkloadConfig} and \texttt{MonteCarloEngine}) and a registry-driven
+workload model. Every benchmark run is fully described by a serialisable
+configuration, fingerprinted by a deterministic hash, and persisted alongside its
+analytical reference values and execution environment, ensuring complete
+reproducibility and traceability. The next chapter describes how each layer is
+implemented in practice.

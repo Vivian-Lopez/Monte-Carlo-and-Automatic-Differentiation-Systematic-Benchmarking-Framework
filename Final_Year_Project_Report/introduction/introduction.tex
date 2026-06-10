@@ -1,0 +1,77 @@
+\chapter{Introduction}
+
+\section{Motivation}
+
+Monte Carlo (MC) simulation is a foundational technique in scientific computing and quantitative finance, used to estimate expectations of stochastic systems where closed-form solutions are unavailable. In financial applications, MC methods are widely used for pricing complex derivatives and evaluating risk under uncertainty. However, modern use cases increasingly require not only accurate estimates, but also sensitivities of these estimates with respect to model parameters, such as Greeks in option pricing.
+
+Automatic differentiation (AD) provides a principled and efficient way to compute such sensitivities by differentiating the numerical program itself. Unlike finite difference methods, AD produces derivatives that are accurate up to floating-point precision and integrates naturally with simulation code. The combination of MC and AD (MC+AD) therefore enables flexible, gradient-based analysis of stochastic systems.
+
+Despite its advantages, MC+AD introduces significant computational challenges. These workloads are typically compute-intensive, memory-sensitive, and highly dependent on implementation details such as hardware architecture, programming language, numerical libraries, and differentiation mode. As high-performance computing (HPC) systems become increasingly heterogeneous—spanning CPUs, GPUs, and cloud-based environments—understanding how MC+AD workloads behave across these systems becomes critical.
+
+This project is motivated by the need to systematically evaluate and optimise MC+AD workloads in modern computing environments, with a focus on performance, scalability, and cost-efficiency.
+
+\section{Problem Statement}
+
+While Monte Carlo simulation, automatic differentiation, and high-performance computing have each been studied extensively, there is a lack of unified frameworks and methodologies for evaluating their combined behaviour. Existing work often focuses on isolated aspects, such as MC algorithms, AD systems, or hardware benchmarking, without considering their interactions in a controlled and reproducible manner.
+
+In particular, several gaps can be identified. First, there is no standardised benchmarking framework that supports MC workloads with integrated AD across multiple programming languages and hardware architectures. Second, most AD benchmarking studies are conducted in the context of machine learning, leaving stochastic simulation workloads comparatively underexplored. Third, performance comparisons across systems are often difficult to interpret due to inconsistent experimental setups, lack of reproducibility, and insufficient reporting of configuration details.
+
+Furthermore, modern optimisation techniques developed in the AI/ML community—such as operator fusion, mixed precision, and hardware-aware scheduling—have not been systematically evaluated in the context of MC+AD workloads. Finally, there is limited empirical guidance on selecting appropriate cloud hardware configurations for these workloads, particularly when considering cost-performance trade-offs.
+
+As a result, practitioners lack clear, evidence-based insights into how to design, implement, and deploy efficient MC+AD systems.
+
+\section{Research Questions}
+
+This project addresses the following research questions:
+
+\begin{itemize}
+    % \item How do different hardware architectures and software stacks affect the throughput and efficiency of MC+AD workloads?
+    % \item What are the trade-offs between programming languages and AD libraries in terms of performance, maintainability, and parallelism?
+    % \item Which cloud hardware configurations provide the best cost-performance trade-offs for large-scale MC+AD tasks?
+    % \item How can techniques from the AI/ML community be leveraged to improve performance and hardware utilisation in MC+AD workloads?
+    % \item How do different parallelisation strategies impact scalability, and where do performance bottlenecks arise?
+    \item How do different hardware architectures and software stacks affect the throughput and efficiency of MC+AD workloads? 
+    \item What are the trade-offs between programming languages and AD libraries in terms of performance, maintainability, and parallelism?
+    \item Which Google Cloud hardware configurations provide the best cost/performance for large-scale MC+AD tasks?
+    \item How can we leverage the latest AI community techniques to improve training/inference and maximize hardware utilization?
+    \item How do parallelization strategies impact scaling, and where do bottlenecks arise? 
+
+\end{itemize}
+
+
+\section{Contributions}
+
+This project makes the following contributions:
+
+\begin{itemize}
+
+    \item The design and implementation of a modular, extensible benchmarking framework for Monte Carlo engines with automatic differentiation support.
+    \item A systematic methodology for evaluating MC+AD workloads across different hardware architectures, software stacks, and programming languages.
+    \item An experimental study comparing performance, scalability, and memory behaviour under varying configurations, including differentiation modes and parallelisation strategies.
+    \item An analysis of cost-performance trade-offs for MC+AD workloads in cloud computing environments, including measured Google Cloud runs and per-run cost estimates.
+    \item A budget-aware profiling methodology based on short probe runs and successive halving, evaluated against a full-grid cloud baseline.
+    \item Insights into the applicability and limits of AI-inspired compiler/runtime techniques, particularly JAX/XLA, for stochastic simulation workloads.
+    
+\end{itemize}
+
+The framework and methodology developed in this work provide a foundation for reproducible and extensible benchmarking of MC+AD systems. The final evaluation combines detailed local CPU experiments with cloud cost-performance and profiler-selection experiments.
+
+\section{Report Structure}
+
+The remainder of this report is organised as follows.
+
+\begin{itemize}
+    
+    \item Chapter 2 reviews the background and related work, including Monte Carlo simulation engines, automatic differentiation, benchmarking methodologies, and relevant techniques from high-performance computing and machine learning.
+    
+    \item Chapter 3 describes the system design of the benchmarking framework, including workload definitions, execution model, data collection pipeline, cloud metadata model, and budget-aware profiling design.
+    
+    \item Chapter 4 describes the concrete implementation of the framework, including the engine modules, benchmark runner, storage layer, API, dashboard, cloud-cost metadata, and profiler driver.
+    
+    \item Chapter 5 outlines the experimental methodology, covering validation, performance benchmarking, scalability analysis, cloud experiments, and profiler-versus-grid comparisons.
+    
+    \item Chapter 6 presents and analyses the experimental results, focusing on performance trends, AD overheads, scaling limits, cloud cost-performance, Pareto frontiers, and profiler quality.
+
+    \item Chapter 7 concludes the report, summarising key findings and discussing potential directions for future work.
+    
+\end{itemize}
