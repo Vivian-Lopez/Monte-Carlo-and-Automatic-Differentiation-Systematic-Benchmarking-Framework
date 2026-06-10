@@ -1,0 +1,143 @@
+\documentclass[a4paper, twoside]{report}
+
+%% Language and font encodings
+\usepackage[english]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+
+%% Page layout
+\usepackage[
+  a4paper,
+  top=3cm,
+  bottom=2cm,
+  left=3cm,
+  right=3cm,
+  marginparwidth=1.75cm
+]{geometry}
+
+%% Packages
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{xurl}
+\usepackage{hyperref}
+\usepackage{multirow}
+\usepackage{threeparttable}
+
+%% Experimental setup formatting helpers
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+\newcommand{\code}{\nolinkurl}
+
+\lstdefinestyle{sqlstyle}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  xleftmargin=0.5em,
+  xrightmargin=0.5em
+}
+
+\setlist[itemize]{leftmargin=*, itemsep=0.25em, topsep=0.25em}
+\setlist[enumerate]{leftmargin=*, itemsep=0.25em, topsep=0.25em}
+\emergencystretch=2em
+
+\title{Systematic Benchmarking of Monte Carlo Engines with Automatic Differentiation Across Modern Architectures}
+\author{Vivian Lopez}
+
+\begin{document}
+
+\input{title/title.tex}
+
+%% =========================
+%% ABSTRACT
+%% =========================
+% \begin{abstract}
+% % Problem (1-2 sentences)
+% % What you built
+% % Key findings (VERY important for marks)
+% % Why it matters
+% \end{abstract}
+\begin{abstract}
+
+Monte Carlo (MC) simulation with automatic differentiation (AD) is important in quantitative finance because both prices and sensitivities must be computed efficiently.  Its performance is difficult to reason about in isolation: workload structure, AD mode, implementation language, compiler/runtime behaviour, and cloud hardware can all change the best engineering choice.  This project addresses that problem by building a reproducible benchmarking framework for MC+AD option-pricing workloads and using it to evaluate engine/runtime performance, AD overhead, cloud cost-performance, and budget-aware profiling.
+
+The framework provides typed workload configurations, a common engine interface, controlled warm-up and repeated timing, deterministic seeding, correctness validation, SQLite result storage, CSV export, and environment metadata capture.  It supports European, Asian, and parametric local-volatility option workloads, with NumPy, JAX/XLA, C++/OpenMP, and Rust/Rayon engines where available.  JAX provides forward- and reverse-mode AD measurements.
+
+The strongest contribution is a Successive Halving style cloud profiler for selecting promising full-scale benchmark configurations from cheap probes.  In the final cloud experiment \texttt{sha\_cloud\_profiler\_v4} on an \texttt{n2-standard-4} VM in \texttt{europe-west1-b}, the full grid contained 16 configurations and 48 full benchmark runs.  The previous profiler selected 30 full runs, whereas SHA selected 24, saving 50.0\% of the full-grid runs while recovering 100.0\% of the full-grid Pareto frontier and incurring 0.0\% runtime and cost regret relative to the grid best.  The best runtime configuration was \texttt{rust/european/none}, taking 0.54 ms at \(M=100{,}000\), and was selected by the full grid, old profiler, and SHA.
+
+The results suggest that no single engine is best for every workload.  Rust/Rayon is strongest for no-AD European and local-volatility CPU runs in the reported experiments, while JAX remains essential for AD.  At \(M=100{,}000\), JAX AD overhead ranged from 1.81\(\times\) for Asian reverse mode to 4.42\(\times\) for local-volatility forward mode.  The project therefore contributes both an engineering artefact and an empirical methodology for cost-aware MC+AD benchmarking, while leaving GPU execution, Mojo, wider BLAS comparisons, hardware counters, wider cloud regions, and distributed execution as future work.
+
+\end{abstract}
+
+%% =========================
+%% ACKNOWLEDGEMENTS
+%% =========================
+\renewcommand{\abstractname}{Acknowledgements}
+\begin{abstract}
+I would like to thank my supervisor, William Knottenbelt, for his helpful guidance and advice during the project. His feedback helped clarify the direction of the work and identify the areas where the project could be strengthened.
+
+I am also grateful to the HSBC Quant team for their support and industrial perspective. In particular, I would like to thank Zouhair Rajehi for acting as the main point of contact and for providing useful background, technical context, and pointers for the project. I would also like to thank Renaud X. Delloye for his input during the meetings, and Ouejdane Ghodhbane for coordinating the meetings and providing a welcoming point of contact with the team.
+
+Finally, I would like to thank the Department of Computing at Imperial College London for the opportunity to undertake this project.
+\end{abstract}
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+%% =========================
+%% CHAPTER 1: INTRODUCTION
+%% =========================
+\input{introduction/introduction.tex}
+
+%% =========================
+%% CHAPTER 2: BACKGROUND
+%% =========================
+\input{background/background.tex}
+
+%% =========================
+%% CHAPTER 3: SYSTEM DESIGN
+%% =========================
+\input{design/design.tex}
+
+%% =========================
+%% CHAPTER 4: IMPLEMENTATION
+%% =========================
+\input{implementation/implementation.tex}
+
+%% =========================
+%% CHAPTER 5: EXPERIMENTS
+%% =========================
+\input{experiments/experiments.tex}
+
+%% =========================
+%% CHAPTER 6: RESULTS & DISCUSSION
+%% =========================
+\input{evaluation/evaluation.tex}
+
+%% =========================
+%% CHAPTER 7: CONCLUSION
+%% =========================
+\input{conclusion/conclusion.tex}
+
+%% =========================
+%% DECLARATIONS
+%% =========================
+\input{project/project.tex}
+
+%% =========================
+%% APPENDIX
+%% =========================
+\input{appendix/appendix.tex}
+
+\bibliographystyle{unsrt}
+\bibliography{bibs/sample}
+
+\end{document}

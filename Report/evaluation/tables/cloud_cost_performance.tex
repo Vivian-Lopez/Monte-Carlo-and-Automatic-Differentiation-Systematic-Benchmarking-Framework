@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{Best no-AD cost-performance per priced cloud instance at $M=100{,}000$.}
+\label{tab:cloud-cost-performance}
+\begin{tabularx}{\textwidth}{llYrrr}
+\toprule
+\textbf{Workload} & \textbf{Instance} & \textbf{Best engine} & \textbf{Runtime ms} & \textbf{Cost/run USD} & \textbf{M paths/s} \\
+\midrule
+Asian & n2-standard-4 & jax/none & 634.6 & 3.42e-05 & 0.158 \\
+Asian & t2d-standard-4 & jax/none & 343.9 & 1.62e-05 & 0.291 \\
+European & n2-standard-4 & rust/none & 0.539 & 2.91e-08 & 185.495 \\
+European & t2d-standard-4 & rust/none & 0.356 & 1.68e-08 & 281.263 \\
+Local volatility & n2-standard-4 & rust/none & 488.9 & 2.64e-05 & 0.205 \\
+Local volatility & t2d-standard-4 & rust/none & 443.6 & 2.10e-05 & 0.225 \\
+\bottomrule
+\end{tabularx}
+\end{table}

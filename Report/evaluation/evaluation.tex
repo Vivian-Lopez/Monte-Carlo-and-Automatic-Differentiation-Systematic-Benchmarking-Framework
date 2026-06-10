@@ -1,0 +1,88 @@
+\chapter{Evaluation}
+\label{chap:evaluation}
+
+\section{Overview}
+
+This chapter presents the completed results. The central result is that the SHA profiler halved the number of full-scale benchmark runs in the final cloud experiment while matching the full-grid selection quality on the measured metrics. The remaining sections support that result by first checking correctness, then analysing engine performance, AD overhead and cloud cost-performance.
+
+\section{Correctness Validation}
+
+The European GBM workload was validated against Black--Scholes analytical values. Table~\ref{tab:correctness-validation} shows the stored JAX AD validation at \(M=100{,}000\). Forward and reverse mode produced the same reported price and Greeks for this experiment. The price error was 0.357\%, and the absolute errors for delta, vega and rho were small relative to the scale of the reported Greeks.
+
+\input{evaluation/tables/correctness_validation.tex}
+
+This validation does not prove correctness for every workload, but it gives evidence that the shared European configuration, random sampling and JAX AD plumbing are producing sensible values. The Asian and local-volatility workloads are therefore interpreted primarily through cross-engine consistency and performance, rather than through an analytical closed form.
+
+\section{Engine Runtime Comparison}
+
+The final cloud experiment shows that the best engine depends strongly on workload. At \(M=100{,}000\) on \code{n2-standard-4}, the fastest no-AD European configuration was \code{rust/european/none}, with a runtime of 0.54 ms. This configuration was selected by the full grid, the old profiler and SHA. For the local-volatility workload on the same instance, Rust was also the fastest no-AD engine among the selected configurations, with 488.9 ms. For the Asian workload, the best no-AD configuration in the priced cloud comparison was \code{jax/none}, with 634.6 ms on \code{n2-standard-4}.
+
+These results support a cautious conclusion: compiled no-AD engines are highly competitive for simple and local-volatility CPU workloads, but JAX remains important where AD is required and can also be competitive for some path-dependent no-AD workloads. The framework therefore exposes a genuine engineering trade-off rather than a single universally dominant engine.
+
+\section{Automatic Differentiation Overhead}
+
+Table~\ref{tab:ad-overhead} reports JAX AD overhead at \(M=100{,}000\) on \code{n2-standard-4}. The overheads range from 1.81\(\times\) for Asian reverse mode to 4.42\(\times\) for local-volatility forward mode.
+
+\input{evaluation/tables/ad_overhead.tex}
+
+The measured ordering is workload dependent. Reverse mode is cheaper than forward mode for the Asian and local-volatility measurements in this experiment, while the European forward and reverse overheads are closer. This is consistent with the expectation that AD mode interacts with computation structure and stored intermediates. The result does not imply that reverse mode is always preferable, but it shows why AD mode should be measured rather than chosen by rule of thumb.
+
+\section{Cloud Cost-Performance}
+
+Table~\ref{tab:cloud-cost-performance} summarises the best no-AD cost-performance rows for priced cloud instances at \(M=100{,}000\). The table includes both runtime and estimated per-run cost, making explicit that a faster machine can also be cheaper per run if its runtime improvement outweighs its hourly price.
+
+\input{evaluation/tables/cloud_cost_performance.tex}
+
+Figure~\ref{fig:cloud-cost-performance} visualises the same relationship. In the stored priced comparison, \code{t2d-standard-4} is faster and lower cost per run than \code{n2-standard-4} for the listed best no-AD workloads. This is an empirical result for the measured workloads and pricing assumptions, not a claim about all machine types or all future prices.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.82\textwidth]{evaluation/figures/cloud_cost_performance_priced.png}
+    \caption{Runtime and estimated cost per run for best no-AD cloud configurations at \(M=100{,}000\).}
+    \label{fig:cloud-cost-performance}
+\end{figure}
+
+\section{Pareto Frontier}
+
+Figure~\ref{fig:pareto-runtime-cost} plots runtime against estimated cost for the final \code{n2-standard-4} full-grid comparison. Because the plotted configurations are on the same instance type, runtime and cost are closely linked. The value of the Pareto analysis is therefore not that it reveals a complex two-dimensional trade-off on one machine, but that it gives a precise target for profiler recovery: a profiler should retain the configurations that the full grid identifies as non-dominated under the measured metrics.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{evaluation/figures/pareto_runtime_cost_n2.png}
+    \caption{Runtime versus estimated cost for the final \code{n2-standard-4} grid. Pareto-optimal points are highlighted.}
+    \label{fig:pareto-runtime-cost}
+\end{figure}
+
+\section{Profiler Comparison}
+
+Table~\ref{tab:profiler-comparison} is the main result of the project. The full grid contained 48 full benchmark runs. The old profiler selected 30 runs, saving 37.5\%. SHA selected 24 runs, saving 50.0\%. Both profilers recovered 100.0\% of the full-grid Pareto frontier and incurred 0.0\% runtime and cost regret relative to the full-grid best. SHA also achieved a perfect stored final probe-to-full Spearman rank correlation of 1.000, compared with 0.935 for the old profiler evidence.
+
+\input{evaluation/tables/profiler_comparison.tex}
+
+This result directly answers RQ5 for the measured grid: SHA reduced full-scale cloud benchmarking work while preserving the full-grid decision quality on the reported metrics. The practical significance is that the expensive part of the experiment was not merely shifted elsewhere. The SHA probe path budget was 95.5\% lower than evaluating the grid at full scale, and the mean scaling-law extrapolation error was 9.7\%.
+
+\section{SHA Progression}
+
+Figure~\ref{fig:sha-progression} shows the SHA promotion sequence recorded for the final experiment. All 16 configurations are evaluated at the cheapest probe level, then the active set is reduced as the path budget increases. The final selected set contains the configurations that are promoted for full benchmarking after the profiler's conservative guards are applied.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.78\textwidth]{evaluation/figures/sha_progression_n2.png}
+    \caption{SHA active configuration count as probe path budget increases.}
+    \label{fig:sha-progression}
+\end{figure}
+
+The progression illustrates why SHA is useful in this setting. Most configurations receive only cheap measurements, while promising configurations receive more budget. In the final experiment this was enough to identify the same best runtime configuration as the full grid: \code{rust/european/none} at \(M=100{,}000\), with runtime 0.54 ms.
+
+\section{Threats to Validity}
+
+Several limitations affect interpretation:
+\begin{itemize}
+    \item \textbf{Stochastic noise}: Monte Carlo estimates and runtime measurements both contain variability, even with deterministic seeds and repeated timings.
+    \item \textbf{Cloud variability}: the headline result is tied to specific cloud instances, regions, prices and the recorded software environment.
+    \item \textbf{Profiler generality}: SHA performed well on the measured grid, but wider grids may require different promotion factors or safeguards.
+    \item \textbf{Hardware coverage}: GPUs, hardware counters, distributed execution and wider regional comparisons were not completed.
+    \item \textbf{Engine coverage}: Mojo and broader BLAS/library comparisons were not included in the final evaluated results.
+\end{itemize}
+
+These limitations do not undermine the reported measurements, but they bound the claims. The project demonstrates a reproducible method and a strong measured SHA result, rather than a universal benchmark of every architecture.

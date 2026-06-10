@@ -1,0 +1,65 @@
+\chapter{Experiments}
+\label{chap:experiments}
+
+\section{Overview}
+
+The experiments evaluate the framework along the five research questions introduced in Chapter~\ref{chap:introduction}. The evaluation uses the repository result files, especially \code{results/benchmarks.db} and the generated CSV summaries. No report numbers are taken from unpublished or invented experiments.
+
+The final headline experiment is \code{sha_cloud_profiler_v4}, run at git commit \code{13789b8} on a Google Cloud \code{n2-standard-4} instance in \code{europe-west1-b}. The recorded cloud metadata identifies the region as \code{europe-west1}. The project evidence describes the BLAS backend as OpenBLAS for this run; the database itself records the timing and cloud fields used in the evaluation.
+
+\section{Workloads and Parameters}
+
+The evaluated workloads are:
+\begin{itemize}
+    \item \textbf{European GBM}: a European call option with Black--Scholes validation.
+    \item \textbf{Asian option}: a path-dependent arithmetic-average option.
+    \item \textbf{Local volatility}: a parametric local-volatility workload with time-stepped simulation.
+\end{itemize}
+
+The common option parameters are \(S_0=100\), \(K=100\), \(r=0.05\), \(\sigma=0.2\) and \(T=1\), with deterministic seeding where supported. The final full-grid cloud experiment used \(M \in \{10{,}000, 50{,}000, 100{,}000\}\). The SHA probes used smaller path counts, with progression data recorded for \(M=1{,}000\), \(5{,}000\) and \(25{,}000\). The Asian and local-volatility workloads use time-stepped simulation; the final report focuses on the stored results rather than claiming analytical validation for those workloads.
+
+\section{Engines and AD Modes}
+
+The evaluated engines are NumPy CPU, JAX/XLA, C++/OpenMP and Rust/Rayon. Not every engine supports every workload or AD mode. The final grid therefore contains only supported configurations:
+\begin{itemize}
+    \item no-AD measurements for CPU, JAX, C++ and Rust where available;
+    \item JAX forward-mode AD for supported workloads; and
+    \item JAX reverse-mode AD for supported workloads.
+\end{itemize}
+
+The C++ and Rust engines are treated as no-AD compiled baselines. JAX is the AD engine used for the reported forward- and reverse-mode overheads.
+
+\section{Full Grid}
+
+The full-grid baseline for the final \code{n2-standard-4} cloud experiment contains 16 candidate configurations and three full path counts, for 48 full benchmark runs. This baseline is the reference used to judge profiler quality. A profiler is considered successful only if it reduces the number of full runs while preserving the decisions that the full grid would have supported.
+
+\section{Old Profiler Baseline}
+
+The old profiler uses cheap probes to rank candidate configurations and then selects a subset for full benchmarking. It includes conservative selection rules so that configurations are not chosen solely from a single global top-\(k\) list. In the final experiment it selected 30 of the 48 full-grid runs, saving 18 full runs.
+
+\section{SHA Profiler}
+
+The SHA profiler evaluates all candidates at low budget, promotes promising configurations to larger probes, and then selects a final set for full benchmarking. In the final experiment it selected 24 of the 48 full-grid runs. The probe path budget was much smaller than the full-grid path budget, giving a recorded SHA probe-budget saving of 95.5\% relative to probing the grid at full scale.
+
+The SHA experiment is deliberately evaluated against the full grid. The reported metrics are not claims that SHA will always succeed; they show that, for the measured configuration grid, the cheap probes were sufficiently predictive to preserve the full-grid selections while halving the number of full-scale runs.
+
+\section{Metrics}
+
+The evaluation uses the following metrics:
+\begin{itemize}
+    \item \textbf{runtime}: median or aggregated runtime in milliseconds from repeated benchmark runs;
+    \item \textbf{throughput}: simulated paths per second, reported as \(M\) paths/s in tables;
+    \item \textbf{AD overhead}: JAX AD runtime divided by the corresponding JAX no-AD runtime;
+    \item \textbf{cost per run}: runtime multiplied by the configured hourly cloud instance price;
+    \item \textbf{Pareto recovery}: fraction of full-grid Pareto-optimal configurations selected by a profiler;
+    \item \textbf{runtime and cost regret}: percentage loss relative to the full-grid best configuration; and
+    \item \textbf{Spearman correlation}: rank agreement between probe and full-grid orderings.
+\end{itemize}
+
+\section{Reproducibility Controls}
+
+The experiment scripts store configuration hashes, JSON configurations, experiment identifiers, timestamps, git commit information and cloud metadata. Report figures and tables are regenerated from the database and CSV exports using \code{evaluation/generate_report_assets.py}. This makes the report auditable: the main numerical claims can be traced back to \code{results/benchmarks.db} and the generated artefacts.
+
+\section{Experimental Limitations}
+
+The final experiment does not cover GPUs, Mojo, distributed execution, hardware counters, all cloud regions or all BLAS backends. It also does not prove that SHA will preserve Pareto quality for every future workload grid. The result should be read as strong evidence for this measured grid and as a methodology for further benchmarking, not as a universal guarantee.

@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{JAX automatic differentiation overhead at $M=100{,}000$ on n2-standard-4.}
+\label{tab:ad-overhead}
+\begin{tabular}{llrr}
+\toprule
+\textbf{Workload} & \textbf{AD mode} & \textbf{Runtime ms} & \textbf{Overhead} \\
+\midrule
+Asian & reverse & 1148.4 & 1.81$\times$ \\
+European & forward & 4.783 & 1.96$\times$ \\
+European & reverse & 5.208 & 2.10$\times$ \\
+Asian & forward & 1552.1 & 2.45$\times$ \\
+Local volatility & reverse & 2169.7 & 2.55$\times$ \\
+Local volatility & forward & 3768.5 & 4.42$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}

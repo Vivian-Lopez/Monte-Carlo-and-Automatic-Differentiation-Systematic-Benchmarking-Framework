@@ -1,0 +1,75 @@
+\chapter{System Design}
+\label{chap:design}
+
+\section{Design Goals}
+
+The framework was designed around four goals. First, experiments should be reproducible: a result should be traceable to a workload configuration, engine, AD mode, code version and machine. Second, engines should be comparable through a common interface rather than through separate one-off scripts. Third, results should be queryable after execution so that tables and figures can be regenerated from the database. Fourth, cloud profiling should reduce expensive full-scale measurements without hiding the selection quality loss, if any.
+
+\section{Architecture}
+
+The system follows a pipeline design:
+\[
+\text{configuration} \rightarrow \text{engine} \rightarrow \text{runner} \rightarrow \text{result} \rightarrow \text{storage and analysis}.
+\]
+
+A workload configuration specifies the option type, model parameters, path count, time steps, random seed, engine and AD mode. The engine layer exposes a uniform interface for checking support and executing the workload. The runner applies warm-up, repeated timing and result aggregation. The storage layer persists results to SQLite, and analysis scripts export report tables, Pareto frontiers and profiler comparisons.
+
+This separation is important because it prevents experiment logic from being embedded inside individual engines. A new engine should only need to implement the common workload interface; it should not need to know how cloud metadata, cost estimates or report artefacts are stored.
+
+\section{Workload Design}
+
+The evaluated workloads were chosen to cover increasing simulation structure:
+\begin{itemize}
+    \item \textbf{European GBM option}: a direct terminal-payoff workload with an analytical Black--Scholes reference for validation.
+    \item \textbf{Asian option}: a path-dependent workload where the payoff depends on the average asset path.
+    \item \textbf{Parametric local-volatility option}: a time-stepped workload with more expensive path evolution and stronger pressure on memory and vectorisation.
+\end{itemize}
+
+The European workload supports the cleanest correctness checks because it can be compared with Black--Scholes prices and Greeks. The Asian and local-volatility workloads are used mainly for cross-engine and performance comparisons, with the understanding that exact analytical validation is not available in the same form.
+
+\section{Engine Abstraction}
+
+Each engine reports whether it supports a workload and AD mode. The design deliberately treats unsupported combinations as part of the experiment definition rather than as runtime failures. For example, JAX supports the AD measurements used in this report, while the C++ and Rust engines are used for no-AD timing comparisons. This avoids pretending that every language/runtime combination provides the same derivative functionality.
+
+The abstraction also keeps timing comparable. Each engine returns a common result structure containing price, optional Greeks, runtime statistics, throughput, memory information where available, and metadata. The runner can therefore store and analyse results without engine-specific branching in the reporting code.
+
+\section{Result Storage and Metadata}
+
+SQLite was chosen as the primary result store because it is portable, easy to inspect and sufficient for the project scale. Each run stores the core workload fields together with derived metrics and metadata. Important fields include:
+\begin{itemize}
+    \item workload name, engine, AD mode, path count and time steps;
+    \item runtime summary, throughput, price and optional Greek values;
+    \item analytical reference values and errors where available;
+    \item experiment identifier, configuration hash and JSON configuration;
+    \item git commit, timestamp, platform and library metadata; and
+    \item cloud instance, region, zone and cost estimate when applicable.
+\end{itemize}
+
+Persisting both structured columns and the JSON configuration makes the database useful for direct SQL queries while preserving enough context to reconstruct experiment settings. Generated report tables are derived from the database and CSV exports rather than manually copied from console output.
+
+\section{Cloud Cost-Performance Design}
+
+Cloud results are stored as benchmark results plus cost metadata. The cost model estimates per-run cost from measured runtime and the configured hourly price of the instance. This is not a replacement for full billing analysis, but it is sufficient for comparing configurations under the same pricing assumptions. The report therefore uses cost as a measured-and-derived metric tied to specific machine types, not as a universal market claim.
+
+\section{Profiler Design}
+
+The project implements two budget-aware profilers and compares both with a full-grid baseline.
+
+\subsection{Old Probe-Based Profiler}
+
+The older profiler runs cheap probes for all candidate configurations, ranks them, and selects a subset for full benchmarking. It includes safety and diversity rules so that selection is not based only on a single global ranking. This makes it a useful baseline, but it still selected 30 of the 48 full-grid runs in the final cloud experiment.
+
+\subsection{Successive Halving Profiler}
+
+The SHA profiler evaluates all candidate configurations at small path counts, promotes a smaller active set to larger probes, and then chooses final full-scale runs. In the final experiment, probe path counts were much smaller than the full path count, so the probe budget was cheap relative to the full grid. The profiler also retained conservative safeguards, including grouping by workload/AD mode and crossover protection, so that plausible winners were not discarded only because of early low-budget noise.
+
+Selection quality is evaluated against the full grid rather than assumed. The main metrics are:
+\begin{itemize}
+    \item \textbf{full runs saved}: reduction in full-scale benchmark evaluations;
+    \item \textbf{Pareto recovery}: fraction of full-grid Pareto-optimal points recovered;
+    \item \textbf{runtime regret}: loss relative to the fastest full-grid configuration;
+    \item \textbf{cost regret}: loss relative to the cheapest full-grid configuration; and
+    \item \textbf{rank correlation}: Spearman correlation between probe ranking and full-grid ranking.
+\end{itemize}
+
+This design makes SHA the central empirical contribution: it is judged by whether it reduces full benchmark work while preserving the decisions a full grid would have made.

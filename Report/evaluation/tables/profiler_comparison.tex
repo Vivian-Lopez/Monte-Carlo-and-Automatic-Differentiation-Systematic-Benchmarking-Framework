@@ -1,0 +1,22 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment.}
+\label{tab:profiler-comparison}
+\begin{tabularx}{\textwidth}{Yrrr}
+\toprule
+\textbf{Metric} & \textbf{Full grid} & \textbf{Old profiler} & \textbf{SHA} \\
+\midrule
+Candidate configurations & 16 & 16 & 16 \\
+Full benchmark runs & 48 & 30 & 24 \\
+Full runs saved & 0 & 18 & 24 \\
+Percentage saved & 0.0\% & 37.5\% & 50.0\% \\
+Pareto recovery & baseline & 100.0\% & 100.0\% \\
+Runtime regret & baseline & +0.0\% & +0.0\% \\
+Cost regret & baseline & +0.0\% & +0.0\% \\
+Spearman $\rho$ probe--full & -- & 0.935 & 1.000 \\
+Probe path-budget saving & -- & -- & 95.5\% \\
+Mean scaling-law error & -- & -- & 9.7\% \\
+\bottomrule
+\end{tabularx}
+\end{table}

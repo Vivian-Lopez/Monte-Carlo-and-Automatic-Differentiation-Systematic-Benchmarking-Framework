@@ -1,0 +1,14 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{European GBM AD validation against Black--Scholes analytical values at $M=100{,}000$.}
+\label{tab:correctness-validation}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{AD mode} & \textbf{Price err.} & \textbf{Delta err.} & \textbf{Vega err.} & \textbf{Rho err.} \\
+\midrule
+forward & 0.357\% & 0.000428 & 0.259 & 0.080 \\
+reverse & 0.357\% & 0.000428 & 0.259 & 0.080 \\
+\bottomrule
+\end{tabular}
+\end{table}
