@@ -140,15 +140,18 @@ run_wave() {
     echo "Running wave: ${wave[*]}"
     local pids=()
     local pid_mts=()
+    local wave_mt
 
-    for mt in "${wave[@]}"; do
-        zone="$(mt_zone "$mt")"
-        vm="$(vm_name_for "$mt")"
-        echo "Creating $vm ($mt in $zone)"
+    for wave_mt in "${wave[@]}"; do
+        local zone
+        local vm
+        zone="$(mt_zone "$wave_mt")"
+        vm="$(vm_name_for "$wave_mt")"
+        echo "Creating $vm ($wave_mt in $zone)"
         gcloud compute instances create "$vm" \
             --project="$PROJECT" \
             --zone="$zone" \
-            --machine-type="$mt" \
+            --machine-type="$wave_mt" \
             --image-family=debian-12 \
             --image-project=debian-cloud \
             --boot-disk-size=30GB \
@@ -157,11 +160,14 @@ run_wave() {
             --quiet
     done
 
-    for mt in "${wave[@]}"; do
+    for wave_mt in "${wave[@]}"; do
         (
-            vm="$(vm_name_for "$mt")"
-            zone="$(mt_zone "$mt")"
-            region="$(mt_region "$mt")"
+            local vm
+            local zone
+            local region
+            vm="$(vm_name_for "$wave_mt")"
+            zone="$(mt_zone "$wave_mt")"
+            region="$(mt_region "$wave_mt")"
             echo "[$vm] Waiting for SSH"
             wait_for_ssh "$vm" "$zone"
             echo "[$vm] Installing dependencies"
@@ -208,7 +214,7 @@ run_wave() {
                 source venv/bin/activate
                 python experiments/run_guarded_sha_local_vol.py \
                     --run-full-grid --run-plain-sha --run-guarded-sha \
-                    --instances '${mt}' \
+                    --instances '${wave_mt}' \
                     --region '${region}' \
                     --full-budget '${FULL_BUDGET}' \
                     --probe-budgets '${PROBE_BUDGETS}' \
@@ -218,14 +224,14 @@ run_wave() {
                     ${dry_arg} ${api_arg} ${rates_arg}
             "
 
-            mkdir -p "${LOCAL_RUN_DIR}/${mt}"
+            mkdir -p "${LOCAL_RUN_DIR}/${wave_mt}"
             remote_csv="$(vm_ssh "$vm" "$zone" "ls -td ${REPO_DIR}/results/guarded_sha_local_vol/* | head -1")"
-            gcloud compute scp --recurse "${vm}:${remote_csv}" "${LOCAL_RUN_DIR}/${mt}/" \
+            gcloud compute scp --recurse "${vm}:${remote_csv}" "${LOCAL_RUN_DIR}/${wave_mt}/" \
                 --project="$PROJECT" --zone="$zone" --quiet
             echo "[$vm] Copied outputs"
         ) &
         pids+=("$!")
-        pid_mts+=("$mt")
+        pid_mts+=("$wave_mt")
     done
 
     wave_ok=true
@@ -238,9 +244,9 @@ run_wave() {
     done
 
     if [[ "$DELETE_VMS_AFTER" == true ]]; then
-        for mt in "${wave[@]}"; do
-            gcloud compute instances delete "$(vm_name_for "$mt")" \
-                --project="$PROJECT" --zone="$(mt_zone "$mt")" --quiet || true
+        for wave_mt in "${wave[@]}"; do
+            gcloud compute instances delete "$(vm_name_for "$wave_mt")" \
+                --project="$PROJECT" --zone="$(mt_zone "$wave_mt")" --quiet || true
         done
     fi
 
@@ -249,14 +255,14 @@ run_wave() {
     fi
 }
 
-for mt in "${ALL_MTS[@]}"; do
-    vcpus="$(mt_vcpus "$mt")"
+for machine_type in "${ALL_MTS[@]}"; do
+    vcpus="$(mt_vcpus "$machine_type")"
     if (( current_wave_vcpus + vcpus > VCPU_BUDGET )); then
         run_wave
         wave=()
         current_wave_vcpus=0
     fi
-    wave+=("$mt")
+    wave+=("$machine_type")
     current_wave_vcpus=$((current_wave_vcpus + vcpus))
 done
 run_wave
