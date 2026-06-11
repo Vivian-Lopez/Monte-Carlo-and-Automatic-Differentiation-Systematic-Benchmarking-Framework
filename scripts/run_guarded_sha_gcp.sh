@@ -17,6 +17,7 @@ REPEATS=3
 WARMUP=1
 OUTPUT_DIR="results/guarded_sha_local_vol_gcp"
 REPO_URL="https://github.com/Vivian-Lopez/Monte-Carlo-and-Automatic-Differentiation-Systematic-Benchmarking-Framework.git"
+REPO_BRANCH="guarded-sha-profiler"
 REPO_DIR="~/benchmark_repo"
 GCP_API_KEY="${GCP_PRICING_API_KEY:-}"
 HOURLY_RATES_JSON=""
@@ -37,6 +38,7 @@ Options:
   --output-dir results/guarded_sha_local_vol_gcp
   --gcp-api-key KEY
   --hourly-rates-json path/to/rates.json
+  --repo-branch guarded-sha-profiler
   --no-delete-vms
   --dry-run
 EOF
@@ -54,6 +56,7 @@ while [[ $# -gt 0 ]]; do
         --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
         --gcp-api-key) GCP_API_KEY="$2"; shift 2 ;;
         --hourly-rates-json) HOURLY_RATES_JSON="$2"; shift 2 ;;
+        --repo-branch) REPO_BRANCH="$2"; shift 2 ;;
         --no-delete-vms) DELETE_VMS_AFTER=false; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
         --help|-h) usage; exit 0 ;;
@@ -117,6 +120,7 @@ echo "Guarded SHA GCP run: $TIMESTAMP"
 echo "Project: $PROJECT"
 echo "Machine types: ${ALL_MTS[*]}"
 echo "Output: $LOCAL_RUN_DIR"
+echo "Repo branch: $REPO_BRANCH"
 
 gcloud services enable compute.googleapis.com --project "$PROJECT" >/dev/null
 
@@ -166,9 +170,9 @@ run_wave() {
             echo "[$vm] Cloning repository"
             vm_ssh "$vm" "$zone" "
                 if [[ -d ${REPO_DIR} ]]; then
-                    cd ${REPO_DIR} && git pull --quiet
+                    cd ${REPO_DIR} && git fetch --quiet origin '${REPO_BRANCH}' && git checkout --quiet '${REPO_BRANCH}' && git pull --quiet origin '${REPO_BRANCH}'
                 else
-                    git clone --quiet '${REPO_URL}' ${REPO_DIR}
+                    git clone --quiet --branch '${REPO_BRANCH}' '${REPO_URL}' ${REPO_DIR}
                 fi
             "
             echo "[$vm] Installing Python dependencies"
@@ -265,4 +269,3 @@ python experiments/run_guarded_sha_local_vol.py \
     --output-dir "${LOCAL_RUN_DIR}/combined"
 
 echo "Combined outputs written under ${LOCAL_RUN_DIR}/combined"
-
