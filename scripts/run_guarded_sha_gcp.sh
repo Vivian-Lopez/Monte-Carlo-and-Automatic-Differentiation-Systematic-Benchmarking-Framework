@@ -262,8 +262,15 @@ done
 run_wave
 
 echo "Combining observations locally"
-mapfile -t OBS_FILES < <(find "$LOCAL_RUN_DIR" -name candidate_observations.csv -print)
-python experiments/run_guarded_sha_local_vol.py \
+OBS_FILES=()
+while IFS= read -r obs_file; do
+    OBS_FILES+=("$obs_file")
+done < <(find "$LOCAL_RUN_DIR" -name candidate_observations.csv -print)
+if [[ ${#OBS_FILES[@]} -eq 0 ]]; then
+    echo "ERROR: no candidate_observations.csv files found under $LOCAL_RUN_DIR"
+    exit 1
+fi
+python3 experiments/run_guarded_sha_local_vol.py \
     --input-observations "${OBS_FILES[@]}" \
     --run-full-grid --run-plain-sha --run-guarded-sha \
     --instances "$(IFS=,; echo "${ALL_MTS[*]}")" \
