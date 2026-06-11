@@ -46,7 +46,7 @@
 \contentsline {section}{\numberline {3.11}Design Decisions and Trade-offs}{19}{section.3.11}%
 \contentsline {paragraph}{Decorator-based workload registration.}{19}{section*.14}%
 \contentsline {paragraph}{Module-level JAX kernels.}{19}{section*.15}%
-\contentsline {paragraph}{Single-pass reverse-mode AD.}{19}{section*.16}%
+\contentsline {paragraph}{Single-pass reverse-mode AD.}{20}{section*.16}%
 \contentsline {paragraph}{\texttt {jax.lax.scan} for the local-volatility loop.}{20}{section*.17}%
 \contentsline {paragraph}{SQLite over PostgreSQL.}{20}{section*.18}%
 \contentsline {paragraph}{Per-thread RNG streams.}{20}{section*.19}%
@@ -128,31 +128,31 @@
 \contentsline {subsection}{\numberline {6.13.2}Cloud Cost-Performance}{47}{subsection.6.13.2}%
 \contentsline {subsection}{\numberline {6.13.3}Pareto Frontier}{47}{subsection.6.13.3}%
 \contentsline {subsection}{\numberline {6.13.4}Old Profiler versus SHA}{47}{subsection.6.13.4}%
-\contentsline {subsection}{\numberline {6.13.5}Cross-Instance Profiler Robustness}{49}{subsection.6.13.5}%
-\contentsline {subsection}{\numberline {6.13.6}SHA Progression}{49}{subsection.6.13.6}%
-\contentsline {section}{\numberline {6.14}Cross-Question Discussion}{49}{section.6.14}%
-\contentsline {subsection}{\numberline {6.14.1}Software Stack and Engine Performance}{49}{subsection.6.14.1}%
+\contentsline {subsection}{\numberline {6.13.5}Guarded SHA Local-Volatility Profiler}{49}{subsection.6.13.5}%
+\contentsline {subsection}{\numberline {6.13.6}SHA Progression in the Earlier Multi-Workload Grid}{49}{subsection.6.13.6}%
+\contentsline {section}{\numberline {6.14}Cross-Question Discussion}{50}{section.6.14}%
+\contentsline {subsection}{\numberline {6.14.1}Software Stack and Engine Performance}{50}{subsection.6.14.1}%
 \contentsline {subsection}{\numberline {6.14.2}Programming-Language, Runtime and AD-Support Trade-offs}{50}{subsection.6.14.2}%
-\contentsline {subsection}{\numberline {6.14.3}Parallelism and Bottlenecks}{50}{subsection.6.14.3}%
-\contentsline {subsection}{\numberline {6.14.4}Compiler and AD Runtime Techniques}{50}{subsection.6.14.4}%
+\contentsline {subsection}{\numberline {6.14.3}Parallelism and Bottlenecks}{51}{subsection.6.14.3}%
+\contentsline {subsection}{\numberline {6.14.4}Compiler and AD Runtime Techniques}{51}{subsection.6.14.4}%
 \contentsline {subsection}{\numberline {6.14.5}Integrated Scope of the Completed Evaluation}{51}{subsection.6.14.5}%
 \contentsline {section}{\numberline {6.15}Limitations and Threats to Validity}{51}{section.6.15}%
 \contentsline {subsection}{\numberline {6.15.1}Hardware and Cloud Scope}{51}{subsection.6.15.1}%
 \contentsline {subsection}{\numberline {6.15.2}Local-Volatility Correctness}{51}{subsection.6.15.2}%
-\contentsline {subsection}{\numberline {6.15.3}Random Number Generation as a Confounder}{51}{subsection.6.15.3}%
-\contentsline {subsection}{\numberline {6.15.4}Warm versus Cold JAX Execution}{51}{subsection.6.15.4}%
+\contentsline {subsection}{\numberline {6.15.3}Random Number Generation as a Confounder}{52}{subsection.6.15.3}%
+\contentsline {subsection}{\numberline {6.15.4}Warm versus Cold JAX Execution}{52}{subsection.6.15.4}%
 \contentsline {subsection}{\numberline {6.15.5}Memory Measurement}{52}{subsection.6.15.5}%
 \contentsline {subsection}{\numberline {6.15.6}Thread Control}{52}{subsection.6.15.6}%
 \contentsline {section}{\numberline {6.16}Summary}{52}{section.6.16}%
-\contentsline {chapter}{\numberline {7}Conclusion}{53}{chapter.7}%
-\contentsline {section}{\numberline {7.1}Summary of Work}{53}{section.7.1}%
-\contentsline {section}{\numberline {7.2}Key Findings}{53}{section.7.2}%
-\contentsline {section}{\numberline {7.3}Answering Research Questions}{53}{section.7.3}%
-\contentsline {paragraph}{Hardware and software stacks.}{53}{section*.27}%
-\contentsline {paragraph}{Programming languages, runtimes and AD support.}{54}{section*.28}%
-\contentsline {paragraph}{Cloud cost-performance.}{54}{section*.29}%
-\contentsline {paragraph}{Compiler and AD runtime techniques.}{54}{section*.30}%
-\contentsline {paragraph}{Parallelism and bottlenecks.}{54}{section*.31}%
-\contentsline {section}{\numberline {7.4}Future Work}{54}{section.7.4}%
-\contentsline {section}{\numberline {7.5}Final Remarks}{54}{section.7.5}%
-\contentsline {chapter}{Declarations}{55}{chapter*.32}%
+\contentsline {chapter}{\numberline {7}Conclusion}{54}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Summary of Work}{54}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Key Findings}{54}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Answering Research Questions}{55}{section.7.3}%
+\contentsline {paragraph}{Hardware and software stacks.}{55}{section*.27}%
+\contentsline {paragraph}{Programming languages, runtimes and AD support.}{55}{section*.28}%
+\contentsline {paragraph}{Cloud cost-performance.}{55}{section*.29}%
+\contentsline {paragraph}{Compiler and AD runtime techniques.}{55}{section*.30}%
+\contentsline {paragraph}{Parallelism and bottlenecks.}{55}{section*.31}%
+\contentsline {section}{\numberline {7.4}Future Work}{55}{section.7.4}%
+\contentsline {section}{\numberline {7.5}Final Remarks}{55}{section.7.5}%
+\contentsline {chapter}{Declarations}{56}{chapter*.32}%

@@ -932,42 +932,60 @@ merely shifted elsewhere: the SHA probe path budget is 95.5\% lower than
 evaluating the grid at full scale, and the mean scaling-law extrapolation
 error is 9.7\%.
 
-\subsection{Cross-Instance Profiler Robustness}
-\label{subsec:cloud-profiler-robustness}
+\subsection{Guarded SHA Local-Volatility Profiler}
+\label{subsec:guarded-sha-localvol}
 
-To test whether the headline result generalises beyond one instance slice, the
-same full-grid, Pareto-recovery and regret calculations are applied to all six
-priced instance-type slices stored in \code{sha\_cloud\_profiler\_v4}. Each
-slice contains the same 16 candidate configurations and 48 full-grid cells.
-Table~\ref{tab:profiler-cross-instance} reports the resulting post-hoc
-robustness audit.
+The robustness issue above motivated a guarded SHA experiment focused on the
+local-volatility deployment problem. The candidate space is split into fair
+task pools: an all-implemented-backends price-only pool, a validated-backend
+price-only pool that excludes Rust because of the local-volatility price
+discrepancy discussed in Section~\ref{subsec:limitations-localvol-correctness}, and an
+AD-required pool comparing only configurations that produce Greeks. The run
+evaluates five four-vCPU Google Cloud instance types
+(\code{e2}, \code{n2}, \code{n2d}, \code{c2d}, and \code{t2d}) with \(M=1k\),
+\(5k\), and \(25k\) probes and a \(100k\)-path full-grid oracle. The clean
+combined artefact contains 120 observations.
 
-\input{evaluation/tables/profiler_cross_instance.tex}
+\input{evaluation/tables/guarded_sha_localvol.tex}
 
-This audit materially changes the interpretation of the profiler result. SHA
-achieves perfect Pareto recovery and zero regret on the headline
-\code{n2-standard-4} grid, but not on the other measured instance slices. In
-five of the six slices SHA prunes too aggressively: it saves more full runs,
-but misses at least one Pareto configuration and often fails to retain the
-fastest \code{european/rust/none} configuration at \(M=100{,}000\). The old
-profiler is less efficient, selecting 30 of 48 full cells in every slice, but
-it recovers the Pareto frontier in all six slices.
+Table~\ref{tab:guarded-sha-localvol} shows a stronger and more defensible
+profiler story than the unguarded SHA audit. The repeated \code{t2d} selection
+is not a transcription error: the objective is a weighted runtime--cost score,
+not pure elapsed time. \code{c2d} is the fastest pure runtime choice, but
+\code{t2d} is only 6.0\% slower and 24.3\% cheaper for price-only, and 4.9\%
+slower and 25.5\% cheaper for AD-required. This is enough for \code{t2d} to win
+even the speed-sensitive 0.8/0.2 objective.
 
-The conclusion is therefore narrower and more useful: SHA is a promising
-budget-reduction mechanism, but the current implementation is not yet robust
-enough to replace the conservative profiler across instance types. A stronger
-version should include uncertainty-aware promotion rules, repeated probes for
-near-tie configurations, and a diversity or fastest-probe guard to avoid
-discarding configurations whose scaling improves at larger \(M\).
+The all-backend price-only pool selects \code{rust/none/t2d}, but this is a
+performance recommendation only. Because Rust local-volatility pricing has not
+passed the same cross-engine consistency check as NumPy, C++ and JAX, the
+validated price-only deployment recommendation is instead
+\code{cpp/none/t2d}. The AD-required recommendation is
+\code{jax/reverse/t2d}; these local-volatility sensitivities are internally
+consistent JAX AD outputs rather than closed-form-validated Greeks.
 
-\subsection{SHA Progression}
+The 0.0\% regret values are measured against the observed full-grid oracle for
+this tested local-volatility configuration, candidate engines, AD modes,
+instance types and \(100k\)-path target budget. They do not imply the true
+global optimum over all cloud instances, thread counts, workloads or larger path
+budgets. Table~\ref{tab:guarded-sha-method-comparison} shows that plain SHA
+also recovers the observed oracle on this grid while selecting fewer full runs;
+guarded SHA is reported as the safer policy because it trades some of that
+saving for explicit near-tie, engine-diversity, instance-family and
+scaling-improvement safeguards. Cloud timing variation means the small
+\code{c2d}/\code{t2d} gaps should be interpreted as near-tie deployment
+evidence rather than permanent hardware rankings.
+
+\subsection{SHA Progression in the Earlier Multi-Workload Grid}
 \label{subsec:sha-progression}
 
-Figure~\ref{fig:sha-progression} shows the SHA promotion sequence recorded for
-the final experiment. All 16 configurations are evaluated at the cheapest
-probe level, then the active set is reduced as the path budget increases. The
-final selected set contains the configurations promoted for full benchmarking
-after the profiler's conservative safeguards are applied.
+This subsection returns to the earlier multi-workload
+\code{sha\_cloud\_profiler\_v4} experiment and visualises the promotion path on
+the \code{n2-standard-4} grid. Figure~\ref{fig:sha-progression} shows that all
+16 configurations are evaluated at the cheapest probe level, then the active
+set is reduced as the path budget increases. The final selected set contains
+the configurations promoted for full benchmarking after the profiler's
+conservative safeguards are applied.
 
 \begin{figure}[htbp]
     \centering
@@ -1101,10 +1119,22 @@ the chosen parametric local-volatility workload does not.  Local-volatility
 correctness is therefore assessed through cross-engine consistency and
 convergence with larger \(M\), rather than by exact analytical error.  The
 additional high-\(M\) uncertainty check quantifies this limitation: NumPy, C++
-and JAX agree within estimated Monte Carlo error, while Rust does not. Price
-differences between engines may therefore reflect different random-number
-generators, path-generation implementations, or, in the Rust case, a
-backend-specific RNG-stream issue that requires further investigation.
+and JAX agree within estimated Monte Carlo error, while Rust does not. For that
+reason, Rust local-volatility results are retained as throughput and scaling
+evidence, but Rust is not treated as a correctness-certified local-volatility
+pricing backend in the guarded-profiler deployment recommendation. Price
+differences between engines may reflect different random-number generators,
+path-generation implementations, or, in the Rust case, a backend-specific
+RNG-stream issue that requires further investigation.
+
+The AD correctness story is similarly scoped. European GBM prices and Greeks
+are analytically validated against Black--Scholes. Local-volatility prices are
+validated by cross-engine agreement and convergence where possible, but
+local-volatility Greeks have no closed-form reference in this report. The
+reported local-volatility sensitivities are therefore checked as internally
+consistent JAX AD outputs, not as analytically validated Greeks. A
+finite-difference check using common random numbers would be the most useful
+next validation step.
 
 \subsection{Random Number Generation as a Confounder}
 \label{subsec:limitations-rng}
@@ -1192,13 +1222,14 @@ The main findings are as follows.
     cost. In the stored comparison, \code{t2d-standard-4} is faster and lower
     cost per run than \code{n2-standard-4} for the listed best no-AD rows.
 
-    \item \textbf{Budget-aware profiling:} SHA selects 24 of 48 full-grid
-    benchmark cells on \code{n2-standard-4}, saving 50.0\% of full runs while
-    preserving 100.0\% Pareto recovery and 0.0\% runtime and cost regret in
-    that grid. A cross-instance audit shows that this is promising but not yet
-    generally reliable: SHA achieves perfect recovery on only one of six
-    measured instance slices, while the older conservative profiler recovers
-    the Pareto frontier on all six.
+    \item \textbf{Budget-aware profiling:} plain SHA halves the full-grid work
+    on the favourable \code{n2-standard-4} cloud slice, but the guarded
+    local-volatility profiler gives the stronger final result. Across five
+    four-vCPU instance types, guarded SHA matches the observed objective
+    oracle while avoiding 13 of 30 full-scale task-level runs. Rust remains the
+    best all-backend price-only performance candidate, but the validated
+    price-only deployment recommendation excludes Rust and selects
+    \code{cpp/none/t2d-standard-4}.
 \end{itemize}
 
 Overall, the results show that MC+AD performance depends strongly on the

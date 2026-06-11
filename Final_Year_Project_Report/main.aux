@@ -101,7 +101,7 @@
 \newlabel{sec:design-decisions}{{3.11}{19}{Design Decisions and Trade-offs}{section.3.11}{}}
 \@writefile{toc}{\contentsline {paragraph}{Decorator-based workload registration.}{19}{section*.14}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Module-level JAX kernels.}{19}{section*.15}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Single-pass reverse-mode AD.}{19}{section*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Single-pass reverse-mode AD.}{20}{section*.16}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{\texttt  {jax.lax.scan} for the local-volatility loop.}{20}{section*.17}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{SQLite over PostgreSQL.}{20}{section*.18}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Per-thread RNG streams.}{20}{section*.19}\protected@file@percent }
@@ -306,24 +306,26 @@
 \newlabel{fig:pareto-runtime-cost}{{6.2}{48}{Runtime versus estimated cost for the final \code {n2-standard-4} grid. Pareto-optimal points are highlighted}{figure.6.2}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {6.18}{\ignorespaces Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment.}}{48}{table.6.18}\protected@file@percent }
 \newlabel{tab:profiler-comparison}{{6.18}{48}{Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment}{table.6.18}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.5}Cross-Instance Profiler Robustness}{49}{subsection.6.13.5}\protected@file@percent }
-\newlabel{subsec:cloud-profiler-robustness}{{6.13.5}{49}{Cross-Instance Profiler Robustness}{subsection.6.13.5}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.19}{\ignorespaces Cross-instance robustness audit for SHA on sha\_cloud\_profiler\_v4.}}{49}{table.6.19}\protected@file@percent }
-\newlabel{tab:profiler-cross-instance}{{6.19}{49}{Cross-instance robustness audit for SHA on sha\_cloud\_profiler\_v4}{table.6.19}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.6}SHA Progression}{49}{subsection.6.13.6}\protected@file@percent }
-\newlabel{subsec:sha-progression}{{6.13.6}{49}{SHA Progression}{subsection.6.13.6}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.14}Cross-Question Discussion}{49}{section.6.14}\protected@file@percent }
-\newlabel{sec:results-discussion}{{6.14}{49}{Cross-Question Discussion}{section.6.14}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.1}Software Stack and Engine Performance}{49}{subsection.6.14.1}\protected@file@percent }
-\newlabel{subsec:discussion-software-stack}{{6.14.1}{49}{Software Stack and Engine Performance}{subsection.6.14.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.5}Guarded SHA Local-Volatility Profiler}{49}{subsection.6.13.5}\protected@file@percent }
+\newlabel{subsec:guarded-sha-localvol}{{6.13.5}{49}{Guarded SHA Local-Volatility Profiler}{subsection.6.13.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.19}{\ignorespaces Guarded SHA local-volatility recommendations and pure runtime/cost baselines.}}{49}{table.6.19}\protected@file@percent }
+\newlabel{tab:guarded-sha-localvol}{{6.19}{49}{Guarded SHA local-volatility recommendations and pure runtime/cost baselines}{table.6.19}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.20}{\ignorespaces Same-grid profiler comparison for the balanced guarded-SHA objective.}}{49}{table.6.20}\protected@file@percent }
+\newlabel{tab:guarded-sha-method-comparison}{{6.20}{49}{Same-grid profiler comparison for the balanced guarded-SHA objective}{table.6.20}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.6}SHA Progression in the Earlier Multi-Workload Grid}{49}{subsection.6.13.6}\protected@file@percent }
+\newlabel{subsec:sha-progression}{{6.13.6}{49}{SHA Progression in the Earlier Multi-Workload Grid}{subsection.6.13.6}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {6.3}{\ignorespaces SHA active configuration count as probe path budget increases.}}{50}{figure.6.3}\protected@file@percent }
 \newlabel{fig:sha-progression}{{6.3}{50}{SHA active configuration count as probe path budget increases}{figure.6.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.14}Cross-Question Discussion}{50}{section.6.14}\protected@file@percent }
+\newlabel{sec:results-discussion}{{6.14}{50}{Cross-Question Discussion}{section.6.14}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.1}Software Stack and Engine Performance}{50}{subsection.6.14.1}\protected@file@percent }
+\newlabel{subsec:discussion-software-stack}{{6.14.1}{50}{Software Stack and Engine Performance}{subsection.6.14.1}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {6.14.2}Programming-Language, Runtime and AD-Support Trade-offs}{50}{subsection.6.14.2}\protected@file@percent }
 \newlabel{subsec:discussion-language-ad}{{6.14.2}{50}{Programming-Language, Runtime and AD-Support Trade-offs}{subsection.6.14.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.3}Parallelism and Bottlenecks}{50}{subsection.6.14.3}\protected@file@percent }
-\newlabel{subsec:discussion-parallelism}{{6.14.3}{50}{Parallelism and Bottlenecks}{subsection.6.14.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.4}Compiler and AD Runtime Techniques}{50}{subsection.6.14.4}\protected@file@percent }
-\newlabel{subsec:discussion-ai-techniques}{{6.14.4}{50}{Compiler and AD Runtime Techniques}{subsection.6.14.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.3}Parallelism and Bottlenecks}{51}{subsection.6.14.3}\protected@file@percent }
+\newlabel{subsec:discussion-parallelism}{{6.14.3}{51}{Parallelism and Bottlenecks}{subsection.6.14.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.4}Compiler and AD Runtime Techniques}{51}{subsection.6.14.4}\protected@file@percent }
+\newlabel{subsec:discussion-ai-techniques}{{6.14.4}{51}{Compiler and AD Runtime Techniques}{subsection.6.14.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {6.14.5}Integrated Scope of the Completed Evaluation}{51}{subsection.6.14.5}\protected@file@percent }
 \newlabel{subsec:discussion-scope}{{6.14.5}{51}{Integrated Scope of the Completed Evaluation}{subsection.6.14.5}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {6.15}Limitations and Threats to Validity}{51}{section.6.15}\protected@file@percent }
@@ -332,33 +334,33 @@
 \newlabel{subsec:limitations-single-machine}{{6.15.1}{51}{Hardware and Cloud Scope}{subsection.6.15.1}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {6.15.2}Local-Volatility Correctness}{51}{subsection.6.15.2}\protected@file@percent }
 \newlabel{subsec:limitations-localvol-correctness}{{6.15.2}{51}{Local-Volatility Correctness}{subsection.6.15.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.3}Random Number Generation as a Confounder}{51}{subsection.6.15.3}\protected@file@percent }
-\newlabel{subsec:limitations-rng}{{6.15.3}{51}{Random Number Generation as a Confounder}{subsection.6.15.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.4}Warm versus Cold JAX Execution}{51}{subsection.6.15.4}\protected@file@percent }
-\newlabel{subsec:limitations-cold-warm}{{6.15.4}{51}{Warm versus Cold JAX Execution}{subsection.6.15.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.3}Random Number Generation as a Confounder}{52}{subsection.6.15.3}\protected@file@percent }
+\newlabel{subsec:limitations-rng}{{6.15.3}{52}{Random Number Generation as a Confounder}{subsection.6.15.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.4}Warm versus Cold JAX Execution}{52}{subsection.6.15.4}\protected@file@percent }
+\newlabel{subsec:limitations-cold-warm}{{6.15.4}{52}{Warm versus Cold JAX Execution}{subsection.6.15.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {6.15.5}Memory Measurement}{52}{subsection.6.15.5}\protected@file@percent }
 \newlabel{subsec:limitations-memory-measurement}{{6.15.5}{52}{Memory Measurement}{subsection.6.15.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {6.15.6}Thread Control}{52}{subsection.6.15.6}\protected@file@percent }
 \newlabel{subsec:limitations-thread-control}{{6.15.6}{52}{Thread Control}{subsection.6.15.6}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {6.16}Summary}{52}{section.6.16}\protected@file@percent }
 \newlabel{sec:results-summary}{{6.16}{52}{Summary}{section.6.16}{}}
-\@writefile{toc}{\contentsline {chapter}{\numberline {7}Conclusion}{53}{chapter.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {7}Conclusion}{54}{chapter.7}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\newlabel{chap:conclusion}{{7}{53}{Conclusion}{chapter.7}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {7.1}Summary of Work}{53}{section.7.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7.2}Key Findings}{53}{section.7.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7.3}Answering Research Questions}{53}{section.7.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Hardware and software stacks.}{53}{section*.27}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Programming languages, runtimes and AD support.}{54}{section*.28}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Cloud cost-performance.}{54}{section*.29}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Compiler and AD runtime techniques.}{54}{section*.30}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Parallelism and bottlenecks.}{54}{section*.31}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7.4}Future Work}{54}{section.7.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7.5}Final Remarks}{54}{section.7.5}\protected@file@percent }
+\newlabel{chap:conclusion}{{7}{54}{Conclusion}{chapter.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7.1}Summary of Work}{54}{section.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.2}Key Findings}{54}{section.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.3}Answering Research Questions}{55}{section.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Hardware and software stacks.}{55}{section*.27}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Programming languages, runtimes and AD support.}{55}{section*.28}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Cloud cost-performance.}{55}{section*.29}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Compiler and AD runtime techniques.}{55}{section*.30}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Parallelism and bottlenecks.}{55}{section*.31}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.4}Future Work}{55}{section.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.5}Final Remarks}{55}{section.7.5}\protected@file@percent }
 \bibstyle{unsrt}
 \bibdata{bibs/sample}
-\@writefile{toc}{\contentsline {chapter}{Declarations}{55}{chapter*.32}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{Declarations}{56}{chapter*.32}\protected@file@percent }
 \bibcite{glasserman2004}{1}
 \bibcite{griewank2008}{2}
 \bibcite{baydin2018}{3}
@@ -379,4 +381,4 @@
 \bibcite{coleman2019dawnbench}{18}
 \bibcite{mattson2020mlperf}{19}
 \bibcite{blackscholes1973}{20}
-\gdef \@abspage@last{59}
+\gdef \@abspage@last{60}

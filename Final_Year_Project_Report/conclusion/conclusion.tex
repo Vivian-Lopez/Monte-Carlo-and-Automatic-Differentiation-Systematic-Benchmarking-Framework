@@ -37,18 +37,22 @@ limits at larger \(M,N\) combinations. In the final cloud comparison at
 \(M=100{,}000\), JAX AD overhead ranges from \(1.81\times\) for Asian reverse
 mode to \(4.42\times\) for local-volatility forward mode.
 
-The cloud-profiler result is a useful final systems contribution, but the
-evidence is more nuanced than the headline \code{n2-standard-4} result alone.
-In that slice of \code{sha\_cloud\_profiler\_v4}, the full grid requires 48
-full benchmark cells. SHA selects 24, saving 50.0\% of full runs while
-preserving 100.0\% Pareto recovery and 0.0\% runtime and cost regret relative
-to the full grid. However, a post-hoc audit across the six measured instance
-slices shows that SHA is not yet generally reliable: it achieves perfect
-Pareto recovery only on the \code{n2-standard-4} slice, whereas the older
-conservative profiler recovers the Pareto frontier on all six slices while
-using more full-scale evaluations. The correct conclusion is therefore that
-SHA is promising, but needs uncertainty-aware safeguards before it can replace
-the conservative profiler.
+The cloud-profiler result is a useful final systems contribution. The earlier
+\code{sha\_cloud\_profiler\_v4} run showed that plain SHA can halve the number
+of full benchmark cells on the favourable \code{n2-standard-4} slice, but also
+showed that unguarded pruning is too brittle across instance slices. The final
+guarded local-volatility experiment addresses this directly: across five
+four-vCPU Google Cloud instance types and 120 stored observations, guarded SHA
+matches the observed full-grid oracle for both the price-only and AD-required
+tasks. In the all-implemented-backend pool, the best observed price-only
+performance candidate is \code{rust/none/t2d-standard-4}; however, because Rust
+local-volatility pricing has not passed the same cross-engine consistency check
+as NumPy, C++ and JAX, the correctness-certified price-only recommendation is
+\code{cpp/none/t2d-standard-4}. When Greeks are required, the guarded profiler
+recommends \code{jax/reverse/t2d-standard-4}. These recommendations are scoped
+to the tested local-volatility grid and \(100k\)-path target budget, where they
+achieve 0.0\% objective regret while avoiding 13 of 30 full-scale task-level
+runs.
 
 \section{Answering Research Questions}
 
@@ -90,10 +94,12 @@ large local-volatility workloads.
 
 \section{Future Work}
 
-The most direct next step is to strengthen the cloud-profiler policy with more
-instance types, repeated cloud runs, current pricing snapshots, uncertainty
-estimates, near-tie re-probing, and diversity guards for timing variance,
-scaling crossovers, and Monte Carlo noise. Other useful extensions are GPU and
+The most direct next step is to validate the guarded cloud-profiler policy with
+more workloads, more instance types, repeated cloud runs, current pricing
+snapshots, and uncertainty estimates for timing variance, scaling crossovers,
+and Monte Carlo noise. Local-volatility Greek validation should also be
+strengthened with finite-difference checks using common random numbers. Other
+useful extensions are GPU and
 distributed execution, mixed precision, hardware counters, and broader AD-system
 coverage such as Enzyme, C++ AD tools, Rust AD libraries, Mojo, or specialist
 quant libraries. Two focused microbenchmarks would also sharpen the performance
@@ -109,5 +115,5 @@ Overall, the project contributes both a working engineering artefact and an
 empirical methodology. The artefact makes MC+AD experiments reproducible,
 queryable, and extensible across engines. The methodology shows how local
 benchmarking can be combined with cloud cost metadata and successive halving to
-reduce full-grid benchmarking, while the robustness audit explains why
-budget-aware profilers need safeguards before reliability is claimed.
+reduce full-grid benchmarking, while the guarded-SHA experiment shows how
+explicit safeguards can make that reduction more defensible.

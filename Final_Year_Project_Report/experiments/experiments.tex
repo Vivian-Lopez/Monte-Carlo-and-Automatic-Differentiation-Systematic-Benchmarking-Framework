@@ -713,12 +713,14 @@ Cheap probe runs rank candidate configurations and select a conservative subset;
 in the final run it selects 30 of the 48 full-grid cells. &
 Full runs saved, Pareto recovery, runtime/cost regret and rank correlation. \\
 
-Successive halving &
-SHA evaluates all candidates at small probe budgets, promotes a smaller active
-set through \(M=1k\), \(5k\) and \(25k\), then selects 24 of the 48 full-grid cells
-for full benchmarking. Post-hoc instance slices are used as a robustness check. &
-Same decision-quality metrics as the old profiler, plus promotion behaviour and
-probe path-budget saving. \\
+Guarded SHA &
+The final local-volatility profiler evaluates price-only and AD-required
+candidate pools separately across \code{e2}, \code{n2}, \code{n2d}, \code{c2d}
+and \code{t2d} four-vCPU instances. Probe budgets are \(M=1k\), \(5k\) and
+\(25k\), with a \(100k\)-path full-grid oracle. &
+Recommendation quality, full runs saved, regret against the oracle, guard
+decisions, and whether the guarded policy improves the plain SHA robustness
+story. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -730,7 +732,8 @@ Experiments are run from cheapest and most analytically checkable to most
 expensive: European GBM validation; European AD validation; GBM path/thread
 scaling; local-volatility smoke testing; LV-1/LV-2 engine and AD sweeps; LV-3/LV-4
 \(N\)-scaling; LV-5--LV-10 resource, thread, surface, stability and stress tests;
-and finally \code{sha_cloud_profiler_v4}. This order keeps GBM as the correctness
+then \code{sha_cloud_profiler_v4}; and finally the guarded local-volatility SHA
+run across the five cloud instance types. This order keeps GBM as the correctness
 anchor while making local volatility the main performance benchmark and the cloud
 experiment the main evidence for cost-aware selection.
 
