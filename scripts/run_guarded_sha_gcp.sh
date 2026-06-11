@@ -94,6 +94,12 @@ mt_vcpus() {
     echo "$1" | sed -E 's/.*-([0-9]+)$/\1/'
 }
 
+vm_name_for() {
+    local mt="$1"
+    local vm="guarded-sha-${mt//-/_}-${TIMESTAMP}"
+    echo "${vm//_/-}"
+}
+
 vm_ssh() {
     local vm="$1"
     local zone="$2"
@@ -132,16 +138,12 @@ run_wave() {
         return
     fi
     echo "Running wave: ${wave[*]}"
-    declare -A VM_NAMES=()
-    declare -A VM_ZONES=()
-    declare -A PIDS=()
+    local pids=()
+    local pid_mts=()
 
     for mt in "${wave[@]}"; do
         zone="$(mt_zone "$mt")"
-        vm="guarded-sha-${mt//-/_}-${TIMESTAMP}"
-        vm="${vm//_/-}"
-        VM_NAMES[$mt]="$vm"
-        VM_ZONES[$mt]="$zone"
+        vm="$(vm_name_for "$mt")"
         echo "Creating $vm ($mt in $zone)"
         gcloud compute instances create "$vm" \
             --project="$PROJECT" \
@@ -157,8 +159,8 @@ run_wave() {
 
     for mt in "${wave[@]}"; do
         (
-            vm="${VM_NAMES[$mt]}"
-            zone="${VM_ZONES[$mt]}"
+            vm="$(vm_name_for "$mt")"
+            zone="$(mt_zone "$mt")"
             region="$(mt_region "$mt")"
             echo "[$vm] Waiting for SSH"
             wait_for_ssh "$vm" "$zone"
@@ -222,12 +224,14 @@ run_wave() {
                 --project="$PROJECT" --zone="$zone" --quiet
             echo "[$vm] Copied outputs"
         ) &
-        PIDS[$mt]=$!
+        pids+=("$!")
+        pid_mts+=("$mt")
     done
 
     wave_ok=true
-    for mt in "${wave[@]}"; do
-        if ! wait "${PIDS[$mt]}"; then
+    for idx in "${!pids[@]}"; do
+        mt="${pid_mts[$idx]}"
+        if ! wait "${pids[$idx]}"; then
             echo "Wave job failed for $mt"
             wave_ok=false
         fi
@@ -235,8 +239,8 @@ run_wave() {
 
     if [[ "$DELETE_VMS_AFTER" == true ]]; then
         for mt in "${wave[@]}"; do
-            gcloud compute instances delete "${VM_NAMES[$mt]}" \
-                --project="$PROJECT" --zone="${VM_ZONES[$mt]}" --quiet || true
+            gcloud compute instances delete "$(vm_name_for "$mt")" \
+                --project="$PROJECT" --zone="$(mt_zone "$mt")" --quiet || true
         done
     fi
 
