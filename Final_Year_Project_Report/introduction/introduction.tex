@@ -14,7 +14,7 @@ This project is motivated by the need to systematically evaluate and optimise MC
 
 While Monte Carlo simulation, automatic differentiation, and high-performance computing have each been studied extensively, there is a lack of unified frameworks and methodologies for evaluating their combined behaviour. Existing work often focuses on isolated aspects, such as MC algorithms, AD systems, or hardware benchmarking, without considering their interactions in a controlled and reproducible manner.
 
-In particular, several gaps can be identified. First, there is no standardised benchmarking framework that supports MC workloads with integrated AD across multiple programming languages and hardware architectures. Second, most AD benchmarking studies are conducted in the context of machine learning, leaving stochastic simulation workloads comparatively underexplored. Third, performance comparisons across systems are often difficult to interpret due to inconsistent experimental setups, lack of reproducibility, and insufficient reporting of configuration details.
+In particular, several gaps can be identified. First, there is no standardised benchmarking framework that supports MC workloads, explicit AD-capable backends, and comparable non-AD compiled baselines across multiple programming languages and hardware architectures. Second, most AD benchmarking studies are conducted in the context of machine learning, leaving stochastic simulation workloads comparatively underexplored. Third, performance comparisons across systems are often difficult to interpret due to inconsistent experimental setups, lack of reproducibility, and insufficient reporting of configuration details.
 
 Furthermore, compiler techniques developed in the machine-learning ecosystem, such as staged execution, graph compilation, and operator fusion, have not been systematically evaluated in the context of MC+AD workloads. Finally, there is limited empirical guidance on selecting appropriate cloud hardware configurations for these workloads, particularly when considering cost-performance trade-offs.
 
@@ -22,17 +22,18 @@ As a result, practitioners lack clear, evidence-based insights into how to desig
 
 \section{Research Questions}
 
-This project addresses the following research questions:
+This project addresses the following research questions. The same numbering is
+used in the experimental design and conclusion so that each result can be traced
+back to the problem framing.
 
-\begin{itemize}
-    \item How do different hardware environments and software stacks affect the throughput and efficiency of MC+AD workloads? 
-    \item What are the trade-offs between programming-language/runtime choices and the available AD support in terms of performance, maintainability, and parallelism?
-    \item Which Google Cloud hardware configurations provide the best cost/performance for large-scale MC+AD tasks?
-    \item How useful are JAX/XLA-style compiler and automatic-differentiation techniques for stochastic simulation workloads?
-    \item How do parallelisation strategies impact scaling, and where do bottlenecks arise? 
-
-\end{itemize}
-
+\begin{enumerate}[label=\textbf{RQ\arabic*.}]
+    \item How do different software stacks and execution backends affect the runtime, throughput, and memory behaviour of Monte Carlo workloads?
+    \item What are the performance and memory trade-offs of automatic differentiation for representative Monte Carlo option-pricing workloads?
+    \item How do workload structure and scale, including path count, time-step count, and payoff type, affect backend rankings and bottlenecks?
+    \item Which Google Cloud CPU configurations provide the best marginal cost-performance for the evaluated MC+AD workloads?
+    \item Can short probe runs and successive-halving style profiling reduce the cost of cloud benchmarking while still recovering near-Pareto-optimal configurations?
+    \item What are the practical limitations, threats to validity, and generalisation limits of this benchmarking methodology?
+\end{enumerate}
 
 \section{Contributions}
 
@@ -41,8 +42,8 @@ This project makes the following contributions:
 \begin{itemize}
 
     \item The design and implementation of a modular, extensible benchmarking framework for Monte Carlo engines with automatic differentiation support.
-    \item A systematic methodology for evaluating MC+AD workloads across different hardware architectures, software stacks, and programming languages.
-    \item An experimental study comparing performance, scalability, and memory behaviour under varying configurations, including differentiation modes and parallelisation strategies.
+    \item A systematic methodology for evaluating Monte Carlo workloads across different hardware architectures, software stacks, and programming languages, with JAX providing the main implemented AD case study.
+    \item An experimental study comparing performance, scalability, and memory behaviour under varying configurations, including JAX forward/reverse AD modes and native compiled no-AD baselines.
     \item An analysis of cost-performance trade-offs for MC+AD workloads in cloud computing environments, including measured Google Cloud runs and per-run cost estimates.
     \item A budget-aware profiling methodology based on short probe runs and successive halving, evaluated against a full-grid cloud baseline.
     \item Insights into the applicability and limits of JAX/XLA-style compiler/runtime techniques for stochastic simulation workloads.

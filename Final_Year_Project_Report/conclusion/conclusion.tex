@@ -5,7 +5,7 @@
 
 This project designed, implemented, and evaluated a reproducible benchmarking
 framework for Monte Carlo option-pricing engines with automatic
-differentiation. The framework supports explicit workload configurations,
+differentiation, with JAX providing the main implemented AD backend. The framework supports explicit workload configurations,
 engine abstraction, deterministic seeding, warm-up and repeated timing,
 analytical validation where available, SQLite result storage, environment
 metadata capture, cloud cost metadata, and generated report artefacts.
@@ -24,7 +24,7 @@ profiler-versus-grid evaluation.
 The results show that MC+AD performance cannot be reduced to a single backend
 ranking. The simple European GBM workload is useful for correctness checks, but
 the more demanding local-volatility and Asian workloads change the observed
-trade-offs. Rust/Rayon is the strongest no-AD engine by runtime in the main
+trade-offs. Rust/Rayon is the strongest no-AD engine by measured runtime in the main
 local-volatility results and in the highlighted European/local-volatility cloud
 rows, although the Rust local-volatility price requires further RNG-stream
 validation before it should be treated as correctness evidence. JAX/XLA remains
@@ -56,41 +56,44 @@ runs.
 
 \section{Answering Research Questions}
 
-\paragraph{Hardware and software stacks.}
-The local and cloud results show that runtime depends strongly on workload
-structure, engine implementation, and runtime system. Compiled CPU engines are
-very strong for no-AD workloads, while JAX/XLA is necessary for the reported AD
-measurements and can be competitive when the workload has enough structure to
-benefit from compilation.
+\paragraph{RQ1. How do different software stacks and execution backends affect the runtime, throughput, and memory behaviour of Monte Carlo workloads?}
+Engine choice materially changes runtime, throughput and memory behaviour.
+NumPy is a clear baseline, JAX/XLA benefits when workloads can be staged and
+compiled, and C++/OpenMP and Rust/Rayon provide strong native no-AD CPU
+throughput. JAX reverse-mode AD is the clearest memory-pressure case.
 
-\paragraph{Programming languages, runtimes and AD support.}
-C++/OpenMP and Rust/Rayon provide high no-AD throughput and explicit CPU
-parallelism. JAX provides the main AD capability and exposes the practical
-difference between forward and reverse mode. The measured comparison is best
-described as JAX AD versus native no-AD engines, not as a full comparison of AD
-libraries across C++, Rust and Python. The trade-off is therefore not only
-language performance, but also derivative support, memory behaviour, and ease
-of integration into a reproducible benchmark runner.
+\paragraph{RQ2. What are the performance and memory trade-offs of automatic differentiation for representative Monte Carlo option-pricing workloads?}
+AD is evaluated primarily through JAX. Reverse mode is usually faster than
+forward mode for scalar-output local-volatility pricing, but it has higher
+memory pressure and fails at larger path-count/time-step combinations. The
+comparison is therefore JAX AD versus native no-AD baselines, not a complete
+C++/Rust AD-library benchmark.
 
-\paragraph{Cloud cost-performance.}
-The final priced comparison shows that runtime and cost should be considered
-together. For the measured no-AD rows at \(M=100{,}000\),
-\code{t2d-standard-4} is faster and lower cost per run than
-\code{n2-standard-4}. This is a measured result under the stored pricing and
-environment assumptions, not a universal claim about all cloud hardware.
+\paragraph{RQ3. How do workload structure and scale, including path count, time-step count, and payoff type, affect backend rankings and bottlenecks?}
+Rankings change between European GBM, local volatility and Asian payoffs. Path
+count mainly tests parallel throughput; local-volatility time steps expose scan
+cost and AD memory growth. Rust local-volatility timings are among the fastest
+measured timings, subject to the Chapter~6 correctness caveat.
 
-\paragraph{Compiler and AD runtime techniques.}
-JAX/XLA demonstrates that compiler and AD techniques from the machine-learning ecosystem
-are relevant to MC workloads, especially when the computation is expressed in a
-form such as \code{jax.lax.scan} that the compiler can optimise. The conclusion
-is deliberately limited to the measured XLA and AD evidence.
+\paragraph{RQ4. Which Google Cloud CPU configurations provide the best marginal cost-performance for the evaluated MC+AD workloads?}
+Marginal cost-performance is not the same as raw speed. In the final guarded
+local-volatility run, \code{t2d-standard-4} wins the weighted objectives because
+it is close to the fastest \code{c2d-standard-4} timings while being cheaper per
+measured run. These are marginal compute estimates, not complete cloud bills.
 
-\paragraph{Parallelism and bottlenecks.}
-The thread-scaling experiments show effective scaling for C++ and Rust under
-OpenMP/Rayon-style parallelism, while JAX's CPU runtime is less directly
-controlled by requested thread counts. The stress tests show that memory, not
-only arithmetic throughput, becomes a limiting factor for reverse-mode AD on
-large local-volatility workloads.
+\paragraph{RQ5. Can short probe runs and successive-halving style profiling reduce the cost of cloud benchmarking while still recovering near-Pareto-optimal configurations?}
+Yes within the measured grids, but not universally. Plain SHA recovered the
+full-grid Pareto frontier in the main \code{n2-standard-4} slice while halving
+full-scale evaluations, but cross-instance robustness was weaker. Guarded SHA
+recovered the observed local-volatility oracle while avoiding 13 of 30
+full-scale task-level runs.
+
+\paragraph{RQ6. What are the practical limitations, threats to validity, and generalisation limits of this benchmarking methodology?}
+The key limits are finite candidate grids, warm rather than full cold-start JAX
+timings, marginal rather than end-to-end cloud costs, different RNG
+implementations, limited GPU evidence, and no closed-form local-volatility
+reference. The results support measured systems claims, not universal rankings
+of languages, AD systems or cloud hardware.
 
 \section{Future Work}
 
@@ -116,4 +119,6 @@ empirical methodology. The artefact makes MC+AD experiments reproducible,
 queryable, and extensible across engines. The methodology shows how local
 benchmarking can be combined with cloud cost metadata and successive halving to
 reduce full-grid benchmarking, while the guarded-SHA experiment shows how
-explicit safeguards can make that reduction more defensible.
+explicit safeguards can make that reduction more defensible. The profiler result
+is therefore promising evidence for budget-aware benchmarking, not a universal
+guarantee of optimal cloud selection.

@@ -488,21 +488,14 @@ differentiation.
 \section{GPU Support}
 \label{sec:impl-gpu}
 
-CUDA support is implemented for the European workload via PyCUDA. The kernel
-launch configuration is determined at runtime: the host queries the device for
-the maximum number of threads per block and chooses the largest power of two
-not exceeding it, then computes the number of blocks as
-$\lceil M / \text{threads\_per\_block} \rceil$. The host allocates a single
-device array of size $M$ for the payoffs and reduces it to a scalar with
-\texttt{np.mean} after copying back. The CUDA engine is probed at server
-startup with a 128-path trial run; if the probe fails (no GPU, no CUDA
-toolkit, PyCUDA import failure, etc.) the engine is silently excluded.
-
-JAX inherits GPU support transparently when JAX is installed with CUDA wheels.
-The same JAX engine code paths execute on GPU without modification; the
-benchmark database simply records a different platform string. Switching
-between CPU and GPU JAX is therefore a deployment decision rather than a code
-change.
+CUDA support is implemented as prototype infrastructure for the European
+workload via PyCUDA. The engine launches one path per CUDA thread, uses cuRAND
+for normal draws, writes path payoffs to device memory, and reduces on the host.
+It is probed at server startup with a 128-path trial run and excluded if CUDA or
+PyCUDA is unavailable. JAX can also execute on GPU when installed with CUDA
+wheels. The final quantitative conclusions in Chapter~6, however, are based on
+the CPU backends and cloud CPU instances evaluated there; GPU evaluation is left
+as future work.
 
 \section{Challenges}
 \label{sec:impl-challenges}

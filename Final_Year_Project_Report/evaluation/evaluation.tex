@@ -245,7 +245,7 @@ path count for all engines.  This is expected because the workload cost is
 roughly proportional to \(M\times N\), and \(N\) is fixed at 252 in this
 experiment.
 
-Rust/Rayon is the fastest no-AD engine by runtime across the full path-count sweep.  At
+Rust/Rayon is the fastest no-AD engine by measured runtime across the full path-count sweep.  At
 \(M=500{,}000\), Rust completes the workload in \(2439.6\) ms, compared with
 \(3062.6\) ms for C++, \(3103.7\) ms for JAX, and \(5022.4\) ms for NumPy.
 This corresponds to approximately \(0.205\) million paths/s for Rust,
@@ -257,9 +257,13 @@ workload, Rust is approximately \(2.1\times\) faster than NumPy and about
 The runtime ranking should be read together with the uncertainty check in
 Table~\ref{tab:localvol-uncertainty}. The CPU, C++ and JAX prices are
 statistically consistent with the independent high-\(M\) reference, while the
-Rust local-volatility price requires further RNG-stream validation. Therefore,
-the Rust rows support conclusions about Rayon throughput, but not independent
-local-volatility pricing correctness.
+Rust local-volatility price requires further RNG-stream validation. The Rust
+local-volatility timings are reported as engineering performance measurements,
+but the corresponding prices show a discrepancy relative to the NumPy/JAX/C++
+agreement band. Consequently, Rust local-volatility timings should not be
+interpreted as evidence of a superior validated pricing engine. They indicate
+the performance of the current implementation under the implemented workload,
+while correctness requires further investigation.
 
 A notable difference from the simple European GBM workload is that JAX
 becomes competitive with C++ on the more expensive multi-step workload.  This
@@ -871,16 +875,19 @@ thumb.
 \label{subsec:cloud-cost-performance}
 
 Table~\ref{tab:cloud-cost-performance} summarises the best no-AD
-cost-performance rows for priced cloud instances at \(M=100{,}000\). It
-reports both runtime and estimated cost per run, making explicit that a faster
-machine can also be cheaper per run if the runtime improvement outweighs the
-hourly price difference.
+cost-performance rows for priced cloud instances at \(M=100{,}000\). Cloud
+cost is estimated as marginal compute cost: measured runtime multiplied by the
+published or configured hourly instance price. These estimates exclude VM
+startup and shutdown time, idle time, storage, orchestration overhead, retries,
+network costs, and billing granularity effects. They are therefore suitable for
+relative cost-performance comparison under the benchmark protocol, not as exact
+end-to-end cloud bills.
 
 \input{evaluation/tables/cloud_cost_performance.tex}
 
 Figure~\ref{fig:cloud-cost-performance} visualises the same relationship, with
-cost per run shown on a logarithmic axis because the absolute costs are small
-and differ by workload. In the stored priced comparison,
+cost per run shown on a logarithmic axis because the absolute marginal compute
+costs are small and differ by workload. In the stored priced comparison,
 \code{t2d-standard-4} is faster and lower cost per run than
 \code{n2-standard-4} for the listed best no-AD workloads. This is an empirical
 result for the measured workloads and pricing assumptions, not a claim about
@@ -889,7 +896,7 @@ all machine types or future cloud prices.
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{evaluation/figures/cloud_cost_performance_priced.png}
-    \caption{Runtime and log-scale estimated cost per run for best no-AD cloud configurations at \(M=100{,}000\). Lower-left points are preferable.}
+    \caption{Best no-AD cloud configurations at \(M=100{,}000\). The y-axis uses log-scale marginal compute cost per run; lower-left points indicate faster and cheaper measured configurations under the benchmark protocol.}
     \label{fig:cloud-cost-performance}
 \end{figure}
 
@@ -924,7 +931,8 @@ rank correlation of 1.000, compared with 0.935 for the old profiler evidence.
 \input{evaluation/tables/profiler_comparison.tex}
 
 This result is promising for the \code{n2-standard-4} slice, but it should not
-be read as proof that SHA is generally reliable. In the measured headline
+be read as proof that SHA is generally reliable across workloads, instance
+families, pricing snapshots, or noisy probe rankings. In the measured headline
 grid, SHA halves the number of full-scale cloud benchmark cells while
 preserving the full-grid decision quality on the reported metrics. The
 practical significance is that the expensive part of the experiment is not
@@ -989,8 +997,8 @@ conservative safeguards are applied.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.78\textwidth]{evaluation/figures/sha_progression_n2.png}
-    \caption{SHA active configuration count as probe path budget increases.}
+    \includegraphics[width=0.95\textwidth]{evaluation/figures/sha_progression_n2.png}
+    \caption{SHA promotion path on the earlier \code{n2-standard-4} multi-workload grid. Most configurations receive only cheap probes, while the active set shrinks as the path budget increases.}
     \label{fig:sha-progression}
 \end{figure}
 
@@ -1125,16 +1133,19 @@ evidence, but Rust is not treated as a correctness-certified local-volatility
 pricing backend in the guarded-profiler deployment recommendation. Price
 differences between engines may reflect different random-number generators,
 path-generation implementations, or, in the Rust case, a backend-specific
-RNG-stream issue that requires further investigation.
+issue that requires further investigation. Likely causes include RNG stream
+partitioning, per-thread path assignment, discretisation mismatch, or a
+payoff/discounting implementation difference. A future validation step should
+use deterministic per-path random streams shared across engines and compare
+pathwise terminal values before comparing aggregate prices.
 
 The AD correctness story is similarly scoped. European GBM prices and Greeks
 are analytically validated against Black--Scholes. Local-volatility prices are
 validated by cross-engine agreement and convergence where possible, but
 local-volatility Greeks have no closed-form reference in this report. The
 reported local-volatility sensitivities are therefore checked as internally
-consistent JAX AD outputs, not as analytically validated Greeks. A
-finite-difference check using common random numbers would be the most useful
-next validation step.
+consistent JAX AD outputs, not as analytically validated Greeks. A finite-difference check using common random numbers would be the most useful
+next validation step for the reported JAX local-volatility Greeks.
 
 \subsection{Random Number Generation as a Confounder}
 \label{subsec:limitations-rng}
@@ -1161,6 +1172,16 @@ but the final cloud cost-performance tables do not include a full cold-start
 versus warm-start comparison. Therefore, cloud cost claims should be read as
 steady-state cost-performance rather than one-off job latency.
 
+\subsection{Cloud Cost Scope}
+\label{subsec:limitations-cloud-cost}
+
+The cloud-cost estimates use marginal compute cost only. They intentionally
+exclude startup and shutdown time, idle time, persistent storage, orchestration
+overhead, retries, network transfer and billing granularity. This is defensible
+for comparing measured configurations under the same benchmark protocol, but it
+should not be interpreted as an exact Google Cloud invoice or as a complete
+end-to-end deployment-cost model.
+
 \subsection{Memory Measurement}
 \label{subsec:limitations-memory-measurement}
 
@@ -1181,63 +1202,20 @@ controlled thread-count benchmark.
 \section{Summary}
 \label{sec:results-summary}
 
-The main findings are as follows.
+Overall, the results show that MC+AD performance depends on workload structure,
+runtime system, differentiation mode, parallel execution model and cloud cost
+assumptions. European GBM validates prices and JAX Greeks against
+Black--Scholes, while the local-volatility suite exposes the main runtime, AD,
+memory and scaling trade-offs. Rust/Rayon gives the fastest measured no-AD
+local-volatility timings, but its local-volatility price discrepancy means those
+rows are performance evidence rather than correctness evidence. JAX provides the
+main AD evidence: reverse mode is faster than forward mode for moderate
+scalar-output local-volatility workloads, but reaches memory limits at larger
+\(M,N\) combinations.
 
-\begin{itemize}
-    \item \textbf{European GBM validation:} the simple GBM workload verifies
-    that the framework produces credible prices and AD Greeks against
-    Black--Scholes references.  It is useful as a validation workload, but
-    not representative enough to be the main benchmark.
-
-    \item \textbf{Local-volatility engine performance:} Rust/Rayon is the
-    fastest no-AD local-volatility runtime across the main \(M\)-sweep and
-    the large stress test.  JAX/XLA and C++/OpenMP are close at larger
-    local-volatility sizes, while NumPy is consistently slower. The Rust
-    local-volatility price is not used as correctness evidence because it lies
-    outside the estimated Monte Carlo uncertainty band.
-
-    \item \textbf{AD overhead:} reverse-mode AD is substantially cheaper
-    than forward-mode AD for the scalar-output local-volatility pricing
-    workload.  Reverse-mode overhead is usually around \(2.1\)--\(2.6\times\),
-    while forward-mode overhead is around \(4\)--\(7\times\).
-
-    \item \textbf{Time-step scaling:} runtime grows approximately linearly
-    with the number of local-volatility time steps \(N\), confirming that
-    the workload cost is dominated by repeated scan updates.
-
-    \item \textbf{Memory limits:} JAX reverse-mode AD reaches practical
-    memory limits at large \(M,N\) combinations, including
-    \(M=250k,N=504\) and \(M=1M,N=252\).
-
-    \item \textbf{Thread scaling:} C++ and Rust scale effectively with
-    requested CPU threads, while JAX does not respond meaningfully to the
-    same thread-count controls because XLA manages CPU execution internally.
-
-    \item \textbf{Measurement stability:} key benchmark cells have CV values
-    between 3.23\% and 6.86\%, which is acceptable for interpreting the main
-    performance differences observed in this chapter.
-
-    \item \textbf{Cloud cost-performance:} the final priced cloud comparison
-    shows that instance choice can change both runtime and estimated per-run
-    cost. In the stored comparison, \code{t2d-standard-4} is faster and lower
-    cost per run than \code{n2-standard-4} for the listed best no-AD rows.
-
-    \item \textbf{Budget-aware profiling:} plain SHA halves the full-grid work
-    on the favourable \code{n2-standard-4} cloud slice, but the guarded
-    local-volatility profiler gives the stronger final result. Across five
-    four-vCPU instance types, guarded SHA matches the observed objective
-    oracle while avoiding 13 of 30 full-scale task-level runs. Rust remains the
-    best all-backend price-only performance candidate, but the validated
-    price-only deployment recommendation excludes Rust and selects
-    \code{cpp/none/t2d-standard-4}.
-\end{itemize}
-
-Overall, the results show that MC+AD performance depends strongly on the
-interaction between workload structure, runtime system, differentiation
-mode, parallel execution model, and cloud cost assumptions. The
-local-volatility suite demonstrates that the framework can expose detailed
-runtime, AD, memory, and scaling trade-offs in a reproducible way, while the
-final cloud-profiler experiment demonstrates that cheap probes and SHA can
-reduce full cloud benchmarking work on a favourable measured grid, but also
-shows that robust budget-aware selection requires more conservative or
-uncertainty-aware promotion rules.
+The cloud results show that marginal cost-performance can differ from raw
+runtime ranking. Plain SHA halves full-grid work on the favourable
+\code{n2-standard-4} slice, while the guarded local-volatility profiler matches
+the observed oracle across the five-instance grid and avoids 13 of 30
+full-scale task-level runs. These profiler results are promising, but scoped to
+the measured grids and should be read together with the limitations above.

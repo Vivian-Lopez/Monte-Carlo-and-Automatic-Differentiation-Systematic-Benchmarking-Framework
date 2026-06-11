@@ -336,21 +336,12 @@ per-thread RNG initialisation and a \texttt{sum} reduction. The softplus
 is implemented inline as \texttt{z.max(0.0) + (-z.abs()).exp().ln\_1p()}.
 
 \paragraph{Engine~5 --- CUDA / PyCUDA.}
-\texttt{CUDAMonteCarloEngine} compiles and launches CUDA kernels at runtime via
-PyCUDA. The engine is probed at server startup with a 128-path trial run; if
-CUDA initialisation fails it is silently marked unavailable and excluded from
-the engine registry. The kernel uses one thread per Monte Carlo path. Each
-thread initialises its own \texttt{curandState} via
-\texttt{curand\_init(seed, thread\_index, 0, \&state)}, using the thread index
-as the sequence number so that statistical independence is guaranteed
-regardless of the block/grid layout. Each thread draws $Z$ via
-\texttt{curand\_normal\_double}, computes the GBM terminal price, and writes
-the discounted payoff to a global output array which the host reduces with
-\texttt{np.mean}. Forward-mode Delta is implemented in a separate kernel using
-the pathwise estimator: $\partial S_T / \partial S_0 = S_T/S_0$, so the pathwise
-Delta is $\mathbf{1}_{\{S_T > K\}}(S_T/S_0)$ for a call and
-$-\mathbf{1}_{\{S_T < K\}}(S_T/S_0)$ for a put. The CUDA engine supports the
-European workload only.
+\texttt{CUDAMonteCarloEngine} is included as European-only prototype GPU
+infrastructure. It compiles PyCUDA kernels at runtime, probes availability with
+a small startup run, and is excluded automatically when CUDA is unavailable. It
+supports no-AD European pricing and a pathwise European Delta kernel, but the
+final quantitative conclusions are based on the CPU engines and cloud CPU
+instances evaluated in Chapter~6.
 
 \section{Layer~3 --- Benchmark Runner}
 \label{sec:runner-layer}

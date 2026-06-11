@@ -39,6 +39,16 @@ Yuanming Hu, Shuchang Liu, Matthias Zwicker, Zhendong Su, and Yizhou Sun.
 \newblock Difftaichi: Differentiable programming for physical simulation.
 \newblock {\em arXiv preprint arXiv:1910.00935}, 2020.
 
+\bibitem{giles2006smoking}
+Michael~B. Giles and Paul Glasserman.
+\newblock Smoking adjoints: Fast monte carlo greeks.
+\newblock {\em Risk}, 19(1):88--92, 2006.
+
+\bibitem{capriotti2011fast}
+Luca Capriotti.
+\newblock Fast greeks by algorithmic differentiation.
+\newblock {\em Journal of Computational Finance}, 14(3):3--35, 2011.
+
 \bibitem{weber2025carlojl}
 Lukas Weber.
 \newblock Carlo.jl: A general framework for monte carlo simulations in julia.

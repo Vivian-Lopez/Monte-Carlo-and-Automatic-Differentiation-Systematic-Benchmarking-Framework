@@ -46,82 +46,31 @@ exposes a different backend ranking from the two European-style workloads.
 \section{Connection to the Research Questions}
 \label{sec:exp-rq-mapping}
 
-Table~\ref{tab:exp-rq-mapping} maps the project research questions to the
-experiments that generate the evidence used in the results chapter. Cloud
-hardware is evaluated through the final cost-performance and profiler
-experiments.
+Table~\ref{tab:exp-rq-mapping} maps the Chapter~1 research questions directly
+to the experimental evidence used in Chapter~6.
 
 \begin{table}[htbp]
 \centering
-\small
+\footnotesize
 \caption{Mapping from research questions to experimental evidence.}
 \label{tab:exp-rq-mapping}
-\begin{tabularx}{\textwidth}{p{0.28\textwidth}Y p{0.25\textwidth}}
+\begin{tabularx}{\textwidth}{p{0.12\textwidth}Y}
 \toprule
-\textbf{Research question} &
-\textbf{Evidence collected} &
-\textbf{Script(s)} \\
+\textbf{RQ} & \textbf{Evidence collected} \\
 \midrule
-
-How do software stacks affect MC+AD throughput and efficiency? &
-Runtime, throughput, numerical output, and memory measurements are compared
-across NumPy, JAX/XLA, C++/OpenMP, and Rust/Rayon under the same workload
-definitions. &
-\code{run_european_baseline.py};
-\code{run_european_scalability.py};
-\code{run_localvol_suite.py} \\
-
-What are the trade-offs between programming languages, runtimes, and AD support? &
-No-AD runtime and throughput are compared across Python/NumPy, JAX/XLA,
-C++/OpenMP, and Rust/Rayon.  Forward- and reverse-mode AD are evaluated
-through JAX, which provides the AD-capable reference implementation. The
-compiled C++ and Rust engines are therefore native no-AD baselines rather than
-representatives of C++ or Rust AD libraries. &
-\code{run_european_baseline.py};
-\code{run_european_ad_analysis.py};
-\code{run_localvol_suite.py} \\
-
-How do forward- and reverse-mode AD affect MC workloads? &
-AD overhead is measured by comparing JAX no-AD, forward-mode AD, and
-reverse-mode AD runs at matched path counts, time-step counts, warmup
-counts, and repetition counts. &
-\code{run_european_ad_analysis.py};
-\code{run_localvol_suite.py} \\
-
-How do path count and time-step count affect scalability? &
-The experiments sweep the number of Monte Carlo paths \(M\) and, for the
-local-volatility workload, the number of time steps \(N\).  This separates
-path-level scaling from discretisation-cost scaling. &
-\code{run_european_scalability.py};
-\code{run_localvol_suite.py} \\
-
-How do parallelisation strategies affect scaling and bottlenecks? &
-Strong and weak thread-scaling experiments vary the requested CPU thread
-count over \(1,2,4\) threads.  Observed thread counts are stored where
-available to distinguish requested from actual runtime behaviour. &
-\code{run_thread_scalability.py};
-\code{run_localvol_suite.py} \\
-
-Which Google Cloud configurations provide good cost/performance? &
-Runtime and estimated cost per run are compared for priced cloud instances,
-using stored instance metadata and generated report tables. &
-\code{run\_profiler\_vs\_grid.py};
-\code{generate\_report\_assets.py} \\
-
-Can profiling reduce full cloud benchmarking cost? &
-The old profiler and SHA are compared with a full-grid baseline using full
-runs saved, Pareto recovery, runtime regret, cost regret, and rank
-correlation. &
-\code{run\_profiler\_vs\_grid.py} \\
-
-How useful are JAX/XLA-style compiler and AD techniques? &
-JAX is compared with NumPy and compiled CPU engines for no-AD runs, and with
-matched no-AD baselines for forward- and reverse-mode AD overhead. &
-\code{run_european_ad_analysis.py};
-\code{run_localvol_suite.py} \\
+\textbf{RQ1} & Runtime, throughput and memory comparisons across NumPy, JAX/XLA, C++/OpenMP and Rust/Rayon using matched European, local-volatility and cloud workloads. \\
+\textbf{RQ2} & Matched JAX no-AD, forward-mode and reverse-mode runs; C++ and Rust are interpreted as compiled no-AD baselines, not C++/Rust AD-library measurements. \\
+\textbf{RQ3} & Sweeps over path count, local-volatility time-step count, payoff type and surface preset to test ranking changes and bottlenecks. \\
+\textbf{RQ4} & Priced Google Cloud CPU runs using measured runtime and marginal compute cost per run from stored instance metadata. \\
+\textbf{RQ5} & Full-grid, old-profiler, plain SHA and guarded SHA comparisons using full runs saved, Pareto recovery, regret and promotion traces. \\
+\textbf{RQ6} & Explicit discussion of validation, uncertainty, RNG differences, warm/cold timing, cloud-cost scope, thread control and generalisation limits. \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+The main scripts are \code{run_european_baseline.py},
+\code{run_european_ad_analysis.py}, \code{run_localvol_suite.py},
+\code{run_profiler_vs_grid.py}, and \code{run_guarded_sha_local_vol.py}.
 
 \section{Execution Environment}
 \label{sec:exp-environment}
@@ -471,11 +420,14 @@ where \(x\) may be the price, Delta, Vega, or Rho, and \(\epsilon\) is a
 small constant used only to avoid division by zero.
 
 For the local-volatility workload, no closed-form analytical reference is
-available for the chosen parametric surface.  Cross-engine numerical
-consistency is therefore assessed by comparing estimates across engines and
-by checking convergence as \(M\) increases.  Where available, the Monte Carlo
-standard error is used to interpret whether differences between engines are
-consistent with sampling variation.
+available for the chosen parametric surface. Validation is therefore against
+independent implementations of the same discretised model, not against a
+closed-form financial reference. This establishes cross-implementation
+consistency for the chosen discretisation where engines agree, but does not
+prove correctness of the continuous-time model or the financial modelling
+assumptions. Where available, the Monte Carlo standard error is used to
+interpret whether differences between engines are consistent with sampling
+variation.
 
 For selected stability experiments, the coefficient of variation is reported
 as
@@ -495,13 +447,11 @@ where \(s_t\) is the sample standard deviation of the timed repetitions.
 
 Each script performs warmup repetitions before measurement.  This is
 especially important for JAX/XLA, where the first invocation may include
-tracing and compilation.  The reported runtime is the steady-state execution
-time after warmup, not the cold-start compilation time.
-
-Cold-start costs are not ignored entirely.  Where relevant, they are
-discussed separately in the results chapter because they affect short-lived
-interactive workloads differently from repeated production-style simulation
-runs.
+tracing and compilation. Warm timings measure repeated-production performance
+after compilation has occurred. They are appropriate for long-running or
+repeated workloads, but they understate latency and cost for one-off
+invocations. Cold-start JAX timings are therefore discussed separately where
+relevant rather than mixed into the steady-state tables.
 
 This means the cloud cost-performance results should be interpreted as
 steady-state cost-performance. That is the relevant model for repeated
@@ -510,6 +460,17 @@ interactive jobs where JAX/XLA compilation latency would be paid each time. A
 complete cold-start study would report both first-call and warm-call costs for
 each JAX workload and is treated as extension work rather than part of the
 final measured evidence.
+
+
+\subsection{Cloud Cost Model}
+
+Cloud cost is estimated as marginal compute cost: measured runtime multiplied
+by the published or configured hourly instance price. These estimates exclude
+VM startup and shutdown time, idle time, storage, orchestration overhead,
+retries, network costs, and any billing granularity effects. They are therefore
+suitable for comparing relative cost-performance between configurations under
+the benchmark protocol, but should not be interpreted as exact end-to-end cloud
+bills.
 
 \subsection{Repeated Measurements}
 

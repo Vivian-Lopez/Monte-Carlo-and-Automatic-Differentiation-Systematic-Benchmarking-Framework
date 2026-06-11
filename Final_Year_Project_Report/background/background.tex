@@ -41,6 +41,27 @@ that AD is not a single implementation technique. The design choice for this
 project was therefore to treat AD mode as part of the benchmark configuration,
 rather than assuming that all engines expose identical derivative capability.
 
+
+\section{Monte Carlo Greeks in Finance}
+
+In quantitative finance, sensitivities such as Delta, Vega and Rho are often as
+important as the option price itself. Standard Monte Carlo Greek estimators
+include finite differences, pathwise derivative methods, and likelihood-ratio
+or score-function methods~\cite{glasserman2004,giles2006smoking}. Finite
+differences are simple but introduce step-size and noise trade-offs; common
+random numbers reduce variance but do not remove the bias-variance choice.
+Pathwise and likelihood-ratio estimators avoid some of these problems under
+appropriate smoothness or density assumptions.
+
+Adjoint algorithmic differentiation extends this idea computationally: once a
+pricing computation is written as a program, reverse accumulation can produce
+many sensitivities at a cost that is often a small multiple of the primal
+valuation~\cite{capriotti2011fast}. This project does not propose a new Greek
+estimator. Existing work studies Monte Carlo Greeks and AD/AAD methods, while
+this project studies the systems-level benchmarking, reproducibility and
+cost-performance behaviour of implemented MC+AD workloads across backends and
+cloud CPU configurations.
+
 \section{Monte Carlo + AD Challenges}
 
 Combining Monte Carlo simulation with automatic differentiation enables flexible and general sensitivity analysis, but introduces several non-trivial computational challenges.
@@ -57,55 +78,34 @@ These challenges motivate the need for systematic evaluation of MC+AD workloads,
 
 \section{Existing Frameworks}
 
-Several frameworks exist for Monte Carlo simulation and high-performance numerical computing, though few explicitly target the combination of MC and AD across heterogeneous environments.
+Several frameworks exist for Monte Carlo simulation and high-performance
+numerical computing, though few target MC+AD benchmarking across heterogeneous
+backends. Carlo.jl is a relevant example because it separates the Monte Carlo
+algorithm from scheduling, checkpointing, storage and postprocessing, and it
+emphasises reproducible execution~\cite{weber2025carlojl}. Those ideas
+influenced this project: workload definitions, engine execution, measurement
+policy and storage are separated so that benchmark rows remain auditable when
+engines are added or replaced.
 
-Carlo.jl is a notable example of a Monte Carlo framework designed for high-performance simulations in Julia. It provides abstractions for defining simulation workloads, managing parallel execution, and handling reproducibility through structured configuration and checkpointing. Its design emphasises separation between the Monte Carlo algorithm and the surrounding execution infrastructure, enabling reuse and composability of simulation components.
-
-However, Carlo.jl is intentionally scoped to a single language ecosystem and does not directly address cross-language benchmarking, automatic differentiation, or heterogeneous hardware support. While it demonstrates effective scheduling strategies and reproducible execution, it does not provide a general framework for comparing implementations across different programming languages, AD systems, or hardware architectures.
-
-The Carlo.jl paper is especially relevant because it treats the full lifecycle
-of a Monte Carlo computation as part of the framework, not merely as boilerplate
-around an algorithm~\cite{weber2025carlojl}. Users implement a small interface
-for the algorithm itself, while the framework handles scheduling, independent
-runs, checkpointing, storage, and postprocessing. This separation influenced
-the design of the present framework: workload definitions, engine execution,
-measurement policy, and storage are separated so that experiments remain
-auditable when engines are added or replaced.
-
-Carlo.jl also provides a useful model of Monte Carlo-aware parallel scheduling.
-Rather than only distributing different parameter combinations across workers,
-it can assign idle workers to additional independent runs for an unfinished
-task and then combine the resulting estimates. This is possible because
-independent Monte Carlo chains can be averaged. The principle is relevant even
-though this project does not implement MPI scheduling: Monte Carlo parallelism
-exists both across a parameter grid and within a single task, so a benchmark
-must record enough metadata to distinguish engine efficiency from scheduling
-policy.
-
-Another transferable idea from Carlo.jl is its emphasis on reproducibility and
-recoverability. Parameters are generated in a structured way, checkpoints are
-written conservatively, and postprocessed outputs retain parameter and version
-information. This aligns with the database-centred approach used here. Each
-completed benchmark row records the workload configuration, engine, AD mode,
-timing statistics, numerical outputs, software versions, and cloud metadata
-where applicable. The aim is that a reported result should be traceable to a
-specific run rather than reconstructed from memory or console output.
-
-More broadly, existing benchmarking efforts in scientific computing and machine learning often focus on specific domains or workloads, such as linear algebra kernels or neural network training. While these benchmarks provide valuable insights into hardware and compiler performance, they do not capture the unique characteristics of MC+AD workloads, particularly the interaction between stochastic simulation, differentiation, and parallel execution.
-
-This highlights the need for a benchmarking framework that treats Monte Carlo simulation and automatic differentiation as first-class concerns, while enabling fair and reproducible comparison across implementations.
+However, Carlo.jl is intentionally scoped to a single language ecosystem and
+does not directly address cross-language benchmarking, AD support across
+backends, or cloud cost-performance. More broadly, scientific and machine
+learning benchmarks often focus on linear algebra kernels or neural network
+training rather than the interaction between stochastic simulation,
+differentiation and parallel execution. This motivates a framework that treats
+Monte Carlo simulation, AD-capable execution, reproducibility metadata and cloud
+cost as first-class benchmarking concerns.
 
 \section{Hardware Considerations}
 
-The performance of Monte Carlo and MC+AD workloads is strongly influenced by the underlying hardware architecture. While MC simulations are often considered compute-intensive, in practice their performance can be limited by a combination of arithmetic throughput, memory bandwidth, and parallel execution efficiency.
-
-On modern CPUs, performance depends on effective utilisation of vectorisation (SIMD), multi-threading, and cache hierarchies. Poor memory locality or inefficient vectorisation can significantly reduce achievable performance, even for otherwise simple workloads. In the presence of reverse-mode AD, increased memory usage can exacerbate these issues by placing additional pressure on caches and memory bandwidth.
-
-GPUs offer high throughput for data-parallel workloads and are well-suited to large-scale Monte Carlo simulations. However, their performance depends on careful management of memory access patterns, kernel launch overheads, and control-flow divergence. The introduction of AD can further complicate GPU execution, as differentiation may require additional kernel passes, increased memory usage, or limited compiler optimisation opportunities.
-
-In heterogeneous and cloud environments, additional factors such as data transfer overheads, resource contention, and cost efficiency become relevant. High raw performance does not necessarily translate to optimal cost-performance, particularly when specialised hardware incurs higher operational costs.
-
-Understanding these hardware-level effects is essential for interpreting benchmark results and identifying performance bottlenecks in MC+AD workloads.
+MC and MC+AD performance depends on arithmetic throughput, memory bandwidth,
+cache behaviour, vectorisation, multi-threading and runtime overheads. GPUs can
+provide high throughput for large data-parallel simulations, but kernel launch,
+memory transfer, control-flow divergence and AD memory requirements complicate
+the comparison. In cloud environments, raw speed must also be weighed against
+instance price and utilisation. The evaluation therefore reports both runtime
+and cost-performance rather than assuming that the fastest machine is the best
+deployment choice.
 
 \section{Benchmarking Methodology and Reproducibility}
 
@@ -167,22 +167,12 @@ engine-specific optimisations.
 
 \section{Benchmark Reporting Standards}
 
-Large-scale machine-learning benchmarks also provide useful lessons for
-reporting. DAWNBench emphasised end-to-end measurement and transparent
-reporting of optimisation choices~\cite{coleman2017dawnbench,coleman2019dawnbench},
-while MLPerf formalised submission rules and reproducibility requirements for
-machine-learning systems~\cite{mattson2020mlperf}. MC+AD benchmarking is a
-different domain, but the same reporting discipline is valuable: results should
-state the workload, implementation, hardware, software versions, timing
-protocol, and exclusion policy.
-
-This report applies those ideas at project scale. Tables distinguish workload,
-engine, AD mode, path count, and instance type. The experiments chapter
-describes warm-up and repetition policy, while the evaluation chapter separates
-validation, performance, memory limits, cloud cost, and profiler quality. This
-structure is intended to make the results interpretable even where the final
-hardware coverage is necessarily narrower than a full industrial benchmark
-suite.
+Large-scale benchmarks such as DAWNBench and MLPerf emphasise transparent
+reporting of workload, hardware, software versions and measurement protocol
+\cite{coleman2017dawnbench,coleman2019dawnbench,mattson2020mlperf}. This
+report applies the same discipline at project scale: tables identify workload,
+engine, AD mode, path count and instance type, while the experiments chapter
+states warm-up, repetition, validation and exclusion policies.
 
 \section{Budget-Aware Benchmark Selection}
 
@@ -212,14 +202,12 @@ budget to support reliable final decisions.
 
 \section{Summary of Gaps}
 
-Despite extensive work in Monte Carlo simulation, automatic differentiation, and high-performance benchmarking, several gaps remain in the literature.
-
-First, there is a lack of standardised benchmarking frameworks that support Monte Carlo workloads with integrated automatic differentiation across multiple programming languages and execution environments. Existing tools typically focus on a single language or domain, limiting their ability to support fair cross-system comparisons.
-
-Second, the performance characteristics of AD in stochastic simulation contexts are not well understood. While AD has been extensively studied in machine learning, its interaction with Monte Carlo workloads—particularly in terms of memory usage, scaling behaviour, and parallel execution—has received comparatively little attention.
-
-Third, existing benchmarks often fail to capture the full range of factors influencing performance, including hardware configuration, software stack, differentiation mode, and execution strategy. This makes it difficult to draw general conclusions or reproduce results across different environments.
-
-Finally, there is limited support for integrating performance, resource utilisation, and cost considerations into a unified evaluation framework. For practical applications, particularly in cloud environments, understanding cost-performance trade-offs is as important as measuring raw execution speed.
-
-This project addresses these gaps by developing a modular, language-agnostic benchmarking framework for MC+AD workloads, enabling systematic and reproducible evaluation across hardware architectures, software stacks, and differentiation strategies. The framework is designed to expose non-obvious trade-offs in performance, scalability, and resource usage, providing insights that are not readily obtainable from existing tools or benchmarks.
+The literature motivates three gaps addressed by this project. First, existing
+Monte Carlo frameworks rarely combine reproducible MC execution, AD-capable
+workloads, cross-backend comparison and cloud metadata in one benchmark loop.
+Second, AD performance in stochastic simulation is less standardised than in
+machine-learning benchmarks, particularly for memory pressure and parallel
+execution. Third, practical deployment requires cost-performance and profiler
+selection evidence, not only raw runtime. This project addresses these gaps by
+building a modular benchmarking framework and using it to evaluate implemented
+MC+AD workloads across software stacks and cloud CPU configurations.

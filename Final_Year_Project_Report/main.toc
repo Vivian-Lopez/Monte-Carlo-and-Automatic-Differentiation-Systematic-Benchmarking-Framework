@@ -5,17 +5,18 @@
 \contentsline {section}{\numberline {1.3}Research Questions}{6}{section.1.3}%
 \contentsline {section}{\numberline {1.4}Contributions}{6}{section.1.4}%
 \contentsline {section}{\numberline {1.5}Report Structure}{6}{section.1.5}%
-\contentsline {chapter}{\numberline {2}Background and Related Work}{7}{chapter.2}%
-\contentsline {section}{\numberline {2.1}Monte Carlo Simulation}{7}{section.2.1}%
-\contentsline {section}{\numberline {2.2}Automatic Differentiation}{7}{section.2.2}%
-\contentsline {section}{\numberline {2.3}Monte Carlo + AD Challenges}{8}{section.2.3}%
-\contentsline {section}{\numberline {2.4}Existing Frameworks}{8}{section.2.4}%
-\contentsline {section}{\numberline {2.5}Hardware Considerations}{9}{section.2.5}%
-\contentsline {section}{\numberline {2.6}Benchmarking Methodology and Reproducibility}{10}{section.2.6}%
-\contentsline {section}{\numberline {2.7}Compiler Techniques from Machine Learning Systems}{10}{section.2.7}%
-\contentsline {section}{\numberline {2.8}Benchmark Reporting Standards}{10}{section.2.8}%
-\contentsline {section}{\numberline {2.9}Budget-Aware Benchmark Selection}{11}{section.2.9}%
-\contentsline {section}{\numberline {2.10}Summary of Gaps}{11}{section.2.10}%
+\contentsline {chapter}{\numberline {2}Background and Related Work}{8}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Monte Carlo Simulation}{8}{section.2.1}%
+\contentsline {section}{\numberline {2.2}Automatic Differentiation}{8}{section.2.2}%
+\contentsline {section}{\numberline {2.3}Monte Carlo Greeks in Finance}{9}{section.2.3}%
+\contentsline {section}{\numberline {2.4}Monte Carlo + AD Challenges}{9}{section.2.4}%
+\contentsline {section}{\numberline {2.5}Existing Frameworks}{10}{section.2.5}%
+\contentsline {section}{\numberline {2.6}Hardware Considerations}{10}{section.2.6}%
+\contentsline {section}{\numberline {2.7}Benchmarking Methodology and Reproducibility}{10}{section.2.7}%
+\contentsline {section}{\numberline {2.8}Compiler Techniques from Machine Learning Systems}{10}{section.2.8}%
+\contentsline {section}{\numberline {2.9}Benchmark Reporting Standards}{11}{section.2.9}%
+\contentsline {section}{\numberline {2.10}Budget-Aware Benchmark Selection}{11}{section.2.10}%
+\contentsline {section}{\numberline {2.11}Summary of Gaps}{11}{section.2.11}%
 \contentsline {chapter}{\numberline {3}System Design}{12}{chapter.3}%
 \contentsline {section}{\numberline {3.1}Design Goals}{12}{section.3.1}%
 \contentsline {paragraph}{Reproducibility.}{12}{section*.2}%
@@ -33,21 +34,21 @@
 \contentsline {paragraph}{Engine~4 --- Rust / Rayon.}{16}{section*.9}%
 \contentsline {paragraph}{Engine~5 --- CUDA / PyCUDA.}{16}{section*.10}%
 \contentsline {section}{\numberline {3.5}Layer~3 --- Benchmark Runner}{16}{section.3.5}%
-\contentsline {section}{\numberline {3.6}Layer~4 --- Storage}{17}{section.3.6}%
+\contentsline {section}{\numberline {3.6}Layer~4 --- Storage}{16}{section.3.6}%
 \contentsline {paragraph}{Schema.}{17}{section*.11}%
 \contentsline {paragraph}{Auto-migration.}{17}{section*.12}%
 \contentsline {paragraph}{Write paths.}{17}{section*.13}%
 \contentsline {section}{\numberline {3.7}Layer~5 --- REST API}{17}{section.3.7}%
-\contentsline {section}{\numberline {3.8}Layer~6 --- Frontend}{18}{section.3.8}%
+\contentsline {section}{\numberline {3.8}Layer~6 --- Frontend}{17}{section.3.8}%
 \contentsline {section}{\numberline {3.9}Cloud Cost-Performance Design}{18}{section.3.9}%
 \contentsline {section}{\numberline {3.10}Budget-Aware Profiler Design}{18}{section.3.10}%
-\contentsline {subsection}{\numberline {3.10.1}Probe-Based Baseline}{19}{subsection.3.10.1}%
+\contentsline {subsection}{\numberline {3.10.1}Probe-Based Baseline}{18}{subsection.3.10.1}%
 \contentsline {subsection}{\numberline {3.10.2}Successive Halving Profiler}{19}{subsection.3.10.2}%
 \contentsline {section}{\numberline {3.11}Design Decisions and Trade-offs}{19}{section.3.11}%
 \contentsline {paragraph}{Decorator-based workload registration.}{19}{section*.14}%
 \contentsline {paragraph}{Module-level JAX kernels.}{19}{section*.15}%
-\contentsline {paragraph}{Single-pass reverse-mode AD.}{20}{section*.16}%
-\contentsline {paragraph}{\texttt {jax.lax.scan} for the local-volatility loop.}{20}{section*.17}%
+\contentsline {paragraph}{Single-pass reverse-mode AD.}{19}{section*.16}%
+\contentsline {paragraph}{\texttt {jax.lax.scan} for the local-volatility loop.}{19}{section*.17}%
 \contentsline {paragraph}{SQLite over PostgreSQL.}{20}{section*.18}%
 \contentsline {paragraph}{Per-thread RNG streams.}{20}{section*.19}%
 \contentsline {section}{\numberline {3.12}Summary}{20}{section.3.12}%
@@ -86,73 +87,76 @@
 \contentsline {section}{\numberline {5.1}Overview}{30}{section.5.1}%
 \contentsline {section}{\numberline {5.2}Connection to the Research Questions}{30}{section.5.2}%
 \contentsline {section}{\numberline {5.3}Execution Environment}{30}{section.5.3}%
-\contentsline {section}{\numberline {5.4}Workloads}{32}{section.5.4}%
-\contentsline {subsection}{\numberline {5.4.1}European Option under Geometric Brownian Motion}{32}{subsection.5.4.1}%
-\contentsline {subsection}{\numberline {5.4.2}European Option under Parametric Local Volatility}{32}{subsection.5.4.2}%
-\contentsline {subsection}{\numberline {5.4.3}Asian Arithmetic-Average Option}{33}{subsection.5.4.3}%
-\contentsline {section}{\numberline {5.5}Engines and Software Stacks}{33}{section.5.5}%
-\contentsline {section}{\numberline {5.6}Experimental Variables}{33}{section.5.6}%
-\contentsline {subsection}{\numberline {5.6.1}Independent Variables}{33}{subsection.5.6.1}%
-\contentsline {subsection}{\numberline {5.6.2}Dependent Variables}{34}{subsection.5.6.2}%
-\contentsline {subsection}{\numberline {5.6.3}Controlled Variables}{34}{subsection.5.6.3}%
+\contentsline {section}{\numberline {5.4}Workloads}{31}{section.5.4}%
+\contentsline {subsection}{\numberline {5.4.1}European Option under Geometric Brownian Motion}{31}{subsection.5.4.1}%
+\contentsline {subsection}{\numberline {5.4.2}European Option under Parametric Local Volatility}{31}{subsection.5.4.2}%
+\contentsline {subsection}{\numberline {5.4.3}Asian Arithmetic-Average Option}{32}{subsection.5.4.3}%
+\contentsline {section}{\numberline {5.5}Engines and Software Stacks}{32}{section.5.5}%
+\contentsline {section}{\numberline {5.6}Experimental Variables}{32}{section.5.6}%
+\contentsline {subsection}{\numberline {5.6.1}Independent Variables}{32}{subsection.5.6.1}%
+\contentsline {subsection}{\numberline {5.6.2}Dependent Variables}{33}{subsection.5.6.2}%
+\contentsline {subsection}{\numberline {5.6.3}Controlled Variables}{33}{subsection.5.6.3}%
 \contentsline {section}{\numberline {5.7}Metrics}{34}{section.5.7}%
-\contentsline {section}{\numberline {5.8}Measurement Methodology}{35}{section.5.8}%
-\contentsline {subsection}{\numberline {5.8.1}Warmup and JIT Compilation}{35}{subsection.5.8.1}%
-\contentsline {subsection}{\numberline {5.8.2}Repeated Measurements}{35}{subsection.5.8.2}%
-\contentsline {subsection}{\numberline {5.8.3}Randomness and Correctness}{36}{subsection.5.8.3}%
-\contentsline {subsection}{\numberline {5.8.4}Fairness Controls}{36}{subsection.5.8.4}%
-\contentsline {subsection}{\numberline {5.8.5}Data Exclusion Policy}{36}{subsection.5.8.5}%
+\contentsline {section}{\numberline {5.8}Measurement Methodology}{34}{section.5.8}%
+\contentsline {subsection}{\numberline {5.8.1}Warmup and JIT Compilation}{34}{subsection.5.8.1}%
+\contentsline {subsection}{\numberline {5.8.2}Cloud Cost Model}{35}{subsection.5.8.2}%
+\contentsline {subsection}{\numberline {5.8.3}Repeated Measurements}{35}{subsection.5.8.3}%
+\contentsline {subsection}{\numberline {5.8.4}Randomness and Correctness}{35}{subsection.5.8.4}%
+\contentsline {subsection}{\numberline {5.8.5}Fairness Controls}{35}{subsection.5.8.5}%
+\contentsline {subsection}{\numberline {5.8.6}Data Exclusion Policy}{35}{subsection.5.8.6}%
 \contentsline {section}{\numberline {5.9}Experiment Scripts}{36}{section.5.9}%
 \contentsline {section}{\numberline {5.10}Individual Experiment Designs}{36}{section.5.10}%
-\contentsline {section}{\numberline {5.11}Final Cloud and Profiler Experiments}{38}{section.5.11}%
+\contentsline {section}{\numberline {5.11}Final Cloud and Profiler Experiments}{36}{section.5.11}%
 \contentsline {section}{\numberline {5.12}Execution Order and Analysis Queries}{38}{section.5.12}%
 \contentsline {section}{\numberline {5.13}Reproducibility}{38}{section.5.13}%
-\contentsline {section}{\numberline {5.14}Summary}{39}{section.5.14}%
-\contentsline {chapter}{\numberline {6}Results and Discussion}{40}{chapter.6}%
-\contentsline {section}{\numberline {6.1}Overview}{40}{section.6.1}%
-\contentsline {section}{\numberline {6.2}European GBM Validation}{41}{section.6.2}%
-\contentsline {section}{\numberline {6.3}Local-Volatility Smoke Test}{41}{section.6.3}%
-\contentsline {section}{\numberline {6.4}Local-Volatility Engine Scalability}{42}{section.6.4}%
-\contentsline {section}{\numberline {6.5}Local-Volatility AD Scaling with Path Count}{42}{section.6.5}%
-\contentsline {section}{\numberline {6.6}Local-Volatility Scaling with Time Steps}{43}{section.6.6}%
-\contentsline {section}{\numberline {6.7}Local-Volatility AD Scaling with Time Steps}{43}{section.6.7}%
-\contentsline {section}{\numberline {6.8}Memory Pressure and Practical Resource Limits}{44}{section.6.8}%
-\contentsline {section}{\numberline {6.9}Thread Scalability on Local Volatility}{44}{section.6.9}%
-\contentsline {subsection}{\numberline {6.9.1}Strong Scaling}{44}{subsection.6.9.1}%
-\contentsline {subsection}{\numberline {6.9.2}Weak Scaling}{45}{subsection.6.9.2}%
-\contentsline {section}{\numberline {6.10}Surface-Shape Sensitivity}{45}{section.6.10}%
-\contentsline {section}{\numberline {6.11}Timing Stability}{45}{section.6.11}%
-\contentsline {section}{\numberline {6.12}Stress Limit}{46}{section.6.12}%
-\contentsline {section}{\numberline {6.13}Final Cloud Cost-Performance and Profiler Results}{46}{section.6.13}%
-\contentsline {subsection}{\numberline {6.13.1}Correctness and AD Overhead in the Final Cloud Run}{46}{subsection.6.13.1}%
-\contentsline {subsection}{\numberline {6.13.2}Cloud Cost-Performance}{47}{subsection.6.13.2}%
-\contentsline {subsection}{\numberline {6.13.3}Pareto Frontier}{47}{subsection.6.13.3}%
-\contentsline {subsection}{\numberline {6.13.4}Old Profiler versus SHA}{47}{subsection.6.13.4}%
-\contentsline {subsection}{\numberline {6.13.5}Guarded SHA Local-Volatility Profiler}{49}{subsection.6.13.5}%
+\contentsline {section}{\numberline {5.14}Summary}{38}{section.5.14}%
+\contentsline {chapter}{\numberline {6}Results and Discussion}{39}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Overview}{39}{section.6.1}%
+\contentsline {section}{\numberline {6.2}European GBM Validation}{40}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Local-Volatility Smoke Test}{40}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Local-Volatility Engine Scalability}{41}{section.6.4}%
+\contentsline {section}{\numberline {6.5}Local-Volatility AD Scaling with Path Count}{41}{section.6.5}%
+\contentsline {section}{\numberline {6.6}Local-Volatility Scaling with Time Steps}{42}{section.6.6}%
+\contentsline {section}{\numberline {6.7}Local-Volatility AD Scaling with Time Steps}{42}{section.6.7}%
+\contentsline {section}{\numberline {6.8}Memory Pressure and Practical Resource Limits}{43}{section.6.8}%
+\contentsline {section}{\numberline {6.9}Thread Scalability on Local Volatility}{43}{section.6.9}%
+\contentsline {subsection}{\numberline {6.9.1}Strong Scaling}{43}{subsection.6.9.1}%
+\contentsline {subsection}{\numberline {6.9.2}Weak Scaling}{44}{subsection.6.9.2}%
+\contentsline {section}{\numberline {6.10}Surface-Shape Sensitivity}{44}{section.6.10}%
+\contentsline {section}{\numberline {6.11}Timing Stability}{44}{section.6.11}%
+\contentsline {section}{\numberline {6.12}Stress Limit}{45}{section.6.12}%
+\contentsline {section}{\numberline {6.13}Final Cloud Cost-Performance and Profiler Results}{45}{section.6.13}%
+\contentsline {subsection}{\numberline {6.13.1}Correctness and AD Overhead in the Final Cloud Run}{45}{subsection.6.13.1}%
+\contentsline {subsection}{\numberline {6.13.2}Cloud Cost-Performance}{46}{subsection.6.13.2}%
+\contentsline {subsection}{\numberline {6.13.3}Pareto Frontier}{46}{subsection.6.13.3}%
+\contentsline {subsection}{\numberline {6.13.4}Old Profiler versus SHA}{48}{subsection.6.13.4}%
+\contentsline {subsection}{\numberline {6.13.5}Guarded SHA Local-Volatility Profiler}{48}{subsection.6.13.5}%
 \contentsline {subsection}{\numberline {6.13.6}SHA Progression in the Earlier Multi-Workload Grid}{49}{subsection.6.13.6}%
 \contentsline {section}{\numberline {6.14}Cross-Question Discussion}{50}{section.6.14}%
 \contentsline {subsection}{\numberline {6.14.1}Software Stack and Engine Performance}{50}{subsection.6.14.1}%
 \contentsline {subsection}{\numberline {6.14.2}Programming-Language, Runtime and AD-Support Trade-offs}{50}{subsection.6.14.2}%
-\contentsline {subsection}{\numberline {6.14.3}Parallelism and Bottlenecks}{51}{subsection.6.14.3}%
-\contentsline {subsection}{\numberline {6.14.4}Compiler and AD Runtime Techniques}{51}{subsection.6.14.4}%
+\contentsline {subsection}{\numberline {6.14.3}Parallelism and Bottlenecks}{50}{subsection.6.14.3}%
+\contentsline {subsection}{\numberline {6.14.4}Compiler and AD Runtime Techniques}{50}{subsection.6.14.4}%
 \contentsline {subsection}{\numberline {6.14.5}Integrated Scope of the Completed Evaluation}{51}{subsection.6.14.5}%
 \contentsline {section}{\numberline {6.15}Limitations and Threats to Validity}{51}{section.6.15}%
 \contentsline {subsection}{\numberline {6.15.1}Hardware and Cloud Scope}{51}{subsection.6.15.1}%
 \contentsline {subsection}{\numberline {6.15.2}Local-Volatility Correctness}{51}{subsection.6.15.2}%
-\contentsline {subsection}{\numberline {6.15.3}Random Number Generation as a Confounder}{52}{subsection.6.15.3}%
+\contentsline {subsection}{\numberline {6.15.3}Random Number Generation as a Confounder}{51}{subsection.6.15.3}%
 \contentsline {subsection}{\numberline {6.15.4}Warm versus Cold JAX Execution}{52}{subsection.6.15.4}%
-\contentsline {subsection}{\numberline {6.15.5}Memory Measurement}{52}{subsection.6.15.5}%
-\contentsline {subsection}{\numberline {6.15.6}Thread Control}{52}{subsection.6.15.6}%
+\contentsline {subsection}{\numberline {6.15.5}Cloud Cost Scope}{52}{subsection.6.15.5}%
+\contentsline {subsection}{\numberline {6.15.6}Memory Measurement}{52}{subsection.6.15.6}%
+\contentsline {subsection}{\numberline {6.15.7}Thread Control}{52}{subsection.6.15.7}%
 \contentsline {section}{\numberline {6.16}Summary}{52}{section.6.16}%
-\contentsline {chapter}{\numberline {7}Conclusion}{54}{chapter.7}%
-\contentsline {section}{\numberline {7.1}Summary of Work}{54}{section.7.1}%
-\contentsline {section}{\numberline {7.2}Key Findings}{54}{section.7.2}%
-\contentsline {section}{\numberline {7.3}Answering Research Questions}{55}{section.7.3}%
-\contentsline {paragraph}{Hardware and software stacks.}{55}{section*.27}%
-\contentsline {paragraph}{Programming languages, runtimes and AD support.}{55}{section*.28}%
-\contentsline {paragraph}{Cloud cost-performance.}{55}{section*.29}%
-\contentsline {paragraph}{Compiler and AD runtime techniques.}{55}{section*.30}%
-\contentsline {paragraph}{Parallelism and bottlenecks.}{55}{section*.31}%
-\contentsline {section}{\numberline {7.4}Future Work}{55}{section.7.4}%
+\contentsline {chapter}{\numberline {7}Conclusion}{53}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Summary of Work}{53}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Key Findings}{53}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Answering Research Questions}{54}{section.7.3}%
+\contentsline {paragraph}{RQ1. How do different software stacks and execution backends affect the runtime, throughput, and memory behaviour of Monte Carlo workloads?}{54}{section*.27}%
+\contentsline {paragraph}{RQ2. What are the performance and memory trade-offs of automatic differentiation for representative Monte Carlo option-pricing workloads?}{54}{section*.28}%
+\contentsline {paragraph}{RQ3. How do workload structure and scale, including path count, time-step count, and payoff type, affect backend rankings and bottlenecks?}{54}{section*.29}%
+\contentsline {paragraph}{RQ4. Which Google Cloud CPU configurations provide the best marginal cost-performance for the evaluated MC+AD workloads?}{54}{section*.30}%
+\contentsline {paragraph}{RQ5. Can short probe runs and successive-halving style profiling reduce the cost of cloud benchmarking while still recovering near-Pareto-optimal configurations?}{54}{section*.31}%
+\contentsline {paragraph}{RQ6. What are the practical limitations, threats to validity, and generalisation limits of this benchmarking methodology?}{54}{section*.32}%
+\contentsline {section}{\numberline {7.4}Future Work}{54}{section.7.4}%
 \contentsline {section}{\numberline {7.5}Final Remarks}{55}{section.7.5}%
-\contentsline {chapter}{Declarations}{56}{chapter*.32}%
+\contentsline {chapter}{Declarations}{56}{chapter*.33}%
