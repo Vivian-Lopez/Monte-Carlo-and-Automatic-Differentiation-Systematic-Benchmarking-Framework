@@ -24,10 +24,11 @@ profiler-versus-grid evaluation.
 The results show that MC+AD performance cannot be reduced to a single backend
 ranking. The simple European GBM workload is useful for correctness checks, but
 the more demanding local-volatility and Asian workloads change the observed
-trade-offs. Rust/Rayon is the strongest no-AD engine in the main
+trade-offs. Rust/Rayon is the strongest no-AD engine by runtime in the main
 local-volatility results and in the highlighted European/local-volatility cloud
-rows, while JAX/XLA remains essential for AD and is competitive for some
-path-dependent configurations.
+rows, although the Rust local-volatility price requires further RNG-stream
+validation before it should be treated as correctness evidence. JAX/XLA remains
+essential for AD and is competitive for some path-dependent configurations.
 
 The AD results show a clear runtime-memory trade-off. Reverse-mode AD is
 substantially cheaper than forward mode for the scalar-output
@@ -36,13 +37,18 @@ limits at larger \(M,N\) combinations. In the final cloud comparison at
 \(M=100{,}000\), JAX AD overhead ranges from \(1.81\times\) for Asian reverse
 mode to \(4.42\times\) for local-volatility forward mode.
 
-The cloud-profiler result is the strongest final systems contribution. In the
-\code{sha\_cloud\_profiler\_v4} experiment on \code{n2-standard-4}, the full
-grid requires 48 full benchmark cells. SHA selects 24, saving 50.0\% of full
-runs while preserving 100.0\% Pareto recovery and 0.0\% runtime and cost regret
-relative to the full grid. The old profiler also preserves the best decisions,
-but selects 30 full runs, so SHA achieves the same measured decision quality
-with fewer full-scale evaluations.
+The cloud-profiler result is a useful final systems contribution, but the
+evidence is more nuanced than the headline \code{n2-standard-4} result alone.
+In that slice of \code{sha\_cloud\_profiler\_v4}, the full grid requires 48
+full benchmark cells. SHA selects 24, saving 50.0\% of full runs while
+preserving 100.0\% Pareto recovery and 0.0\% runtime and cost regret relative
+to the full grid. However, a post-hoc audit across the six measured instance
+slices shows that SHA is not yet generally reliable: it achieves perfect
+Pareto recovery only on the \code{n2-standard-4} slice, whereas the older
+conservative profiler recovers the Pareto frontier on all six slices while
+using more full-scale evaluations. The correct conclusion is therefore that
+SHA is promising, but needs uncertainty-aware safeguards before it can replace
+the conservative profiler.
 
 \section{Answering Research Questions}
 
@@ -53,12 +59,14 @@ very strong for no-AD workloads, while JAX/XLA is necessary for the reported AD
 measurements and can be competitive when the workload has enough structure to
 benefit from compilation.
 
-\paragraph{Programming languages and AD libraries.}
+\paragraph{Programming languages, runtimes and AD support.}
 C++/OpenMP and Rust/Rayon provide high no-AD throughput and explicit CPU
 parallelism. JAX provides the main AD capability and exposes the practical
-difference between forward and reverse mode. The trade-off is therefore not
-only language performance, but also derivative support, memory behaviour, and
-ease of integration into a reproducible benchmark runner.
+difference between forward and reverse mode. The measured comparison is best
+described as JAX AD versus native no-AD engines, not as a full comparison of AD
+libraries across C++, Rust and Python. The trade-off is therefore not only
+language performance, but also derivative support, memory behaviour, and ease
+of integration into a reproducible benchmark runner.
 
 \paragraph{Cloud cost-performance.}
 The final priced comparison shows that runtime and cost should be considered
@@ -67,13 +75,11 @@ together. For the measured no-AD rows at \(M=100{,}000\),
 \code{n2-standard-4}. This is a measured result under the stored pricing and
 environment assumptions, not a universal claim about all cloud hardware.
 
-\paragraph{AI/ML techniques.}
-JAX/XLA demonstrates that compiler and AD techniques from the AI/ML ecosystem
+\paragraph{Compiler and AD runtime techniques.}
+JAX/XLA demonstrates that compiler and AD techniques from the machine-learning ecosystem
 are relevant to MC workloads, especially when the computation is expressed in a
-form such as \code{jax.lax.scan} that the compiler can optimise. The project
-does not complete mixed precision, GPU auto-tuning, or broader hardware-aware
-scheduling experiments, so the conclusion is deliberately limited to the
-measured XLA and AD evidence.
+form such as \code{jax.lax.scan} that the compiler can optimise. The conclusion
+is deliberately limited to the measured XLA and AD evidence.
 
 \paragraph{Parallelism and bottlenecks.}
 The thread-scaling experiments show effective scaling for C++ and Rust under
@@ -84,32 +90,24 @@ large local-volatility workloads.
 
 \section{Future Work}
 
-The most direct next step is to broaden the cloud study. More instance types,
-regions, repeated cloud runs, and up-to-date pricing snapshots would test
-whether the SHA profiler remains reliable on larger and noisier grids. The
-profiler could also incorporate uncertainty estimates so that promotion
-decisions account explicitly for timing variance and Monte Carlo noise.
-
-GPU execution, distributed execution, mixed precision, and hardware counters
-remain important extensions. The framework already has a CUDA scaffold and
-metadata structure, but the final evaluation does not claim GPU results.
-Extending the benchmark suite to GPUs and distributed workers would make the
-hardware-comparison part of the original proposal much stronger.
-
-Further AD systems and languages would also be valuable. The project evaluates
-JAX AD, but future work could compare Enzyme, C++ AD tools, Rust AD libraries,
-Mojo, or domain-specific quant libraries. Finally, the frontend and API could
-be developed into a more complete dashboard for interactive profiler
-configuration and report artefact generation.
+The most direct next step is to strengthen the cloud-profiler policy with more
+instance types, repeated cloud runs, current pricing snapshots, uncertainty
+estimates, near-tie re-probing, and diversity guards for timing variance,
+scaling crossovers, and Monte Carlo noise. Other useful extensions are GPU and
+distributed execution, mixed precision, hardware counters, and broader AD-system
+coverage such as Enzyme, C++ AD tools, Rust AD libraries, Mojo, or specialist
+quant libraries. Two focused microbenchmarks would also sharpen the performance
+interpretation: pre-generated normals to separate RNG cost from path evolution,
+and cold-start versus warm-start JAX timing to decide when XLA compilation should
+be included in cloud cost-performance decisions. The frontend/API could then be
+extended into a fuller interactive dashboard for profiler configuration and
+report-artefact generation.
 
 \section{Final Remarks}
 
 Overall, the project contributes both a working engineering artefact and an
 empirical methodology. The artefact makes MC+AD experiments reproducible,
-queryable, and extensible across engines. The methodology shows how detailed
-local benchmarking can be combined with cloud cost metadata and successive
-halving to reduce expensive full-grid benchmarking while preserving measured
-selection quality. The final report therefore represents an expanded and
-completed version of the original framework work: it retains the detailed
-technical and experimental narrative, while adding the final cloud,
-cost-performance, Pareto-frontier, AD-overhead, and SHA-profiler results.
+queryable, and extensible across engines. The methodology shows how local
+benchmarking can be combined with cloud cost metadata and successive halving to
+reduce full-grid benchmarking, while the robustness audit explains why
+budget-aware profilers need safeguards before reliability is claimed.

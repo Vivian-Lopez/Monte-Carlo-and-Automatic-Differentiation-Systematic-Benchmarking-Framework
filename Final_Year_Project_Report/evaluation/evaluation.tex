@@ -20,14 +20,12 @@ C++/OpenMP, and Rust/Rayon where available. This provides the main evidence
 for validation, workload scaling, AD overhead, memory pressure, and thread
 behaviour. The second layer is the final cloud-profiler study, which adds
 Google Cloud cost-performance measurements, Pareto-frontier analysis, and
-old-profiler versus SHA selection quality. GPU acceleration, distributed
-execution, broad BLAS-environment sweeps, mixed precision, and Mojo
-vendor-claim validation are not reported as completed experiments in this
-chapter.
+old-profiler versus SHA selection quality. The discussion below only draws
+claims from these measured experiments.
 
 \begin{table}[htbp]
 \centering
-\small
+\footnotesize
 \caption{Result sections and their corresponding evidence.}
 \label{tab:results-roadmap}
 \begin{tabularx}{\textwidth}{p{0.27\textwidth}p{0.28\textwidth}Y}
@@ -90,7 +88,8 @@ The European GBM workload is not the main performance workload in this
 chapter.  Its role is to provide a simple analytical reference before
 interpreting the more expensive local-volatility experiments.  For the
 standard parameter set \(S_0=K=100\), \(r=0.05\), \(\sigma=0.20\), and
-\(T=1\), the Black--Scholes analytical call price is \(10.4506\), with
+\(T=1\), the Black--Scholes analytical call price~\cite{blackscholes1973}
+is \(10.4506\), with
 Delta \(0.6368\), Vega \(37.524\), and Rho \(53.232\).
 
 \begin{table}[htbp]
@@ -162,6 +161,30 @@ cross-engine comparison and different engines may use different random
 number generators.  The larger \(M\)-sweeps below are used for performance
 interpretation.
 
+Because the local-volatility model has no closed-form price, an additional
+uncertainty check was run using an independent batched NumPy simulation with
+\(M=1{,}000{,}000\), \(N=252\), and seed \(12345\). The discounted payoff
+standard deviation from that run was \(14.64743\), giving a Monte Carlo
+standard error of \(0.01465\) for the reference price. Table~\ref{tab:localvol-uncertainty}
+compares this high-\(M\) reference with the largest LV-1 prices. The
+\(z\)-scores use the combined standard error of the reference and the
+corresponding \(M=500{,}000\) estimate, using the reference payoff standard
+deviation as a common estimate of payoff variance.
+
+\input{evaluation/tables/localvol_uncertainty.tex}
+
+This check strengthens the numerical interpretation of the local-volatility
+results. NumPy, C++ and JAX are within approximately \(1.3\) combined standard
+errors of the independent reference, so their price differences are consistent
+with Monte Carlo sampling error. The Rust local-volatility price is outside
+this range; the discrepancy also persists in the \(M=1{,}000{,}000\) stress
+row. For that reason, Rust local-volatility timings are retained as useful
+runtime and scaling measurements, but the Rust local-volatility price is not
+used as numerical validation evidence. The most likely explanation is the
+interaction between Rayon work splitting and per-thread random-number streams,
+which should be audited before treating Rust as a trusted local-volatility
+pricing backend.
+
 \section{Local-Volatility Engine Scalability}
 \label{sec:results-lv1}
 
@@ -222,7 +245,7 @@ path count for all engines.  This is expected because the workload cost is
 roughly proportional to \(M\times N\), and \(N\) is fixed at 252 in this
 experiment.
 
-Rust/Rayon is the fastest no-AD engine across the full path-count sweep.  At
+Rust/Rayon is the fastest no-AD engine by runtime across the full path-count sweep.  At
 \(M=500{,}000\), Rust completes the workload in \(2439.6\) ms, compared with
 \(3062.6\) ms for C++, \(3103.7\) ms for JAX, and \(5022.4\) ms for NumPy.
 This corresponds to approximately \(0.205\) million paths/s for Rust,
@@ -230,6 +253,13 @@ This corresponds to approximately \(0.205\) million paths/s for Rust,
 \(0.100\) million paths/s for NumPy.  Thus, on this local-volatility
 workload, Rust is approximately \(2.1\times\) faster than NumPy and about
 \(1.25\times\) faster than JAX or C++ at the largest tested path count.
+
+The runtime ranking should be read together with the uncertainty check in
+Table~\ref{tab:localvol-uncertainty}. The CPU, C++ and JAX prices are
+statistically consistent with the independent high-\(M\) reference, while the
+Rust local-volatility price requires further RNG-stream validation. Therefore,
+the Rust rows support conclusions about Rayon throughput, but not independent
+local-volatility pricing correctness.
 
 A notable difference from the simple European GBM workload is that JAX
 becomes competitive with C++ on the more expensive multi-step workload.  This
@@ -360,11 +390,11 @@ at \(N=252\) to \(519.4\) ms at \(N=504\), close to a \(2\times\) increase
 when the number of time steps doubles.  JAX and C++ show the same general
 pattern.
 
-Rust remains the fastest engine in this experiment, followed by C++ and JAX.
+Rust remains the fastest engine by runtime in this experiment, followed by C++ and JAX.
 The difference between C++ and JAX is small at \(N=252\), but both are slower
 than Rust.  This reinforces the LV-1 result that the Rust/Rayon
-implementation is the strongest no-AD local-volatility engine in the current
-local environment.
+implementation is the strongest no-AD local-volatility runtime engine in the
+current local environment.
 
 \section{Local-Volatility AD Scaling with Time Steps}
 \label{sec:results-lv4}
@@ -592,13 +622,13 @@ and Rust.
 \begin{threeparttable}
 \caption{LV-7: weak thread scaling (base \(M=50{,}000\) paths/thread, \(N=252\)).}
 \label{tab:lv7-weak-scaling}
-\begin{tabular}{lrrrr}
+\begin{tabularx}{\textwidth}{l>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X>{\centering\arraybackslash}X}
 \toprule
 \textbf{Engine}
-& \textbf{\(T=1,\ M=50k\) ms}
-& \textbf{\(T=2,\ M=100k\) ms}
-& \textbf{\(T=4,\ M=200k\) ms}
-& \textbf{TP speedup \(1\to4\)} \\
+& \textbf{\(T=1\), \(M=50k\) ms}
+& \textbf{\(T=2\), \(M=100k\) ms}
+& \textbf{\(T=4\), \(M=200k\) ms}
+& \textbf{TP speedup} \\
 \midrule
 \texttt{cpp}
 & \(961.8\pm 7.6\)
@@ -616,7 +646,7 @@ and Rust.
 & \(1252.0\pm32.1\)
 & \(1.01\times\) \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \begin{tablenotes}
 \footnotesize
 \item Throughput speedup is computed as
@@ -784,7 +814,7 @@ out-of-memory mechanism.
 \end{threeparttable}
 \end{table}
 
-The stress test reinforces two conclusions.  First, Rust remains faster than
+The stress test reinforces two runtime conclusions.  First, Rust remains faster than
 C++ at large local-volatility path counts: at \(M=1M\), Rust completes in
 \(5028.3\) ms, while C++ takes \(6363.0\) ms.  Second, JAX reverse-mode AD
 has a practical memory limit in the current environment.  It completes
@@ -848,16 +878,18 @@ hourly price difference.
 
 \input{evaluation/tables/cloud_cost_performance.tex}
 
-Figure~\ref{fig:cloud-cost-performance} visualises the same relationship. In
-the stored priced comparison, \code{t2d-standard-4} is faster and lower cost
-per run than \code{n2-standard-4} for the listed best no-AD workloads. This is
-an empirical result for the measured workloads and pricing assumptions, not a
-claim about all machine types or future cloud prices.
+Figure~\ref{fig:cloud-cost-performance} visualises the same relationship, with
+cost per run shown on a logarithmic axis because the absolute costs are small
+and differ by workload. In the stored priced comparison,
+\code{t2d-standard-4} is faster and lower cost per run than
+\code{n2-standard-4} for the listed best no-AD workloads. This is an empirical
+result for the measured workloads and pricing assumptions, not a claim about
+all machine types or future cloud prices.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.82\textwidth]{evaluation/figures/cloud_cost_performance_priced.png}
-    \caption{Runtime and estimated cost per run for best no-AD cloud configurations at \(M=100{,}000\).}
+    \includegraphics[width=\textwidth]{evaluation/figures/cloud_cost_performance_priced.png}
+    \caption{Runtime and log-scale estimated cost per run for best no-AD cloud configurations at \(M=100{,}000\). Lower-left points are preferable.}
     \label{fig:cloud-cost-performance}
 \end{figure}
 
@@ -891,13 +923,42 @@ rank correlation of 1.000, compared with 0.935 for the old profiler evidence.
 
 \input{evaluation/tables/profiler_comparison.tex}
 
-This result directly addresses the cloud resource-selection goal of the
-project. In the measured grid, SHA halves the number of full-scale cloud
-benchmark cells while preserving the full-grid decision quality on the
-reported metrics. The practical significance is that the expensive part of the
-experiment is not merely shifted elsewhere: the SHA probe path budget is
-95.5\% lower than evaluating the grid at full scale, and the mean scaling-law
-extrapolation error is 9.7\%.
+This result is promising for the \code{n2-standard-4} slice, but it should not
+be read as proof that SHA is generally reliable. In the measured headline
+grid, SHA halves the number of full-scale cloud benchmark cells while
+preserving the full-grid decision quality on the reported metrics. The
+practical significance is that the expensive part of the experiment is not
+merely shifted elsewhere: the SHA probe path budget is 95.5\% lower than
+evaluating the grid at full scale, and the mean scaling-law extrapolation
+error is 9.7\%.
+
+\subsection{Cross-Instance Profiler Robustness}
+\label{subsec:cloud-profiler-robustness}
+
+To test whether the headline result generalises beyond one instance slice, the
+same full-grid, Pareto-recovery and regret calculations are applied to all six
+priced instance-type slices stored in \code{sha\_cloud\_profiler\_v4}. Each
+slice contains the same 16 candidate configurations and 48 full-grid cells.
+Table~\ref{tab:profiler-cross-instance} reports the resulting post-hoc
+robustness audit.
+
+\input{evaluation/tables/profiler_cross_instance.tex}
+
+This audit materially changes the interpretation of the profiler result. SHA
+achieves perfect Pareto recovery and zero regret on the headline
+\code{n2-standard-4} grid, but not on the other measured instance slices. In
+five of the six slices SHA prunes too aggressively: it saves more full runs,
+but misses at least one Pareto configuration and often fails to retain the
+fastest \code{european/rust/none} configuration at \(M=100{,}000\). The old
+profiler is less efficient, selecting 30 of 48 full cells in every slice, but
+it recovers the Pareto frontier in all six slices.
+
+The conclusion is therefore narrower and more useful: SHA is a promising
+budget-reduction mechanism, but the current implementation is not yet robust
+enough to replace the conservative profiler across instance types. A stronger
+version should include uncertainty-aware promotion rules, repeated probes for
+near-tie configurations, and a diversity or fastest-probe guard to avoid
+discarding configurations whose scaling improves at larger \(M\).
 
 \subsection{SHA Progression}
 \label{subsec:sha-progression}
@@ -928,7 +989,7 @@ same best runtime configuration as the full grid:
 \label{subsec:discussion-software-stack}
 
 The local-volatility results show that engine choice has a substantial effect
-on throughput.  Rust/Rayon is the fastest no-AD engine across the main
+on throughput.  Rust/Rayon is the fastest no-AD engine by runtime across the main
 \(M\)-sweep and the large stress test.  At \(M=500k\), \(N=252\), Rust is
 about \(2.1\times\) faster than NumPy and about \(1.25\times\) faster than
 JAX or C++.  JAX and C++ are very similar at larger local-volatility sizes,
@@ -940,14 +1001,27 @@ On local volatility, Rust becomes fastest and JAX becomes competitive with
 C++.  This demonstrates that engine rankings depend strongly on workload
 structure.
 
-\subsection{Programming-Language and AD Trade-offs}
+The numerical interpretation is more cautious. The independent uncertainty
+check indicates that NumPy, C++ and JAX agree within estimated Monte Carlo
+error on the local-volatility price, while Rust does not. Thus Rust is best
+interpreted here as evidence for the throughput available from a Rayon-based
+native implementation, not as a fully validated local-volatility pricing
+backend.
+
+\subsection{Programming-Language, Runtime and AD-Support Trade-offs}
 \label{subsec:discussion-language-ad}
 
 The compiled CPU engines provide the strongest no-AD local-volatility
-performance.  Rust/Rayon performs best overall in the local-volatility
-experiments, while C++/OpenMP remains competitive and scales well with
+runtime performance.  Rust/Rayon performs best overall in the local-volatility
+timing experiments, while C++/OpenMP remains competitive and scales well with
 threads.  JAX/XLA is not the fastest no-AD engine, but it provides the main
 AD capability and becomes close to C++ on larger multi-step workloads.
+
+This should not be read as a broad benchmark of AD libraries across languages.
+The completed implementation compares JAX forward- and reverse-mode AD against
+native no-AD engines in NumPy, C++ and Rust. The C++ and Rust engines are
+valuable systems baselines, but they do not evaluate C++ AD tools, Rust AD
+libraries, Enzyme, or source-transformation AD in those languages.
 
 The AD results show a clear trade-off.  Reverse-mode AD is consistently much
 faster than forward-mode AD for the scalar-output local-volatility pricing
@@ -975,32 +1049,26 @@ limited by parallel efficiency and memory bandwidth at higher thread counts,
 while JAX is limited by its managed execution model and, for reverse-mode AD,
 by memory pressure.
 
-\subsection{AI/ML Compiler Techniques}
+\subsection{Compiler and AD Runtime Techniques}
 \label{subsec:discussion-ai-techniques}
 
-The JAX/XLA results provide partial evidence for the relevance of AI/ML
-compiler techniques to Monte Carlo simulation.  JAX is relatively weak on the
+The JAX/XLA results provide evidence for the relevance of compiler and AD
+runtime techniques to Monte Carlo simulation.  JAX is relatively weak on the
 small European GBM baseline, but becomes competitive with C++ on the
 multi-step local-volatility workload.  This suggests that XLA-style compiled
 execution becomes more attractive when the workload has enough repeated
-structure to amortise dispatch and compilation overheads.
+structure to amortise dispatch and compilation overheads. The conclusion is
+therefore limited but useful: in this project, JAX/XLA is most valuable as an
+AD-capable compiled backend rather than as a universally fastest no-AD engine.
 
-However, the results do not test mixed precision, kernel auto-tuning, GPU
-execution, or hardware-aware scheduling beyond JAX/XLA's CPU backend.
-Therefore, the AI/ML-technique conclusion should be limited to compiled XLA
-execution and automatic differentiation support, not to the full range of
-AI-system optimisation techniques.
-
-\subsection{Scope Against the Original Proposal}
+\subsection{Integrated Scope of the Completed Evaluation}
 \label{subsec:discussion-scope}
 
 The completed experiments strongly address local MC+AD benchmarking,
 programming-language comparison, AD overhead, memory/resource limits, thread
 scalability, and a targeted form of cloud resource selection. The final
 cloud-profiler study adds measured cost-performance, Pareto-frontier, and
-profiler-selection evidence. GPU acceleration, distributed execution, broad
-BLAS-environment comparison, and Mojo vendor-claim validation remain valid
-extensions of the framework but are outside the completed result set.
+profiler-selection evidence.
 
 This scope is scientifically useful. The project demonstrates a reproducible
 benchmarking framework that can run multiple engines under matched workload
@@ -1031,9 +1099,37 @@ rankings.
 The European GBM workload has a closed-form Black--Scholes reference, but
 the chosen parametric local-volatility workload does not.  Local-volatility
 correctness is therefore assessed through cross-engine consistency and
-convergence with larger \(M\), rather than by exact analytical error.  Price
-differences between engines may also reflect different random-number
-generators or path-generation implementations.
+convergence with larger \(M\), rather than by exact analytical error.  The
+additional high-\(M\) uncertainty check quantifies this limitation: NumPy, C++
+and JAX agree within estimated Monte Carlo error, while Rust does not. Price
+differences between engines may therefore reflect different random-number
+generators, path-generation implementations, or, in the Rust case, a
+backend-specific RNG-stream issue that requires further investigation.
+
+\subsection{Random Number Generation as a Confounder}
+\label{subsec:limitations-rng}
+
+The engine comparisons measure complete backend implementations rather than
+isolated path-evolution kernels. This is useful for deployment because random
+number generation is part of real Monte Carlo runtime, but it also means the
+measured differences between NumPy, JAX, C++ and Rust combine simulation-kernel
+cost, RNG cost, memory layout, and reduction behaviour. The current results do
+not separate these effects. A stronger microbenchmark would run a
+pre-generated-normal experiment in which all engines consume the same normal
+variates, allowing RNG generation to be separated from path evolution and
+payoff reduction.
+
+\subsection{Warm versus Cold JAX Execution}
+\label{subsec:limitations-cold-warm}
+
+The main timing tables report warm steady-state runtimes after configured
+warmup repetitions. This is appropriate for repeated production-style
+simulation and for comparing amortised kernel execution, but it is optimistic
+for short-lived cloud jobs where JAX/XLA compilation may be paid on the
+critical path. The implementation records and discusses compilation effects,
+but the final cloud cost-performance tables do not include a full cold-start
+versus warm-start comparison. Therefore, cloud cost claims should be read as
+steady-state cost-performance rather than one-off job latency.
 
 \subsection{Memory Measurement}
 \label{subsec:limitations-memory-measurement}
@@ -1052,17 +1148,6 @@ thread counts do not translate into clean JAX scaling experiments.  This is
 why JAX thread results are interpreted as runtime behaviour rather than as a
 controlled thread-count benchmark.
 
-\subsection{Excluded Proposal Extensions}
-\label{subsec:limitations-excluded-extensions}
-
-The original project proposal included cloud resource selection, GPU
-acceleration, distributed execution, mixed precision, BLAS backend sweeps, and
-Mojo vendor-claim validation. Cloud resource selection is partially completed
-through the final cost-performance and profiler results. GPU acceleration,
-distributed execution, mixed precision, wider BLAS sweeps, and Mojo
-vendor-claim validation are future extensions that the framework is designed
-to support, but they are not part of the completed experimental evidence.
-
 \section{Summary}
 \label{sec:results-summary}
 
@@ -1075,9 +1160,11 @@ The main findings are as follows.
     not representative enough to be the main benchmark.
 
     \item \textbf{Local-volatility engine performance:} Rust/Rayon is the
-    fastest no-AD local-volatility engine across the main \(M\)-sweep and
+    fastest no-AD local-volatility runtime across the main \(M\)-sweep and
     the large stress test.  JAX/XLA and C++/OpenMP are close at larger
-    local-volatility sizes, while NumPy is consistently slower.
+    local-volatility sizes, while NumPy is consistently slower. The Rust
+    local-volatility price is not used as correctness evidence because it lies
+    outside the estimated Monte Carlo uncertainty band.
 
     \item \textbf{AD overhead:} reverse-mode AD is substantially cheaper
     than forward-mode AD for the scalar-output local-volatility pricing
@@ -1106,9 +1193,12 @@ The main findings are as follows.
     cost per run than \code{n2-standard-4} for the listed best no-AD rows.
 
     \item \textbf{Budget-aware profiling:} SHA selects 24 of 48 full-grid
-    benchmark cells, saving 50.0\% of full runs while preserving 100.0\%
-    Pareto recovery and 0.0\% runtime and cost regret in the final measured
-    cloud grid.
+    benchmark cells on \code{n2-standard-4}, saving 50.0\% of full runs while
+    preserving 100.0\% Pareto recovery and 0.0\% runtime and cost regret in
+    that grid. A cross-instance audit shows that this is promising but not yet
+    generally reliable: SHA achieves perfect recovery on only one of six
+    measured instance slices, while the older conservative profiler recovers
+    the Pareto frontier on all six.
 \end{itemize}
 
 Overall, the results show that MC+AD performance depends strongly on the
@@ -1117,5 +1207,6 @@ mode, parallel execution model, and cloud cost assumptions. The
 local-volatility suite demonstrates that the framework can expose detailed
 runtime, AD, memory, and scaling trade-offs in a reproducible way, while the
 final cloud-profiler experiment demonstrates that cheap probes and SHA can
-reduce full cloud benchmarking work without losing decision quality on the
-measured grid.
+reduce full cloud benchmarking work on a favourable measured grid, but also
+shows that robust budget-aware selection requires more conservative or
+uncertainty-aware promotion rules.

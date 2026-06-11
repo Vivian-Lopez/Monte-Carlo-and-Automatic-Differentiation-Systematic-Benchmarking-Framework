@@ -1,0 +1,7 @@
+instance_type,candidate_configurations,full_runs,old_runs,sha_runs,sha_saved_pct,old_pareto_recovery_pct,sha_pareto_recovery_pct,sha_runtime_regret_pct,sha_cost_regret_pct,best_config,sha_best_config,old_best_config
+c2d-standard-4,16,48,30,18,62.5,100.0,66.66666666666667,125.89827677312691,125.89827677312694,european/rust/none,european/cpp/none,european/rust/none
+e2-standard-4,16,48,30,21,56.25,100.0,66.66666666666667,93.4457192763585,93.4457192763585,european/rust/none,european/cpp/none,european/rust/none
+e2-standard-8,16,48,30,18,62.5,100.0,66.66666666666667,34.582120835853736,34.582120835853736,european/rust/none,european/cpp/none,european/rust/none
+n2-standard-4,16,48,30,24,50.0,100.0,100.0,0.0,0.0,european/rust/none,european/rust/none,european/rust/none
+n2d-standard-4,16,48,30,21,56.25,100.0,66.66666666666667,120.89051853379948,120.8905185337995,european/rust/none,european/cpp/none,european/rust/none
+t2d-standard-4,16,48,30,15,68.75,100.0,33.333333333333336,96.39724272128191,96.3972427212819,european/rust/none,european/cpp/none,european/rust/none

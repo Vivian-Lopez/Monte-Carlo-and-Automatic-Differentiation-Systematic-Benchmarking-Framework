@@ -1,3 +1,118 @@
-\begin{thebibliography}{}
+\begin{thebibliography}{10}
+
+\bibitem{glasserman2004}
+Paul Glasserman.
+\newblock {\em Monte Carlo Methods in Financial Engineering}.
+\newblock Springer, New York, 2004.
+
+\bibitem{griewank2008}
+Andreas Griewank and Andrea Walther.
+\newblock {\em Evaluating Derivatives: Principles and Techniques of Algorithmic
+  Differentiation}.
+\newblock SIAM, Philadelphia, 2 edition, 2008.
+
+\bibitem{baydin2018}
+Atilim~Gunes Baydin, Barak~A. Pearlmutter, Alexey~Andreyevich Radul, and
+  Jeffrey~Mark Siskind.
+\newblock Automatic differentiation in machine learning: A survey.
+\newblock {\em Journal of Machine Learning Research}, 18(153):1--43, 2018.
+
+\bibitem{jax2018}
+James Bradbury, Roy Frostig, Peter Hawkins, Matthew~James Johnson, Chris Leary,
+  Dougal Maclaurin, and Skye Wanderman-Milne.
+\newblock {JAX}: Composable transformations of {Python}+{NumPy} programs.
+\newblock \url{https://github.com/jax-ml/jax}, 2018.
+
+\bibitem{moses2021enzyme}
+William~S. Moses and Valentin Churavy.
+\newblock Enzyme: High-performance automatic differentiation of llvm.
+\newblock In {\em Proceedings of the International Conference for High
+  Performance Computing, Networking, Storage and Analysis}, 2021.
+
+\bibitem{innes2019zygote}
+Michael Innes.
+\newblock Zygote: A differentiable programming system for julia.
+\newblock {\em arXiv preprint arXiv:1907.07587}, 2019.
+
+\bibitem{hu2020difftaichi}
+Yuanming Hu, Shuchang Liu, Matthias Zwicker, Zhendong Su, and Yizhou Sun.
+\newblock Difftaichi: Differentiable programming for physical simulation.
+\newblock {\em arXiv preprint arXiv:1910.00935}, 2020.
+
+\bibitem{weber2025carlojl}
+Lukas Weber.
+\newblock Carlo.jl: A general framework for monte carlo simulations in julia.
+\newblock {\em SciPost Physics Codebases}, 49, 2025.
+
+\bibitem{pouchet2012polybench}
+Louis-No{\"e}l Pouchet.
+\newblock Polybench/c 3.2, 2012.
+\newblock Benchmark suite.
+
+\bibitem{treibig2010likwid}
+Jan Treibig, Georg Hager, and Gerhard Wellein.
+\newblock Likwid: A lightweight performance-oriented tool suite for x86
+  multicore environments.
+\newblock In {\em 2010 39th International Conference on Parallel Processing
+  Workshops}, 2010.
+
+\bibitem{intelvtune}
+{Intel Corporation}.
+\newblock Intel vtune profiler, 2025.
+\newblock Software documentation.
+
+\bibitem{xprof2025}
+{OpenXLA Project}.
+\newblock Xprof: Profiling for xla / openxla, 2025.
+\newblock Project documentation.
+
+\bibitem{lattner2020mlir}
+Chris Lattner et~al.
+\newblock Mlir: A compiler infrastructure for the end of moore's law.
+\newblock In {\em Proceedings of the 3rd ACM SIGPLAN International Workshop on
+  Machine Learning and Programming Languages}, 2020.
+
+\bibitem{chen2018tvm}
+Tianqi Chen, Thierry Moreau, Ziheng Jiang, Lianmin Zheng, Eddie Yan, Haichen
+  Shen, et~al.
+\newblock Tvm: An automated end-to-end optimizing compiler for deep learning.
+\newblock In {\em Proceedings of the 13th USENIX Symposium on Operating Systems
+  Design and Implementation}, 2018.
+
+\bibitem{zheng2020ansor}
+Lianmin Zheng, Chengfan Jia, Minmin Sun, Zhao Wu, Cody~Hao Yu, Ahmad Haj-Ali,
+  et~al.
+\newblock Ansor: Generating high-performance tensor programs for deep learning.
+\newblock In {\em Proceedings of the 14th USENIX Symposium on Operating Systems
+  Design and Implementation}, 2020.
+
+\bibitem{micikevicius2017mixed}
+Paulius Micikevicius, Sharan Narang, Jonah Alben, Gregory Diamos, Erich Elsen,
+  David Garcia, et~al.
+\newblock Mixed precision training.
+\newblock {\em arXiv preprint arXiv:1710.03740}, 2017.
+
+\bibitem{coleman2017dawnbench}
+Cody Coleman, Deepak Narayanan, Daniel Kang, Tian Zhao, Jian Zhang, Luigi
+  Nardi, et~al.
+\newblock Dawnbench: An end-to-end deep learning benchmark and competition.
+\newblock {\em arXiv preprint arXiv:1706.04567}, 2017.
+
+\bibitem{coleman2019dawnbench}
+Cody Coleman, Deepak Narayanan, Daniel Kang, Tian Zhao, Jian Zhang, Luigi
+  Nardi, et~al.
+\newblock An analysis of deep learning training times with dawnbench.
+\newblock {\em arXiv preprint arXiv:1908.00799}, 2019.
+
+\bibitem{mattson2020mlperf}
+Peter Mattson, Christine Cheng, Greg Diamos, Cody Coleman, Paulius
+  Micikevicius, David Patterson, et~al.
+\newblock Mlperf training benchmark.
+\newblock {\em Proceedings of Machine Learning and Systems}, 2, 2020.
+
+\bibitem{blackscholes1973}
+Fischer Black and Myron Scholes.
+\newblock The pricing of options and corporate liabilities.
+\newblock {\em Journal of Political Economy}, 81(3):637--654, 1973.
 
 \end{thebibliography}

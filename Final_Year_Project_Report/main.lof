@@ -2,12 +2,12 @@
 \addvspace {10\p@ }
 \addvspace {10\p@ }
 \addvspace {10\p@ }
-\contentsline {figure}{\numberline {3.1}{\ignorespaces High-level system architecture and data flow.}}{14}{figure.3.1}%
+\contentsline {figure}{\numberline {3.1}{\ignorespaces High-level system architecture and data flow.}}{15}{figure.3.1}%
 \addvspace {10\p@ }
 \addvspace {10\p@ }
 \addvspace {10\p@ }
-\contentsline {figure}{\numberline {6.1}{\ignorespaces Runtime and estimated cost per run for best no-AD cloud configurations at \(M=100{,}000\).}}{51}{figure.6.1}%
-\contentsline {figure}{\numberline {6.2}{\ignorespaces Runtime versus estimated cost for the final \nolinkurl {n2-standard-4} grid. Pareto-optimal points are highlighted.}}{52}{figure.6.2}%
-\contentsline {figure}{\numberline {6.3}{\ignorespaces SHA active configuration count as probe path budget increases.}}{53}{figure.6.3}%
+\contentsline {figure}{\numberline {6.1}{\ignorespaces Runtime and log-scale estimated cost per run for best no-AD cloud configurations at \(M=100{,}000\). Lower-left points are preferable.}}{54}{figure.6.1}%
+\contentsline {figure}{\numberline {6.2}{\ignorespaces Runtime versus estimated cost for the final \nolinkurl {n2-standard-4} grid. Pareto-optimal points are highlighted.}}{54}{figure.6.2}%
+\contentsline {figure}{\numberline {6.3}{\ignorespaces SHA active configuration count as probe path budget increases.}}{56}{figure.6.3}%
 \addvspace {10\p@ }
 \addvspace {10\p@ }

@@ -1,4 +1,4 @@
-\documentclass[a4paper, twoside]{report}
+\documentclass[a4paper, twoside, openany]{report}
 
 %% Language and font encodings
 \usepackage[english]{babel}
@@ -49,7 +49,7 @@
 \setlist[enumerate]{leftmargin=*, itemsep=0.25em, topsep=0.25em}
 \emergencystretch=2em
 
-\title{Systematic Benchmarking of Monte Carlo Engines with Automatic Differentiation Across Modern Architectures}
+\title{Systematic Benchmarking and Cost-Aware Profiling of Monte Carlo Workloads with Automatic Differentiation}
 \author{Vivian Lopez}
 
 \begin{document}
@@ -71,7 +71,7 @@ Monte Carlo (MC) simulation with automatic differentiation (AD) is widely used i
 
 This project develops a reproducible benchmarking and profiling framework for MC+AD option-pricing workloads across modern software and hardware environments. The framework provides explicit workload specifications, a common engine interface, controlled warm-up and repeated measurement, deterministic random seeding, numerical validation against reference solutions, structured result storage, and environment metadata capture. Using this framework, a set of representative workloads is evaluated across Python/NumPy, JAX, C++, and Rust implementations on both local and cloud-based hardware platforms.
 
-The experimental study focuses on workload regimes rather than isolated headline timings. Constant-volatility European options are used as a baseline terminal-payoff workload, while parametric local-volatility models introduce additional arithmetic complexity and state-dependent dynamics. A path-dependent Asian option workload is further used to stress memory usage and expose differences in backend scaling behaviour. Across these workloads, the project investigates how backend rankings change with workload scale, how forward- and reverse-mode AD alter runtime and memory costs, and how cloud hardware selection affects cost-performance trade-offs.
+The experimental study focuses on workload regimes rather than isolated headline timings. Constant-volatility European options are used as a baseline terminal-payoff workload, while parametric local-volatility models introduce additional arithmetic complexity and state-dependent dynamics. A path-dependent Asian option workload further adds a non-terminal-payoff case to the final cloud-profiler grid. Across these workloads, the project investigates how backend rankings change with workload scale, how forward- and reverse-mode AD alter runtime and memory costs, and how cloud hardware selection affects cost-performance trade-offs.
 
 The primary contribution of the project is a workload-aware profiling methodology for MC+AD systems. Rather than treating backend and hardware selection as a naive exhaustive grid search problem, the proposed approach uses short probe runs to identify dominated configurations and approximate the runtime-cost Pareto frontier before performing more expensive benchmark evaluations. This reframes cloud resource selection as a reproducible, budget-aware systems problem and enables more efficient exploration of hardware/software design choices.
 
@@ -92,8 +92,6 @@ Finally, I would like to thank the Department of Computing at Imperial College L
 \end{abstract}
 
 \tableofcontents
-\listoffigures
-\listoftables
 
 %% =========================
 %% CHAPTER 1: INTRODUCTION
@@ -135,12 +133,10 @@ Finally, I would like to thank the Department of Computing at Imperial College L
 %% =========================
 \input{project/project.tex}
 
-%% =========================
-%% APPENDIX
-%% =========================
-\input{appendix/appendix.tex}
+%% Appendix material is submitted as supporting artefacts in the repository;
+%% it is omitted from the main PDF to stay within the page limit.
 
-\bibliographystyle{alpha}
+\bibliographystyle{unsrt}
 \bibliography{bibs/sample}
 
 \end{document}

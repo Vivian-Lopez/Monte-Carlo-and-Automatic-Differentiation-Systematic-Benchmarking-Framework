@@ -15,9 +15,8 @@ This campaign supports the detailed validation, scalability, AD-overhead,
 thread-scaling, memory-pressure, and workload-sensitivity analysis. Second, a
 final cloud campaign evaluates cost-performance and profiler quality on Google
 Cloud instances, with the headline \texttt{sha\_cloud\_profiler\_v4} run
-executed on \texttt{n2-standard-4} in \texttt{europe-west1-b}. GPU execution,
-distributed execution, mixed precision, and Mojo-based vendor-claim validation
-remain future extensions rather than completed experiments.
+executed on \texttt{n2-standard-4} in \texttt{europe-west1-b}. Claims in the
+results chapter are limited to these measured local and cloud experiments.
 
 The experimental design follows three principles.
 
@@ -50,14 +49,12 @@ exposes a different backend ranking from the two European-style workloads.
 Table~\ref{tab:exp-rq-mapping} maps the project research questions to the
 experiments that generate the evidence used in the results chapter. Cloud
 hardware is evaluated through the final cost-performance and profiler
-experiments. GPU acceleration, distributed execution, and vendor-specific Mojo
-claims are not directly evaluated; they are discussed as scope limitations and
-future work.
+experiments.
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Mapping from research questions to local experiment evidence.}
+\caption{Mapping from research questions to experimental evidence.}
 \label{tab:exp-rq-mapping}
 \begin{tabularx}{\textwidth}{p{0.28\textwidth}Y p{0.25\textwidth}}
 \toprule
@@ -74,10 +71,12 @@ definitions. &
 \code{run_european_scalability.py};
 \code{run_localvol_suite.py} \\
 
-What are the trade-offs between programming languages and AD libraries? &
+What are the trade-offs between programming languages, runtimes, and AD support? &
 No-AD runtime and throughput are compared across Python/NumPy, JAX/XLA,
 C++/OpenMP, and Rust/Rayon.  Forward- and reverse-mode AD are evaluated
-through JAX, which provides the AD-capable reference implementation. &
+through JAX, which provides the AD-capable reference implementation. The
+compiled C++ and Rust engines are therefore native no-AD baselines rather than
+representatives of C++ or Rust AD libraries. &
 \code{run_european_baseline.py};
 \code{run_european_ad_analysis.py};
 \code{run_localvol_suite.py} \\
@@ -115,11 +114,11 @@ runs saved, Pareto recovery, runtime regret, cost regret, and rank
 correlation. &
 \code{run\_profiler\_vs\_grid.py} \\
 
-How far can the framework support broader proposal goals? &
-The framework records enough configuration and environment metadata to
-support cloud, GPU, distributed, mixed-precision, BLAS, or Mojo experiments,
-although not all of these extensions are completed in the final evaluation. &
-All experiment scripts and database records \\
+How useful are JAX/XLA-style compiler and AD techniques? &
+JAX is compared with NumPy and compiled CPU engines for no-AD runs, and with
+matched no-AD baselines for forward- and reverse-mode AD overhead. &
+\code{run_european_ad_analysis.py};
+\code{run_localvol_suite.py} \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -146,7 +145,8 @@ software environment.
 \label{sec:exp-workload-european}
 
 The validation workload prices a European call option under geometric
-Brownian motion (GBM).  Under the risk-neutral measure, the terminal asset
+Brownian motion (GBM), using the Black--Scholes model as the analytical
+reference~\cite{blackscholes1973}. Under the risk-neutral measure, the terminal asset
 price is
 
 \[
@@ -503,6 +503,14 @@ discussed separately in the results chapter because they affect short-lived
 interactive workloads differently from repeated production-style simulation
 runs.
 
+This means the cloud cost-performance results should be interpreted as
+steady-state cost-performance. That is the relevant model for repeated
+simulation or service-style deployment, but not for one-off serverless or
+interactive jobs where JAX/XLA compilation latency would be paid each time. A
+complete cold-start study would report both first-call and warm-call costs for
+each JAX workload and is treated as extension work rather than part of the
+final measured evidence.
+
 \subsection{Repeated Measurements}
 
 Each benchmark cell is measured over multiple timed repetitions.  The
@@ -619,403 +627,121 @@ promotion decisions. \\
 \end{tabularx}
 \end{table}
 
+
 \section{Individual Experiment Designs}
 \label{sec:exp-designs}
 
-\subsection{European GBM Baseline}
-\label{sec:exp-baseline}
+Table~\ref{tab:exp-design-summary} summarises the individual experiment designs.
+The detailed result values are reported in Chapter~\ref{chap:results}; this
+section records the purpose, sweep variables and primary outputs used to produce
+those results without repeating the same script/workload fields in prose.
 
-The European GBM baseline establishes a simple no-AD performance reference
-and a correctness check against the Black--Scholes analytical price.
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Summary of local experiment designs.}
+\label{tab:exp-design-summary}
+\begin{tabularx}{\textwidth}{p{0.19\textwidth}p{0.23\textwidth}Y p{0.22\textwidth}}
+\toprule
+\textbf{Experiment} &
+\textbf{Script / scope} &
+\textbf{Purpose and sweep} &
+\textbf{Primary outputs} \\
+\midrule
+European GBM baseline &
+\code{run_european_baseline.py}; NumPy, JAX, C++, Rust where available &
+No-AD correctness and low-cost engine comparison against Black--Scholes for a fixed European call. &
+Runtime, throughput, price, relative price error, memory, environment metadata. \\
 
-\paragraph{Script.}
-\code{experiments/run_european_baseline.py}
+European GBM AD &
+\code{run_european_ad_analysis.py}; JAX &
+Compares no AD, forward AD and reverse AD for
+\(M\in\{1k,5k,10k,50k,100k\}\), using analytical Greeks as references. &
+AD overhead, Delta/Vega/Rho estimates and errors, runtime, memory. \\
 
-\paragraph{Workload.}
-European GBM with fixed option parameters.
+European scaling &
+\code{run_european_scalability.py}; available engines &
+Sweeps \(M\in\{1k,5k,10k,50k,100k\}\) to identify fixed overheads and large-\(M\) throughput on the simple GBM workload. &
+Runtime, throughput, price error and memory as functions of \(M\). \\
 
-\paragraph{Engines.}
-NumPy CPU, JAX/XLA, C++/OpenMP, and Rust/Rayon where available.
+European thread scaling &
+\code{run_thread_scalability.py}; JAX, C++, Rust where available &
+Runs strong and weak scaling with requested thread counts \(1,2,4\), distinguishing fixed-work and work-per-thread regimes. &
+Runtime, throughput, requested/observed threads and scaling efficiency. \\
 
-\paragraph{Purpose.}
-This experiment provides a low-cost first comparison across engines and
-checks that the framework can run each implementation through the same
-configuration and database-writing path.
+Local-volatility suite &
+\code{run_localvol_suite.py}; LV-0--LV-10 &
+Main performance campaign: smoke test, engine scaling, JAX AD scaling with \(M\), time-step scaling, memory pressure, thread scaling, surface sensitivity, timing stability and stress limits. &
+Runtime, throughput, price, AD overhead, memory, thread metadata and coefficient of variation. \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\paragraph{Primary outputs.}
-Mean runtime, runtime standard deviation, throughput, price estimate,
-relative price error, memory usage, and environment metadata.
-
-\subsection{European GBM AD Overhead and Greek Accuracy}
-\label{sec:exp-ad}
-
-This experiment isolates the marginal cost of automatic differentiation on
-the analytical GBM workload.
-
-\paragraph{Script.}
-\code{experiments/run_european_ad_analysis.py}
-
-\paragraph{Workload.}
-European GBM.
-
-\paragraph{Engine.}
-JAX/XLA.
-
-\paragraph{Sweep.}
-\[
-    M \in
-    \{1{,}000,\ 5{,}000,\ 10{,}000,\ 50{,}000,\ 100{,}000\},
-    \qquad
-    \text{AD mode}
-    \in
-    \{\text{none},\ \text{forward},\ \text{reverse}\}.
-\]
-
-\paragraph{Purpose.}
-The experiment compares no-AD execution with forward- and reverse-mode AD
-under identical workload settings.  It also checks whether AD-computed
-Greeks are numerically consistent with the analytical Black--Scholes Delta,
-Vega, and Rho.
-
-\paragraph{Primary outputs.}
-AD overhead ratio, Greek estimates, Greek errors, runtime, throughput, and
-memory usage.
-
-\subsection{European GBM Path-Count Scalability}
-\label{sec:exp-path-scaling}
-
-This experiment measures how each engine behaves as the number of Monte
-Carlo paths increases on the simple GBM workload.
-
-\paragraph{Script.}
-\code{experiments/run_european_scalability.py}
-
-\paragraph{Workload.}
-European GBM.
-
-\paragraph{Sweep.}
-\[
-    M \in
-    \{1{,}000,\ 5{,}000,\ 10{,}000,\ 50{,}000,\ 100{,}000\}.
-\]
-
-\paragraph{Purpose.}
-The experiment identifies fixed overheads at small path counts and
-throughput behaviour at larger path counts.  It is used as a simple
-reference before interpreting the more expensive local-volatility workload.
-
-\paragraph{Primary outputs.}
-Runtime, throughput, price error, and memory usage as functions of \(M\).
-
-\subsection{European GBM Thread Scalability}
-\label{sec:exp-thread-scaling}
-
-The GBM thread-scaling experiment measures how engines use local CPU
-parallelism on a simple workload.
-
-\paragraph{Script.}
-\code{experiments/run_thread_scalability.py}
-
-\paragraph{Workload.}
-European GBM.
-
-\paragraph{Engines.}
-JAX/XLA and C++/OpenMP, with Rust/Rayon included where supported.
-
-\paragraph{Regimes.}
-Two scaling regimes are evaluated:
-
-\begin{itemize}
-    \item \textbf{Strong scaling:} \(M\) is fixed while requested thread
-    count varies.  Ideal strong scaling means runtime decreases in
-    proportion to the number of threads.
-
-    \item \textbf{Weak scaling:} \(M\) increases in proportion to requested
-    thread count.  Ideal weak scaling means runtime remains approximately
-    constant as total work and total resources increase together.
-\end{itemize}
-
-\paragraph{Primary outputs.}
-Runtime, throughput, requested thread count, observed thread counts, and
-scaling efficiency.
-
-\subsection{Local-Volatility Benchmark Suite}
-\label{sec:exp-localvol-suite}
-
-The local-volatility benchmark suite is the main experimental programme in
-the final evaluation.
-
-\paragraph{Script.}
-\code{experiments/run_localvol_suite.py}
-
-\paragraph{Workload.}
-European local volatility with default daily discretisation \(N=252\),
-unless \(N\) is explicitly swept.
-
-\paragraph{Engines.}
-NumPy CPU, JAX/XLA, C++/OpenMP, and Rust/Rayon where available.  AD modes are
-evaluated through JAX.
-
-\paragraph{Experiment groups.}
-The suite contains the following experiment groups:
-
-\begin{itemize}
-    \item \textbf{LV-0 Smoke test:} checks that all available engines can run
-    the local-volatility workload before expensive measurements are made.
-    This experiment is not reported as a performance result.
-
-    \item \textbf{LV-1 Engine and \(M\)-scalability:} compares no-AD
-    throughput across NumPy, JAX, C++, and Rust for
-    \(M \in
-    \{10{,}000,25{,}000,50{,}000,100{,}000,250{,}000,500{,}000\}\)
-    at \(N=252\).
-
-    \item \textbf{LV-2 JAX AD \(M\)-scaling:} compares no AD,
-    forward-mode AD, and reverse-mode AD in JAX for
-    \(M \in
-    \{5{,}000,10{,}000,25{,}000,50{,}000,100{,}000,250{,}000\}\)
-    at \(N=252\).
-
-    \item \textbf{LV-3 Time-step scaling:} sweeps the number of time steps
-    \(N\) at fixed \(M\) to separate path-count scaling from
-    discretisation-cost scaling.
-
-    \item \textbf{LV-4 JAX AD time-step scaling:} measures how AD overhead
-    changes as the number of time steps increases.
-
-    \item \textbf{LV-5 Memory pressure:} records peak process memory usage
-    for larger local-volatility runs, with particular attention to JAX AD
-    modes.
-
-    \item \textbf{LV-6 Strong thread scaling:} evaluates whether fixed-size
-    local-volatility workloads speed up when the requested CPU thread count
-    is increased over \(1,2,4\).
-
-    \item \textbf{LV-7 Weak thread scaling:} evaluates whether runtime
-    remains stable when both requested thread count and total path count
-    increase together.
-
-    \item \textbf{LV-8 Surface-shape sensitivity:} compares alternative
-    local-volatility surface presets, such as flat, equity-skew, and
-    strong-smile, where supported by the runner.
-
-    \item \textbf{LV-9 Timing stability:} repeats selected key cells with a
-    larger number of timed runs to estimate measurement variability.
-
-    \item \textbf{LV-10 Stress limit:} tests the largest practical
-    local-volatility configurations that fit within the 4-core, 16 GB RAM
-    Codespace environment.
-\end{itemize}
-
-\paragraph{Purpose.}
-This suite tests whether the performance conclusions from the simple GBM
-workload still hold for a more realistic MC+AD workload.  It provides the
-primary evidence for programming-language/runtime comparison, AD overhead,
-path-count scalability, time-step scalability, thread scalability, local
-resource usage, and measurement stability.
-
-\paragraph{Primary outputs.}
-Mean runtime, runtime standard deviation, throughput, price estimate,
-AD overhead ratio, memory usage, requested and observed thread counts, and
-coefficient of variation for selected stability runs.
+The local-volatility suite is the main experimental programme because it tests
+whether conclusions from the simple GBM workload still hold for a multi-step,
+state-dependent MC+AD workload. The GBM experiments remain important as
+analytical correctness anchors and as cheaper baselines for interpreting fixed
+runtime overheads, thread behaviour and JAX AD accuracy.
 
 \section{Final Cloud and Profiler Experiments}
 \label{sec:exp-cloud-profiler}
 
 The final experimental extension evaluates cloud cost-performance and the
-budget-aware profiler. It does not replace the earlier local experiments:
-those experiments provide the detailed workload, AD, scaling, and resource
-analysis. The cloud experiment instead asks whether the completed framework can
-use stored metadata and cheap probes to make cost-aware full-benchmark
-selection decisions.
+budget-aware profiler. It does not replace the earlier local experiments; those
+experiments provide the detailed workload, AD, scaling and resource analysis.
+The cloud experiment instead asks whether the completed framework can use stored
+metadata and cheap probes to make cost-aware full-benchmark selection decisions.
 
-\subsection{Full-Grid Cloud Baseline}
-\label{sec:exp-full-grid-cloud}
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Final cloud/profiler experiment design.}
+\label{tab:cloud-profiler-design}
+\begin{tabularx}{\textwidth}{p{0.23\textwidth}Y p{0.25\textwidth}}
+\toprule
+\textbf{Component} & \textbf{Design} & \textbf{Evaluation criteria} \\
+\midrule
+Full-grid baseline &
+\code{sha_cloud_profiler_v4}, git commit \code{13789b8}, Google Cloud
+\code{n2-standard-4} in \code{europe-west1-b}. The reference grid contains 16
+supported candidate configurations and \(M\in\{10k,50k,100k\}\), giving 48 full
+benchmark cells across European, Asian and local-volatility workloads. &
+Reference runtime, cost per run, correctness, AD overhead and Pareto frontier. \\
 
-The headline full-grid baseline is the \texttt{sha\_cloud\_profiler\_v4}
-experiment. It is recorded at git commit \texttt{13789b8} on a Google Cloud
-\texttt{n2-standard-4} instance in \texttt{europe-west1-b}, with region
-\texttt{europe-west1}. The full-grid baseline contains 16 supported candidate
-configurations and three full path counts,
-\[
-    M \in \{10{,}000,\ 50{,}000,\ 100{,}000\},
-\]
-giving 48 full benchmark cells.
+Old profiler &
+Cheap probe runs rank candidate configurations and select a conservative subset;
+in the final run it selects 30 of the 48 full-grid cells. &
+Full runs saved, Pareto recovery, runtime/cost regret and rank correlation. \\
 
-The candidate configurations span the European, Asian, and local-volatility
-workloads, supported no-AD engines, and JAX AD modes. Unsupported combinations,
-such as AD for compiled no-AD-only engines, are excluded before the grid is
-formed. The full grid provides the reference decisions against which profiler
-quality is judged.
+Successive halving &
+SHA evaluates all candidates at small probe budgets, promotes a smaller active
+set through \(M=1k\), \(5k\) and \(25k\), then selects 24 of the 48 full-grid cells
+for full benchmarking. Post-hoc instance slices are used as a robustness check. &
+Same decision-quality metrics as the old profiler, plus promotion behaviour and
+probe path-budget saving. \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\subsection{Old Profiler Baseline}
-\label{sec:exp-old-profiler}
-
-The old profiler performs cheap probe runs, ranks candidate configurations, and
-selects a conservative subset for full benchmarking. In the final experiment it
-selects 30 of the 48 full-grid cells. Its purpose is to provide a stronger
-baseline than ``no profiling'': SHA must be compared not only with exhaustive
-search, but also with the earlier probe-selection strategy.
-
-\subsection{Successive Halving Profiler}
-\label{sec:exp-sha-profiler}
-
-The SHA profiler evaluates all candidates at low path counts and promotes a
-smaller active set to larger probe budgets. The recorded progression uses probe
-path counts including \(M=1{,}000\), \(M=5{,}000\), and \(M=25{,}000\). After
-the promotion rounds and conservative safeguards, SHA selects 24 of the 48
-full-grid cells for full benchmarking.
-
-The SHA result is evaluated using the same decision-quality criteria as the old
-profiler: full runs saved, Pareto recovery, runtime regret, cost regret,
-Spearman probe-to-full rank correlation, and probe path-budget saving. This
-ensures that the profiler is not credited merely for reducing work; it must
-also preserve the decisions supported by the full grid.
-
-\section{Execution Order}
+\section{Execution Order and Analysis Queries}
 \label{sec:exp-execution-order}
 
-The experiments are run in an order that first validates correctness on a
-simple analytical workload and then moves to the more expensive
-local-volatility suite and final cloud-profiler evaluation.
+Experiments are run from cheapest and most analytically checkable to most
+expensive: European GBM validation; European AD validation; GBM path/thread
+scaling; local-volatility smoke testing; LV-1/LV-2 engine and AD sweeps; LV-3/LV-4
+\(N\)-scaling; LV-5--LV-10 resource, thread, surface, stability and stress tests;
+and finally \code{sha_cloud_profiler_v4}. This order keeps GBM as the correctness
+anchor while making local volatility the main performance benchmark and the cloud
+experiment the main evidence for cost-aware selection.
 
-\begin{enumerate}
-    \item \textbf{European GBM validation:} run the baseline GBM workload and
-    confirm that completed engines produce prices close to the
-    Black--Scholes analytical reference.
-
-    \item \textbf{European AD validation:} run the JAX forward- and
-    reverse-mode AD experiment and compare Delta, Vega, and Rho against
-    Black--Scholes references.
-
-    \item \textbf{European path-count and thread scaling:} run the simpler
-    GBM scalability experiments to establish low-cost baseline behaviour.
-
-    \item \textbf{Local-volatility smoke test:} run LV-0 to confirm that all
-    available engines can execute the multi-step workload.
-
-    \item \textbf{Local-volatility engine and AD sweeps:} run LV-1 and LV-2
-    to collect the main local-volatility performance and AD-overhead data.
-
-    \item \textbf{Local-volatility \(N\)-scaling:} run LV-3 and LV-4 to
-    measure how runtime and AD overhead change with the number of time
-    steps.
-
-    \item \textbf{Local-volatility resource and parallelism experiments:}
-    run LV-5 to LV-10 to evaluate memory usage, thread scaling,
-    surface-shape sensitivity, timing stability, and practical local stress
-    limits.
-
-    \item \textbf{Cloud full-grid and profiler comparison:} run
-    \texttt{sha\_cloud\_profiler\_v4} to compare full-grid benchmarking with
-    the old profiler and SHA under recorded cloud cost metadata.
-\end{enumerate}
-
-This order keeps the analytically validated GBM workload as a correctness
-anchor, while making the local-volatility workload the main performance
-benchmark for detailed scaling analysis and the cloud-profiler experiment the
-main evidence for cost-aware selection.
-
-\section{Database Queries for Analysis}
-\label{sec:exp-analysis-queries}
-
-The final analysis uses database queries over completed runs.  The exact
-query predicates may be adjusted to match the experiment labels stored by
-the runner, but the following views define the main result tables.
-
-\subsection{European Baseline Throughput}
-
-\begin{lstlisting}[style=sqlstyle,language=SQL]
-SELECT engine,
-       mean_runtime_ms,
-       std_runtime_ms,
-       throughput_paths_per_sec,
-       result_value,
-       rel_price_error,
-       memory_peak_mb
-FROM runs
-WHERE experiment_type = 'european_baseline'
-  AND status = 'completed'
-ORDER BY throughput_paths_per_sec DESC;
-\end{lstlisting}
-
-\subsection{European AD Overhead and Greek Accuracy}
-
-\begin{lstlisting}[style=sqlstyle,language=SQL]
-SELECT M,
-       ad_mode,
-       mean_runtime_ms,
-       ad_overhead_ratio,
-       greek_delta,
-       analytical_delta,
-       rel_delta_error,
-       greek_vega,
-       analytical_vega,
-       rel_vega_error,
-       greek_rho,
-       analytical_rho,
-       rel_rho_error
-FROM runs
-WHERE experiment_type = 'european_ad_analysis'
-  AND status = 'completed'
-ORDER BY M, ad_mode;
-\end{lstlisting}
-
-\subsection{Local-Volatility Engine Scaling}
-
-\begin{lstlisting}[style=sqlstyle,language=SQL]
-SELECT experiment_type,
-       engine,
-       M,
-       N,
-       mean_runtime_ms,
-       std_runtime_ms,
-       throughput_paths_per_sec,
-       result_value,
-       memory_peak_mb
-FROM runs
-WHERE experiment_type LIKE 'localvol%'
-  AND ad_mode = 'none'
-  AND status = 'completed'
-ORDER BY experiment_type, M, engine;
-\end{lstlisting}
-
-\subsection{Local-Volatility AD Overhead}
-
-\begin{lstlisting}[style=sqlstyle,language=SQL]
-SELECT experiment_type,
-       M,
-       N,
-       ad_mode,
-       mean_runtime_ms,
-       std_runtime_ms,
-       ad_overhead_ratio,
-       throughput_paths_per_sec,
-       memory_peak_mb,
-       result_value
-FROM runs
-WHERE experiment_type LIKE 'localvol%'
-  AND engine = 'jax'
-  AND status = 'completed'
-ORDER BY experiment_type, N, M, ad_mode;
-\end{lstlisting}
-
-\subsection{Thread Scaling}
-
-\begin{lstlisting}[style=sqlstyle,language=SQL]
-SELECT engine,
-       experiment_type,
-       requested_threads,
-       observed_threads_max,
-       M,
-       N,
-       mean_runtime_ms,
-       throughput_paths_per_sec
-FROM runs
-WHERE experiment_type LIKE '%thread%'
-  AND status = 'completed'
-ORDER BY experiment_type, engine, M, N, requested_threads;
-\end{lstlisting}
+The final analysis is produced from completed rows in the shared SQLite database.
+The views used for Chapter~\ref{chap:results} filter by experiment type, engine,
+AD mode, workload size, status and thread metadata to produce: European baseline
+throughput; European AD overhead and Greek accuracy; local-volatility no-AD
+engine scaling; local-volatility JAX AD overhead; strong/weak thread scaling; and
+cloud profiler decision-quality summaries. The full database and generated CSV
+artefacts are submitted with the project repository, so the exact predicates can
+be audited without printing pages of SQL in the main report.
 
 \section{Reproducibility}
 \label{sec:exp-reproducibility}
@@ -1044,25 +770,6 @@ specific workload, software stack, and hardware environment.  The experiment
 database is append-only during collection: failed, skipped, and completed
 runs are all preserved so that the final analysis does not depend on
 unrecorded manual filtering.
-
-\section{Scope of Excluded Extensions}
-\label{sec:exp-extensions}
-
-The original project proposal included cloud resource selection, GPU
-acceleration, distributed execution, mixed precision, BLAS backend sweeps,
-and vendor-claim validation through emerging languages such as Mojo. Cloud
-resource selection is partially addressed through the final cost-performance
-and profiler experiments. GPU acceleration, distributed execution, mixed
-precision, broader BLAS-environment sweeps, and Mojo vendor-claim validation
-remain future extensions.
-
-The final results therefore combine local CPU benchmarking across NumPy,
-JAX/XLA, C++/OpenMP, and Rust/Rayon with a targeted cloud-profiler study.
-The local campaign provides detailed analysis of local-volatility
-performance, AD overhead, path-count scaling, time-step scaling, thread
-scaling, and measurement stability. The cloud campaign provides measured
-cost-performance, Pareto-frontier, and profiler-selection evidence for the
-completed framework.
 
 \section{Summary}
 \label{sec:exp-summary}

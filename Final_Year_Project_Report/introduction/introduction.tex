@@ -16,7 +16,7 @@ While Monte Carlo simulation, automatic differentiation, and high-performance co
 
 In particular, several gaps can be identified. First, there is no standardised benchmarking framework that supports MC workloads with integrated AD across multiple programming languages and hardware architectures. Second, most AD benchmarking studies are conducted in the context of machine learning, leaving stochastic simulation workloads comparatively underexplored. Third, performance comparisons across systems are often difficult to interpret due to inconsistent experimental setups, lack of reproducibility, and insufficient reporting of configuration details.
 
-Furthermore, modern optimisation techniques developed in the AI/ML community—such as operator fusion, mixed precision, and hardware-aware scheduling—have not been systematically evaluated in the context of MC+AD workloads. Finally, there is limited empirical guidance on selecting appropriate cloud hardware configurations for these workloads, particularly when considering cost-performance trade-offs.
+Furthermore, compiler techniques developed in the machine-learning ecosystem, such as staged execution, graph compilation, and operator fusion, have not been systematically evaluated in the context of MC+AD workloads. Finally, there is limited empirical guidance on selecting appropriate cloud hardware configurations for these workloads, particularly when considering cost-performance trade-offs.
 
 As a result, practitioners lack clear, evidence-based insights into how to design, implement, and deploy efficient MC+AD systems.
 
@@ -25,16 +25,11 @@ As a result, practitioners lack clear, evidence-based insights into how to desig
 This project addresses the following research questions:
 
 \begin{itemize}
-    % \item How do different hardware architectures and software stacks affect the throughput and efficiency of MC+AD workloads?
-    % \item What are the trade-offs between programming languages and AD libraries in terms of performance, maintainability, and parallelism?
-    % \item Which cloud hardware configurations provide the best cost-performance trade-offs for large-scale MC+AD tasks?
-    % \item How can techniques from the AI/ML community be leveraged to improve performance and hardware utilisation in MC+AD workloads?
-    % \item How do different parallelisation strategies impact scalability, and where do performance bottlenecks arise?
-    \item How do different hardware architectures and software stacks affect the throughput and efficiency of MC+AD workloads? 
-    \item What are the trade-offs between programming languages and AD libraries in terms of performance, maintainability, and parallelism?
+    \item How do different hardware environments and software stacks affect the throughput and efficiency of MC+AD workloads? 
+    \item What are the trade-offs between programming-language/runtime choices and the available AD support in terms of performance, maintainability, and parallelism?
     \item Which Google Cloud hardware configurations provide the best cost/performance for large-scale MC+AD tasks?
-    \item How can we leverage the latest AI community techniques to improve training/inference and maximize hardware utilization?
-    \item How do parallelization strategies impact scaling, and where do bottlenecks arise? 
+    \item How useful are JAX/XLA-style compiler and automatic-differentiation techniques for stochastic simulation workloads?
+    \item How do parallelisation strategies impact scaling, and where do bottlenecks arise? 
 
 \end{itemize}
 
@@ -50,7 +45,7 @@ This project makes the following contributions:
     \item An experimental study comparing performance, scalability, and memory behaviour under varying configurations, including differentiation modes and parallelisation strategies.
     \item An analysis of cost-performance trade-offs for MC+AD workloads in cloud computing environments, including measured Google Cloud runs and per-run cost estimates.
     \item A budget-aware profiling methodology based on short probe runs and successive halving, evaluated against a full-grid cloud baseline.
-    \item Insights into the applicability and limits of AI-inspired compiler/runtime techniques, particularly JAX/XLA, for stochastic simulation workloads.
+    \item Insights into the applicability and limits of JAX/XLA-style compiler/runtime techniques for stochastic simulation workloads.
     
 \end{itemize}
 

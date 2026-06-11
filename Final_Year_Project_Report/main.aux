@@ -5,139 +5,163 @@
 \providecommand\HyField@AuxAddToFields[1]{}
 \providecommand\HyField@AuxAddToCoFields[2]{}
 \babel@aux{english}{}
-\@writefile{toc}{\contentsline {chapter}{\numberline {1}Introduction}{7}{chapter.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {1}Introduction}{5}{chapter.1}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\@writefile{toc}{\contentsline {section}{\numberline {1.1}Motivation}{7}{section.1.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {1.2}Problem Statement}{7}{section.1.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {1.3}Research Questions}{8}{section.1.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {1.4}Contributions}{8}{section.1.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {1.5}Report Structure}{8}{section.1.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {chapter}{\numberline {2}Background and Related Work}{9}{chapter.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.1}Motivation}{5}{section.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.2}Problem Statement}{5}{section.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.3}Research Questions}{6}{section.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.4}Contributions}{6}{section.1.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {1.5}Report Structure}{6}{section.1.5}\protected@file@percent }
+\citation{glasserman2004}
+\citation{griewank2008}
+\citation{baydin2018}
+\citation{jax2018}
+\@writefile{toc}{\contentsline {chapter}{\numberline {2}Background and Related Work}{7}{chapter.2}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\@writefile{toc}{\contentsline {section}{\numberline {2.1}Monte Carlo Simulation}{9}{section.2.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2.2}Automatic Differentiation}{9}{section.2.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2.3}Monte Carlo + AD Challenges}{10}{section.2.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2.4}Existing Frameworks}{10}{section.2.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2.5}Hardware Considerations}{10}{section.2.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2.6}Budget-Aware Benchmark Selection}{11}{section.2.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2.7}Summary of Gaps}{11}{section.2.7}\protected@file@percent }
-\@writefile{toc}{\contentsline {chapter}{\numberline {3}System Design}{13}{chapter.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.1}Monte Carlo Simulation}{7}{section.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.2}Automatic Differentiation}{7}{section.2.2}\protected@file@percent }
+\citation{moses2021enzyme}
+\citation{innes2019zygote}
+\citation{hu2020difftaichi}
+\@writefile{toc}{\contentsline {section}{\numberline {2.3}Monte Carlo + AD Challenges}{8}{section.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.4}Existing Frameworks}{8}{section.2.4}\protected@file@percent }
+\citation{weber2025carlojl}
+\@writefile{toc}{\contentsline {section}{\numberline {2.5}Hardware Considerations}{9}{section.2.5}\protected@file@percent }
+\citation{pouchet2012polybench}
+\citation{treibig2010likwid}
+\citation{intelvtune}
+\citation{xprof2025}
+\citation{lattner2020mlir}
+\citation{chen2018tvm}
+\citation{zheng2020ansor}
+\citation{micikevicius2017mixed}
+\citation{coleman2017dawnbench}
+\citation{coleman2019dawnbench}
+\citation{mattson2020mlperf}
+\@writefile{toc}{\contentsline {section}{\numberline {2.6}Benchmarking Methodology and Reproducibility}{10}{section.2.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.7}Compiler Techniques from Machine Learning Systems}{10}{section.2.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.8}Benchmark Reporting Standards}{10}{section.2.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.9}Budget-Aware Benchmark Selection}{11}{section.2.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2.10}Summary of Gaps}{11}{section.2.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {3}System Design}{12}{chapter.3}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\newlabel{chap:system-design}{{3}{13}{System Design}{chapter.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.1}Design Goals}{13}{section.3.1}\protected@file@percent }
-\newlabel{sec:design-goals}{{3.1}{13}{Design Goals}{section.3.1}{}}
-\@writefile{toc}{\contentsline {paragraph}{Reproducibility.}{13}{section*.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Extensibility.}{13}{section*.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Fairness.}{13}{section*.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Traceability.}{13}{section*.7}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3.2}High-Level Architecture}{14}{section.3.2}\protected@file@percent }
-\newlabel{sec:architecture}{{3.2}{14}{High-Level Architecture}{section.3.2}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3.1}{\ignorespaces High-level system architecture and data flow.}}{14}{figure.3.1}\protected@file@percent }
-\newlabel{fig:arch}{{3.1}{14}{High-level system architecture and data flow}{figure.3.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.3}Layer~1 --- Workload Configuration}{14}{section.3.3}\protected@file@percent }
-\newlabel{sec:workload-layer}{{3.3}{14}{Layer~1 --- Workload Configuration}{section.3.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.3.1}Workload~1 --- European Option}{15}{subsection.3.3.1}\protected@file@percent }
-\newlabel{sec:workload-european}{{3.3.1}{15}{Workload~1 --- European Option}{subsection.3.3.1}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3.1}{\ignorespaces Fields of \texttt  {EuropeanOptionConfig}.}}{15}{table.3.1}\protected@file@percent }
-\newlabel{tab:european-fields}{{3.1}{15}{Fields of \texttt {EuropeanOptionConfig}}{table.3.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.3.2}Workload~2 --- European Local-Volatility Option}{15}{subsection.3.3.2}\protected@file@percent }
-\newlabel{sec:workload-localvol}{{3.3.2}{15}{Workload~2 --- European Local-Volatility Option}{subsection.3.3.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3.2}{\ignorespaces Additional fields of \texttt  {EuropeanLocalVolConfig}.}}{15}{table.3.2}\protected@file@percent }
-\newlabel{tab:localvol-fields}{{3.2}{15}{Additional fields of \texttt {EuropeanLocalVolConfig}}{table.3.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.4}Layer~2 --- Engine Interface}{16}{section.3.4}\protected@file@percent }
-\newlabel{sec:engine-layer}{{3.4}{16}{Layer~2 --- Engine Interface}{section.3.4}{}}
-\@writefile{toc}{\contentsline {paragraph}{Engine~1 --- NumPy / CPU.}{16}{section*.8}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Engine~2 --- JAX / XLA.}{16}{section*.9}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Engine~3 --- C++ / OpenMP.}{17}{section*.10}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Engine~4 --- Rust / Rayon.}{17}{section*.11}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Engine~5 --- CUDA / PyCUDA.}{17}{section*.12}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3.5}Layer~3 --- Benchmark Runner}{17}{section.3.5}\protected@file@percent }
-\newlabel{sec:runner-layer}{{3.5}{17}{Layer~3 --- Benchmark Runner}{section.3.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.6}Layer~4 --- Storage}{18}{section.3.6}\protected@file@percent }
-\newlabel{sec:storage-layer}{{3.6}{18}{Layer~4 --- Storage}{section.3.6}{}}
-\@writefile{toc}{\contentsline {paragraph}{Schema.}{18}{section*.13}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Auto-migration.}{18}{section*.14}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Write paths.}{18}{section*.15}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3.7}Layer~5 --- REST API}{18}{section.3.7}\protected@file@percent }
-\newlabel{sec:api-layer}{{3.7}{18}{Layer~5 --- REST API}{section.3.7}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3.3}{\ignorespaces REST API endpoints.}}{19}{table.3.3}\protected@file@percent }
-\newlabel{tab:api-endpoints}{{3.3}{19}{REST API endpoints}{table.3.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.8}Layer~6 --- Frontend}{19}{section.3.8}\protected@file@percent }
-\newlabel{sec:frontend-layer}{{3.8}{19}{Layer~6 --- Frontend}{section.3.8}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.9}Cloud Cost-Performance Design}{19}{section.3.9}\protected@file@percent }
-\newlabel{sec:cloud-cost-design}{{3.9}{19}{Cloud Cost-Performance Design}{section.3.9}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.10}Budget-Aware Profiler Design}{19}{section.3.10}\protected@file@percent }
-\newlabel{sec:profiler-design}{{3.10}{19}{Budget-Aware Profiler Design}{section.3.10}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.10.1}Probe-Based Baseline}{20}{subsection.3.10.1}\protected@file@percent }
-\newlabel{sec:old-profiler-design}{{3.10.1}{20}{Probe-Based Baseline}{subsection.3.10.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.10.2}Successive Halving Profiler}{20}{subsection.3.10.2}\protected@file@percent }
-\newlabel{sec:sha-profiler-design}{{3.10.2}{20}{Successive Halving Profiler}{subsection.3.10.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.11}Design Decisions and Trade-offs}{20}{section.3.11}\protected@file@percent }
-\newlabel{sec:design-decisions}{{3.11}{20}{Design Decisions and Trade-offs}{section.3.11}{}}
-\@writefile{toc}{\contentsline {paragraph}{Decorator-based workload registration.}{20}{section*.16}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Module-level JAX kernels.}{20}{section*.17}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Single-pass reverse-mode AD.}{20}{section*.18}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{\texttt  {jax.lax.scan} for the local-volatility loop.}{21}{section*.19}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{SQLite over PostgreSQL.}{21}{section*.20}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Per-thread RNG streams.}{21}{section*.21}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3.12}Summary}{21}{section.3.12}\protected@file@percent }
-\newlabel{sec:design-summary}{{3.12}{21}{Summary}{section.3.12}{}}
-\@writefile{toc}{\contentsline {chapter}{\numberline {4}Implementation}{22}{chapter.4}\protected@file@percent }
+\newlabel{chap:system-design}{{3}{12}{System Design}{chapter.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.1}Design Goals}{12}{section.3.1}\protected@file@percent }
+\newlabel{sec:design-goals}{{3.1}{12}{Design Goals}{section.3.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{Reproducibility.}{12}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Extensibility.}{12}{section*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Fairness.}{12}{section*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Traceability.}{12}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.2}High-Level Architecture}{13}{section.3.2}\protected@file@percent }
+\newlabel{sec:architecture}{{3.2}{13}{High-Level Architecture}{section.3.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3.1}{\ignorespaces High-level system architecture and data flow.}}{13}{figure.3.1}\protected@file@percent }
+\newlabel{fig:arch}{{3.1}{13}{High-level system architecture and data flow}{figure.3.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.3}Layer~1 --- Workload Configuration}{13}{section.3.3}\protected@file@percent }
+\newlabel{sec:workload-layer}{{3.3}{13}{Layer~1 --- Workload Configuration}{section.3.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3.1}Workload~1 --- European Option}{14}{subsection.3.3.1}\protected@file@percent }
+\newlabel{sec:workload-european}{{3.3.1}{14}{Workload~1 --- European Option}{subsection.3.3.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3.1}{\ignorespaces Fields of \texttt  {EuropeanOptionConfig}.}}{14}{table.3.1}\protected@file@percent }
+\newlabel{tab:european-fields}{{3.1}{14}{Fields of \texttt {EuropeanOptionConfig}}{table.3.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3.2}Workload~2 --- European Local-Volatility Option}{14}{subsection.3.3.2}\protected@file@percent }
+\newlabel{sec:workload-localvol}{{3.3.2}{14}{Workload~2 --- European Local-Volatility Option}{subsection.3.3.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3.2}{\ignorespaces Additional fields of \texttt  {EuropeanLocalVolConfig}.}}{14}{table.3.2}\protected@file@percent }
+\newlabel{tab:localvol-fields}{{3.2}{14}{Additional fields of \texttt {EuropeanLocalVolConfig}}{table.3.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.4}Layer~2 --- Engine Interface}{15}{section.3.4}\protected@file@percent }
+\newlabel{sec:engine-layer}{{3.4}{15}{Layer~2 --- Engine Interface}{section.3.4}{}}
+\@writefile{toc}{\contentsline {paragraph}{Engine~1 --- NumPy / CPU.}{15}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Engine~2 --- JAX / XLA.}{15}{section*.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Engine~3 --- C++ / OpenMP.}{16}{section*.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Engine~4 --- Rust / Rayon.}{16}{section*.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Engine~5 --- CUDA / PyCUDA.}{16}{section*.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.5}Layer~3 --- Benchmark Runner}{16}{section.3.5}\protected@file@percent }
+\newlabel{sec:runner-layer}{{3.5}{16}{Layer~3 --- Benchmark Runner}{section.3.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.6}Layer~4 --- Storage}{17}{section.3.6}\protected@file@percent }
+\newlabel{sec:storage-layer}{{3.6}{17}{Layer~4 --- Storage}{section.3.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{Schema.}{17}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Auto-migration.}{17}{section*.12}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Write paths.}{17}{section*.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.7}Layer~5 --- REST API}{17}{section.3.7}\protected@file@percent }
+\newlabel{sec:api-layer}{{3.7}{17}{Layer~5 --- REST API}{section.3.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3.3}{\ignorespaces REST API endpoints.}}{18}{table.3.3}\protected@file@percent }
+\newlabel{tab:api-endpoints}{{3.3}{18}{REST API endpoints}{table.3.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.8}Layer~6 --- Frontend}{18}{section.3.8}\protected@file@percent }
+\newlabel{sec:frontend-layer}{{3.8}{18}{Layer~6 --- Frontend}{section.3.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.9}Cloud Cost-Performance Design}{18}{section.3.9}\protected@file@percent }
+\newlabel{sec:cloud-cost-design}{{3.9}{18}{Cloud Cost-Performance Design}{section.3.9}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.10}Budget-Aware Profiler Design}{18}{section.3.10}\protected@file@percent }
+\newlabel{sec:profiler-design}{{3.10}{18}{Budget-Aware Profiler Design}{section.3.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.10.1}Probe-Based Baseline}{19}{subsection.3.10.1}\protected@file@percent }
+\newlabel{sec:old-profiler-design}{{3.10.1}{19}{Probe-Based Baseline}{subsection.3.10.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.10.2}Successive Halving Profiler}{19}{subsection.3.10.2}\protected@file@percent }
+\newlabel{sec:sha-profiler-design}{{3.10.2}{19}{Successive Halving Profiler}{subsection.3.10.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.11}Design Decisions and Trade-offs}{19}{section.3.11}\protected@file@percent }
+\newlabel{sec:design-decisions}{{3.11}{19}{Design Decisions and Trade-offs}{section.3.11}{}}
+\@writefile{toc}{\contentsline {paragraph}{Decorator-based workload registration.}{19}{section*.14}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Module-level JAX kernels.}{19}{section*.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Single-pass reverse-mode AD.}{19}{section*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\texttt  {jax.lax.scan} for the local-volatility loop.}{20}{section*.17}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{SQLite over PostgreSQL.}{20}{section*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Per-thread RNG streams.}{20}{section*.19}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.12}Summary}{20}{section.3.12}\protected@file@percent }
+\newlabel{sec:design-summary}{{3.12}{20}{Summary}{section.3.12}{}}
+\@writefile{toc}{\contentsline {chapter}{\numberline {4}Implementation}{21}{chapter.4}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\newlabel{chap:implementation}{{4}{22}{Implementation}{chapter.4}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.1}Overview}{22}{section.4.1}\protected@file@percent }
-\newlabel{sec:impl-overview}{{4.1}{22}{Overview}{section.4.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.2}Core Modules}{22}{section.4.2}\protected@file@percent }
-\newlabel{sec:core-modules}{{4.2}{22}{Core Modules}{section.4.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.1}Workload Registry}{22}{subsection.4.2.1}\protected@file@percent }
-\newlabel{sec:impl-registry}{{4.2.1}{22}{Workload Registry}{subsection.4.2.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.2}Monte Carlo Engine Interface}{23}{subsection.4.2.2}\protected@file@percent }
-\newlabel{sec:impl-engine-interface}{{4.2.2}{23}{Monte Carlo Engine Interface}{subsection.4.2.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.3}NumPy Engine}{23}{subsection.4.2.3}\protected@file@percent }
-\newlabel{sec:impl-numpy}{{4.2.3}{23}{NumPy Engine}{subsection.4.2.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.4}JAX Engine}{23}{subsection.4.2.4}\protected@file@percent }
-\newlabel{sec:impl-jax}{{4.2.4}{23}{JAX Engine}{subsection.4.2.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.5}C++ Engine}{24}{subsection.4.2.5}\protected@file@percent }
-\newlabel{sec:impl-cpp}{{4.2.5}{24}{C++ Engine}{subsection.4.2.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.6}Rust Engine}{24}{subsection.4.2.6}\protected@file@percent }
-\newlabel{sec:impl-rust}{{4.2.6}{24}{Rust Engine}{subsection.4.2.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.7}CUDA Engine}{25}{subsection.4.2.7}\protected@file@percent }
-\newlabel{sec:impl-cuda}{{4.2.7}{25}{CUDA Engine}{subsection.4.2.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.8}Benchmark Runner}{25}{subsection.4.2.8}\protected@file@percent }
-\newlabel{sec:impl-runner}{{4.2.8}{25}{Benchmark Runner}{subsection.4.2.8}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.9}Metrics Collection}{26}{subsection.4.2.9}\protected@file@percent }
-\newlabel{sec:impl-metrics}{{4.2.9}{26}{Metrics Collection}{subsection.4.2.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.10}Storage Layer}{26}{subsection.4.2.10}\protected@file@percent }
-\newlabel{sec:impl-storage}{{4.2.10}{26}{Storage Layer}{subsection.4.2.10}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.11}REST API}{26}{subsection.4.2.11}\protected@file@percent }
-\newlabel{sec:impl-api}{{4.2.11}{26}{REST API}{subsection.4.2.11}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.12}Frontend / Dashboard}{26}{subsection.4.2.12}\protected@file@percent }
-\newlabel{sec:impl-frontend}{{4.2.12}{26}{Frontend / Dashboard}{subsection.4.2.12}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.3}Supported Workloads}{27}{section.4.3}\protected@file@percent }
-\newlabel{sec:impl-workloads}{{4.3}{27}{Supported Workloads}{section.4.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.4}AD Integration}{27}{section.4.4}\protected@file@percent }
-\newlabel{sec:impl-ad}{{4.4}{27}{AD Integration}{section.4.4}{}}
+\newlabel{chap:implementation}{{4}{21}{Implementation}{chapter.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.1}Overview}{21}{section.4.1}\protected@file@percent }
+\newlabel{sec:impl-overview}{{4.1}{21}{Overview}{section.4.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.2}Core Modules}{21}{section.4.2}\protected@file@percent }
+\newlabel{sec:core-modules}{{4.2}{21}{Core Modules}{section.4.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.1}Workload Registry}{21}{subsection.4.2.1}\protected@file@percent }
+\newlabel{sec:impl-registry}{{4.2.1}{21}{Workload Registry}{subsection.4.2.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.2}Monte Carlo Engine Interface}{22}{subsection.4.2.2}\protected@file@percent }
+\newlabel{sec:impl-engine-interface}{{4.2.2}{22}{Monte Carlo Engine Interface}{subsection.4.2.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.3}NumPy Engine}{22}{subsection.4.2.3}\protected@file@percent }
+\newlabel{sec:impl-numpy}{{4.2.3}{22}{NumPy Engine}{subsection.4.2.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.4}JAX Engine}{22}{subsection.4.2.4}\protected@file@percent }
+\newlabel{sec:impl-jax}{{4.2.4}{22}{JAX Engine}{subsection.4.2.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.5}C++ Engine}{23}{subsection.4.2.5}\protected@file@percent }
+\newlabel{sec:impl-cpp}{{4.2.5}{23}{C++ Engine}{subsection.4.2.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.6}Rust Engine}{23}{subsection.4.2.6}\protected@file@percent }
+\newlabel{sec:impl-rust}{{4.2.6}{23}{Rust Engine}{subsection.4.2.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.7}CUDA Engine}{24}{subsection.4.2.7}\protected@file@percent }
+\newlabel{sec:impl-cuda}{{4.2.7}{24}{CUDA Engine}{subsection.4.2.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.8}Benchmark Runner}{24}{subsection.4.2.8}\protected@file@percent }
+\newlabel{sec:impl-runner}{{4.2.8}{24}{Benchmark Runner}{subsection.4.2.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.9}Metrics Collection}{25}{subsection.4.2.9}\protected@file@percent }
+\newlabel{sec:impl-metrics}{{4.2.9}{25}{Metrics Collection}{subsection.4.2.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.10}Storage Layer}{25}{subsection.4.2.10}\protected@file@percent }
+\newlabel{sec:impl-storage}{{4.2.10}{25}{Storage Layer}{subsection.4.2.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.11}REST API}{25}{subsection.4.2.11}\protected@file@percent }
+\newlabel{sec:impl-api}{{4.2.11}{25}{REST API}{subsection.4.2.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.12}Frontend / Dashboard}{25}{subsection.4.2.12}\protected@file@percent }
+\newlabel{sec:impl-frontend}{{4.2.12}{25}{Frontend / Dashboard}{subsection.4.2.12}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.3}Supported Workloads}{26}{section.4.3}\protected@file@percent }
+\newlabel{sec:impl-workloads}{{4.3}{26}{Supported Workloads}{section.4.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.4}AD Integration}{26}{section.4.4}\protected@file@percent }
+\newlabel{sec:impl-ad}{{4.4}{26}{AD Integration}{section.4.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4.1}{\ignorespaces Implemented workload and AD support by engine.}}{26}{table.4.1}\protected@file@percent }
+\newlabel{tab:impl-support-matrix}{{4.1}{26}{Implemented workload and AD support by engine}{table.4.1}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4.5}GPU Support}{27}{section.4.5}\protected@file@percent }
 \newlabel{sec:impl-gpu}{{4.5}{27}{GPU Support}{section.4.5}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4.6}Challenges}{27}{section.4.6}\protected@file@percent }
 \newlabel{sec:impl-challenges}{{4.6}{27}{Challenges}{section.4.6}{}}
-\@writefile{toc}{\contentsline {paragraph}{XLA caching across runs.}{27}{section*.22}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Triple AD passes.}{28}{section*.23}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{\texttt  {for}-loop unrolling in JAX.}{28}{section*.24}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Numerically stable softplus.}{28}{section*.25}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Per-thread RNG reproducibility.}{28}{section*.26}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Optional native components.}{28}{section*.27}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Schema evolution.}{28}{section*.28}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{XLA caching across runs.}{27}{section*.20}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Triple AD passes.}{27}{section*.21}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\texttt  {for}-loop unrolling in JAX.}{27}{section*.22}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Numerically stable softplus.}{27}{section*.23}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Per-thread RNG reproducibility.}{27}{section*.24}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Optional native components.}{27}{section*.25}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Schema evolution.}{28}{section*.26}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {4.7}Cloud Metadata and Cost Support}{28}{section.4.7}\protected@file@percent }
 \newlabel{sec:impl-cloud}{{4.7}{28}{Cloud Metadata and Cost Support}{section.4.7}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4.8}Profiler Implementation}{28}{section.4.8}\protected@file@percent }
 \newlabel{sec:impl-profiler}{{4.8}{28}{Profiler Implementation}{section.4.8}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4.9}Testing}{29}{section.4.9}\protected@file@percent }
-\newlabel{sec:impl-testing}{{4.9}{29}{Testing}{section.4.9}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.9}Testing}{28}{section.4.9}\protected@file@percent }
+\newlabel{sec:impl-testing}{{4.9}{28}{Testing}{section.4.9}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4.10}Dependencies}{29}{section.4.10}\protected@file@percent }
 \newlabel{sec:impl-deps}{{4.10}{29}{Dependencies}{section.4.10}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4.11}Summary}{29}{section.4.11}\protected@file@percent }
@@ -152,8 +176,9 @@
 \newlabel{sec:exp-rq-mapping}{{5.2}{30}{Connection to the Research Questions}{section.5.2}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {5.3}Execution Environment}{30}{section.5.3}\protected@file@percent }
 \newlabel{sec:exp-environment}{{5.3}{30}{Execution Environment}{section.5.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {5.1}{\ignorespaces Mapping from research questions to local experiment evidence.}}{31}{table.5.1}\protected@file@percent }
-\newlabel{tab:exp-rq-mapping}{{5.1}{31}{Mapping from research questions to local experiment evidence}{table.5.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5.1}{\ignorespaces Mapping from research questions to experimental evidence.}}{31}{table.5.1}\protected@file@percent }
+\newlabel{tab:exp-rq-mapping}{{5.1}{31}{Mapping from research questions to experimental evidence}{table.5.1}{}}
+\citation{blackscholes1973}
 \@writefile{toc}{\contentsline {section}{\numberline {5.4}Workloads}{32}{section.5.4}\protected@file@percent }
 \newlabel{sec:exp-workloads}{{5.4}{32}{Workloads}{section.5.4}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.4.1}European Option under Geometric Brownian Motion}{32}{subsection.5.4.1}\protected@file@percent }
@@ -177,207 +202,181 @@
 \newlabel{sec:exp-methodology}{{5.8}{35}{Measurement Methodology}{section.5.8}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.8.1}Warmup and JIT Compilation}{35}{subsection.5.8.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.8.2}Repeated Measurements}{35}{subsection.5.8.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.8.3}Randomness and Correctness}{35}{subsection.5.8.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.8.3}Randomness and Correctness}{36}{subsection.5.8.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.8.4}Fairness Controls}{36}{subsection.5.8.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.8.5}Data Exclusion Policy}{36}{subsection.5.8.5}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {5.9}Experiment Scripts}{36}{section.5.9}\protected@file@percent }
 \newlabel{sec:exp-scripts}{{5.9}{36}{Experiment Scripts}{section.5.9}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {5.10}Individual Experiment Designs}{36}{section.5.10}\protected@file@percent }
 \newlabel{sec:exp-designs}{{5.10}{36}{Individual Experiment Designs}{section.5.10}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.10.1}European GBM Baseline}{36}{subsection.5.10.1}\protected@file@percent }
-\newlabel{sec:exp-baseline}{{5.10.1}{36}{European GBM Baseline}{subsection.5.10.1}{}}
-\@writefile{toc}{\contentsline {paragraph}{Script.}{36}{section*.29}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Workload.}{36}{section*.30}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Engines.}{36}{section*.31}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Purpose.}{36}{section*.32}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {5.3}{\ignorespaces Core experiment scripts and their roles.}}{37}{table.5.3}\protected@file@percent }
 \newlabel{tab:exp-scripts}{{5.3}{37}{Core experiment scripts and their roles}{table.5.3}{}}
-\@writefile{toc}{\contentsline {paragraph}{Primary outputs.}{37}{section*.33}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.10.2}European GBM AD Overhead and Greek Accuracy}{37}{subsection.5.10.2}\protected@file@percent }
-\newlabel{sec:exp-ad}{{5.10.2}{37}{European GBM AD Overhead and Greek Accuracy}{subsection.5.10.2}{}}
-\@writefile{toc}{\contentsline {paragraph}{Script.}{37}{section*.34}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Workload.}{37}{section*.35}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Engine.}{37}{section*.36}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Sweep.}{37}{section*.37}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Purpose.}{37}{section*.38}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Primary outputs.}{37}{section*.39}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.10.3}European GBM Path-Count Scalability}{37}{subsection.5.10.3}\protected@file@percent }
-\newlabel{sec:exp-path-scaling}{{5.10.3}{37}{European GBM Path-Count Scalability}{subsection.5.10.3}{}}
-\@writefile{toc}{\contentsline {paragraph}{Script.}{37}{section*.40}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Workload.}{38}{section*.41}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Sweep.}{38}{section*.42}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Purpose.}{38}{section*.43}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Primary outputs.}{38}{section*.44}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.10.4}European GBM Thread Scalability}{38}{subsection.5.10.4}\protected@file@percent }
-\newlabel{sec:exp-thread-scaling}{{5.10.4}{38}{European GBM Thread Scalability}{subsection.5.10.4}{}}
-\@writefile{toc}{\contentsline {paragraph}{Script.}{38}{section*.45}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Workload.}{38}{section*.46}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Engines.}{38}{section*.47}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Regimes.}{38}{section*.48}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Primary outputs.}{38}{section*.49}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.10.5}Local-Volatility Benchmark Suite}{38}{subsection.5.10.5}\protected@file@percent }
-\newlabel{sec:exp-localvol-suite}{{5.10.5}{38}{Local-Volatility Benchmark Suite}{subsection.5.10.5}{}}
-\@writefile{toc}{\contentsline {paragraph}{Script.}{38}{section*.50}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Workload.}{38}{section*.51}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Engines.}{38}{section*.52}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Experiment groups.}{38}{section*.53}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Purpose.}{39}{section*.54}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Primary outputs.}{39}{section*.55}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5.11}Final Cloud and Profiler Experiments}{39}{section.5.11}\protected@file@percent }
-\newlabel{sec:exp-cloud-profiler}{{5.11}{39}{Final Cloud and Profiler Experiments}{section.5.11}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.11.1}Full-Grid Cloud Baseline}{39}{subsection.5.11.1}\protected@file@percent }
-\newlabel{sec:exp-full-grid-cloud}{{5.11.1}{39}{Full-Grid Cloud Baseline}{subsection.5.11.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.11.2}Old Profiler Baseline}{39}{subsection.5.11.2}\protected@file@percent }
-\newlabel{sec:exp-old-profiler}{{5.11.2}{39}{Old Profiler Baseline}{subsection.5.11.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.11.3}Successive Halving Profiler}{40}{subsection.5.11.3}\protected@file@percent }
-\newlabel{sec:exp-sha-profiler}{{5.11.3}{40}{Successive Halving Profiler}{subsection.5.11.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5.12}Execution Order}{40}{section.5.12}\protected@file@percent }
-\newlabel{sec:exp-execution-order}{{5.12}{40}{Execution Order}{section.5.12}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5.13}Database Queries for Analysis}{40}{section.5.13}\protected@file@percent }
-\newlabel{sec:exp-analysis-queries}{{5.13}{40}{Database Queries for Analysis}{section.5.13}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.13.1}European Baseline Throughput}{40}{subsection.5.13.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.13.2}European AD Overhead and Greek Accuracy}{41}{subsection.5.13.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.13.3}Local-Volatility Engine Scaling}{41}{subsection.5.13.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.13.4}Local-Volatility AD Overhead}{41}{subsection.5.13.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.13.5}Thread Scaling}{42}{subsection.5.13.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5.14}Reproducibility}{42}{section.5.14}\protected@file@percent }
-\newlabel{sec:exp-reproducibility}{{5.14}{42}{Reproducibility}{section.5.14}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5.15}Scope of Excluded Extensions}{42}{section.5.15}\protected@file@percent }
-\newlabel{sec:exp-extensions}{{5.15}{42}{Scope of Excluded Extensions}{section.5.15}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5.16}Summary}{43}{section.5.16}\protected@file@percent }
-\newlabel{sec:exp-summary}{{5.16}{43}{Summary}{section.5.16}{}}
-\@writefile{toc}{\contentsline {chapter}{\numberline {6}Results and Discussion}{44}{chapter.6}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {5.4}{\ignorespaces Summary of local experiment designs.}}{37}{table.5.4}\protected@file@percent }
+\newlabel{tab:exp-design-summary}{{5.4}{37}{Summary of local experiment designs}{table.5.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5.11}Final Cloud and Profiler Experiments}{38}{section.5.11}\protected@file@percent }
+\newlabel{sec:exp-cloud-profiler}{{5.11}{38}{Final Cloud and Profiler Experiments}{section.5.11}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5.5}{\ignorespaces Final cloud/profiler experiment design.}}{38}{table.5.5}\protected@file@percent }
+\newlabel{tab:cloud-profiler-design}{{5.5}{38}{Final cloud/profiler experiment design}{table.5.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5.12}Execution Order and Analysis Queries}{38}{section.5.12}\protected@file@percent }
+\newlabel{sec:exp-execution-order}{{5.12}{38}{Execution Order and Analysis Queries}{section.5.12}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5.13}Reproducibility}{38}{section.5.13}\protected@file@percent }
+\newlabel{sec:exp-reproducibility}{{5.13}{38}{Reproducibility}{section.5.13}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5.14}Summary}{39}{section.5.14}\protected@file@percent }
+\newlabel{sec:exp-summary}{{5.14}{39}{Summary}{section.5.14}{}}
+\citation{blackscholes1973}
+\@writefile{toc}{\contentsline {chapter}{\numberline {6}Results and Discussion}{40}{chapter.6}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\newlabel{chap:results}{{6}{44}{Results and Discussion}{chapter.6}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.1}Overview}{44}{section.6.1}\protected@file@percent }
-\newlabel{sec:results-overview}{{6.1}{44}{Overview}{section.6.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.2}European GBM Validation}{44}{section.6.2}\protected@file@percent }
-\newlabel{sec:results-gbm-validation}{{6.2}{44}{European GBM Validation}{section.6.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.3}Local-Volatility Smoke Test}{44}{section.6.3}\protected@file@percent }
-\newlabel{sec:results-lv0}{{6.3}{44}{Local-Volatility Smoke Test}{section.6.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.1}{\ignorespaces Result sections and their corresponding evidence.}}{45}{table.6.1}\protected@file@percent }
-\newlabel{tab:results-roadmap}{{6.1}{45}{Result sections and their corresponding evidence}{table.6.1}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.2}{\ignorespaces European GBM baseline validation at \(M=10{,}000\).}}{45}{table.6.2}\protected@file@percent }
-\newlabel{tab:gbm-baseline-validation}{{6.2}{45}{European GBM baseline validation at \(M=10{,}000\)}{table.6.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.3}{\ignorespaces LV-0: smoke test (\(M=1{,}000\), \(N=252\), one timed run).}}{45}{table.6.3}\protected@file@percent }
-\newlabel{tab:lv0-smoke}{{6.3}{45}{LV-0: smoke test (\(M=1{,}000\), \(N=252\), one timed run)}{table.6.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.4}Local-Volatility Engine Scalability}{46}{section.6.4}\protected@file@percent }
-\newlabel{sec:results-lv1}{{6.4}{46}{Local-Volatility Engine Scalability}{section.6.4}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.4}{\ignorespaces LV-1: engine scalability on local volatility (\(N=252\), no AD).}}{46}{table.6.4}\protected@file@percent }
-\newlabel{tab:lv1-engine-scalability}{{6.4}{46}{LV-1: engine scalability on local volatility (\(N=252\), no AD)}{table.6.4}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.5}Local-Volatility AD Scaling with Path Count}{46}{section.6.5}\protected@file@percent }
-\newlabel{sec:results-lv2}{{6.5}{46}{Local-Volatility AD Scaling with Path Count}{section.6.5}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.5}{\ignorespaces LV-2: JAX AD path-count scaling on local volatility (\(N=252\)).}}{46}{table.6.5}\protected@file@percent }
-\newlabel{tab:lv2-ad-m-scaling}{{6.5}{46}{LV-2: JAX AD path-count scaling on local volatility (\(N=252\))}{table.6.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.6}Local-Volatility Scaling with Time Steps}{47}{section.6.6}\protected@file@percent }
-\newlabel{sec:results-lv3}{{6.6}{47}{Local-Volatility Scaling with Time Steps}{section.6.6}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.6}{\ignorespaces LV-3: time-step scaling on local volatility (\(M=50{,}000\), no AD).}}{47}{table.6.6}\protected@file@percent }
-\newlabel{tab:lv3-n-scaling}{{6.6}{47}{LV-3: time-step scaling on local volatility (\(M=50{,}000\), no AD)}{table.6.6}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.7}Local-Volatility AD Scaling with Time Steps}{47}{section.6.7}\protected@file@percent }
-\newlabel{sec:results-lv4}{{6.7}{47}{Local-Volatility AD Scaling with Time Steps}{section.6.7}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.7}{\ignorespaces LV-4: JAX AD time-step scaling on local volatility (\(M=25{,}000\)).}}{47}{table.6.7}\protected@file@percent }
-\newlabel{tab:lv4-ad-n-scaling}{{6.7}{47}{LV-4: JAX AD time-step scaling on local volatility (\(M=25{,}000\))}{table.6.7}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.8}Memory Pressure and Practical Resource Limits}{47}{section.6.8}\protected@file@percent }
-\newlabel{sec:results-memory}{{6.8}{47}{Memory Pressure and Practical Resource Limits}{section.6.8}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.8}{\ignorespaces LV-5: JAX memory-pressure experiment.}}{48}{table.6.8}\protected@file@percent }
-\newlabel{tab:lv5-memory}{{6.8}{48}{LV-5: JAX memory-pressure experiment}{table.6.8}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.9}Thread Scalability on Local Volatility}{48}{section.6.9}\protected@file@percent }
-\newlabel{sec:results-thread-scalability}{{6.9}{48}{Thread Scalability on Local Volatility}{section.6.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.9.1}Strong Scaling}{48}{subsection.6.9.1}\protected@file@percent }
-\newlabel{subsec:results-lv6-strong}{{6.9.1}{48}{Strong Scaling}{subsection.6.9.1}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.9}{\ignorespaces LV-6: strong thread scaling (\(M=100{,}000\), \(N=252\)).}}{48}{table.6.9}\protected@file@percent }
-\newlabel{tab:lv6-strong-scaling}{{6.9}{48}{LV-6: strong thread scaling (\(M=100{,}000\), \(N=252\))}{table.6.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.9.2}Weak Scaling}{48}{subsection.6.9.2}\protected@file@percent }
-\newlabel{subsec:results-lv7-weak}{{6.9.2}{48}{Weak Scaling}{subsection.6.9.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.10}{\ignorespaces LV-7: weak thread scaling (base \(M=50{,}000\) paths/thread, \(N=252\)).}}{48}{table.6.10}\protected@file@percent }
-\newlabel{tab:lv7-weak-scaling}{{6.10}{48}{LV-7: weak thread scaling (base \(M=50{,}000\) paths/thread, \(N=252\))}{table.6.10}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.10}Surface-Shape Sensitivity}{49}{section.6.10}\protected@file@percent }
-\newlabel{sec:results-surface-sensitivity}{{6.10}{49}{Surface-Shape Sensitivity}{section.6.10}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.11}{\ignorespaces LV-8: surface-shape sensitivity (\(M=50{,}000\), \(N=252\)).}}{49}{table.6.11}\protected@file@percent }
-\newlabel{tab:lv8-surface-sensitivity}{{6.11}{49}{LV-8: surface-shape sensitivity (\(M=50{,}000\), \(N=252\))}{table.6.11}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.11}Timing Stability}{49}{section.6.11}\protected@file@percent }
-\newlabel{sec:results-timing-stability}{{6.11}{49}{Timing Stability}{section.6.11}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.12}{\ignorespaces LV-9: timing stability (\(M=100{,}000\), \(N=252\), 20 timed runs).}}{49}{table.6.12}\protected@file@percent }
-\newlabel{tab:lv9-timing-stability}{{6.12}{49}{LV-9: timing stability (\(M=100{,}000\), \(N=252\), 20 timed runs)}{table.6.12}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.12}Stress Limit}{49}{section.6.12}\protected@file@percent }
-\newlabel{sec:results-stress-limit}{{6.12}{49}{Stress Limit}{section.6.12}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.13}{\ignorespaces LV-10: stress limit (\(N=252\), large \(M\)).}}{50}{table.6.13}\protected@file@percent }
-\newlabel{tab:lv10-stress-limit}{{6.13}{50}{LV-10: stress limit (\(N=252\), large \(M\))}{table.6.13}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.13}Final Cloud Cost-Performance and Profiler Results}{50}{section.6.13}\protected@file@percent }
-\newlabel{sec:results-cloud-profiler}{{6.13}{50}{Final Cloud Cost-Performance and Profiler Results}{section.6.13}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.1}Correctness and AD Overhead in the Final Cloud Run}{50}{subsection.6.13.1}\protected@file@percent }
-\newlabel{subsec:cloud-correctness-ad}{{6.13.1}{50}{Correctness and AD Overhead in the Final Cloud Run}{subsection.6.13.1}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.14}{\ignorespaces European GBM AD validation against Black--Scholes analytical values at $M=100{,}000$.}}{50}{table.6.14}\protected@file@percent }
-\newlabel{tab:correctness-validation}{{6.14}{50}{European GBM AD validation against Black--Scholes analytical values at $M=100{,}000$}{table.6.14}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.15}{\ignorespaces JAX automatic differentiation overhead at $M=100{,}000$ on n2-standard-4.}}{50}{table.6.15}\protected@file@percent }
-\newlabel{tab:ad-overhead}{{6.15}{50}{JAX automatic differentiation overhead at $M=100{,}000$ on n2-standard-4}{table.6.15}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.2}Cloud Cost-Performance}{51}{subsection.6.13.2}\protected@file@percent }
-\newlabel{subsec:cloud-cost-performance}{{6.13.2}{51}{Cloud Cost-Performance}{subsection.6.13.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.16}{\ignorespaces Best no-AD cost-performance per priced cloud instance at $M=100{,}000$.}}{51}{table.6.16}\protected@file@percent }
-\newlabel{tab:cloud-cost-performance}{{6.16}{51}{Best no-AD cost-performance per priced cloud instance at $M=100{,}000$}{table.6.16}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {6.1}{\ignorespaces Runtime and estimated cost per run for best no-AD cloud configurations at \(M=100{,}000\).}}{51}{figure.6.1}\protected@file@percent }
-\newlabel{fig:cloud-cost-performance}{{6.1}{51}{Runtime and estimated cost per run for best no-AD cloud configurations at \(M=100{,}000\)}{figure.6.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.3}Pareto Frontier}{51}{subsection.6.13.3}\protected@file@percent }
-\newlabel{subsec:cloud-pareto}{{6.13.3}{51}{Pareto Frontier}{subsection.6.13.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.4}Old Profiler versus SHA}{51}{subsection.6.13.4}\protected@file@percent }
-\newlabel{subsec:cloud-profiler-comparison}{{6.13.4}{51}{Old Profiler versus SHA}{subsection.6.13.4}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {6.2}{\ignorespaces Runtime versus estimated cost for the final \nolinkurl  {n2-standard-4} grid. Pareto-optimal points are highlighted.}}{52}{figure.6.2}\protected@file@percent }
-\newlabel{fig:pareto-runtime-cost}{{6.2}{52}{Runtime versus estimated cost for the final \code {n2-standard-4} grid. Pareto-optimal points are highlighted}{figure.6.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.17}{\ignorespaces Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment.}}{52}{table.6.17}\protected@file@percent }
-\newlabel{tab:profiler-comparison}{{6.17}{52}{Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment}{table.6.17}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.5}SHA Progression}{52}{subsection.6.13.5}\protected@file@percent }
-\newlabel{subsec:sha-progression}{{6.13.5}{52}{SHA Progression}{subsection.6.13.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.14}Cross-Question Discussion}{52}{section.6.14}\protected@file@percent }
-\newlabel{sec:results-discussion}{{6.14}{52}{Cross-Question Discussion}{section.6.14}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.1}Software Stack and Engine Performance}{52}{subsection.6.14.1}\protected@file@percent }
-\newlabel{subsec:discussion-software-stack}{{6.14.1}{52}{Software Stack and Engine Performance}{subsection.6.14.1}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {6.3}{\ignorespaces SHA active configuration count as probe path budget increases.}}{53}{figure.6.3}\protected@file@percent }
-\newlabel{fig:sha-progression}{{6.3}{53}{SHA active configuration count as probe path budget increases}{figure.6.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.2}Programming-Language and AD Trade-offs}{53}{subsection.6.14.2}\protected@file@percent }
-\newlabel{subsec:discussion-language-ad}{{6.14.2}{53}{Programming-Language and AD Trade-offs}{subsection.6.14.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.3}Parallelism and Bottlenecks}{53}{subsection.6.14.3}\protected@file@percent }
-\newlabel{subsec:discussion-parallelism}{{6.14.3}{53}{Parallelism and Bottlenecks}{subsection.6.14.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.4}AI/ML Compiler Techniques}{53}{subsection.6.14.4}\protected@file@percent }
-\newlabel{subsec:discussion-ai-techniques}{{6.14.4}{53}{AI/ML Compiler Techniques}{subsection.6.14.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.5}Scope Against the Original Proposal}{54}{subsection.6.14.5}\protected@file@percent }
-\newlabel{subsec:discussion-scope}{{6.14.5}{54}{Scope Against the Original Proposal}{subsection.6.14.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.15}Limitations and Threats to Validity}{54}{section.6.15}\protected@file@percent }
-\newlabel{sec:results-limitations}{{6.15}{54}{Limitations and Threats to Validity}{section.6.15}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.1}Hardware and Cloud Scope}{54}{subsection.6.15.1}\protected@file@percent }
-\newlabel{subsec:limitations-single-machine}{{6.15.1}{54}{Hardware and Cloud Scope}{subsection.6.15.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.2}Local-Volatility Correctness}{54}{subsection.6.15.2}\protected@file@percent }
-\newlabel{subsec:limitations-localvol-correctness}{{6.15.2}{54}{Local-Volatility Correctness}{subsection.6.15.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.3}Memory Measurement}{54}{subsection.6.15.3}\protected@file@percent }
-\newlabel{subsec:limitations-memory-measurement}{{6.15.3}{54}{Memory Measurement}{subsection.6.15.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.4}Thread Control}{54}{subsection.6.15.4}\protected@file@percent }
-\newlabel{subsec:limitations-thread-control}{{6.15.4}{54}{Thread Control}{subsection.6.15.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.5}Excluded Proposal Extensions}{54}{subsection.6.15.5}\protected@file@percent }
-\newlabel{subsec:limitations-excluded-extensions}{{6.15.5}{54}{Excluded Proposal Extensions}{subsection.6.15.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6.16}Summary}{55}{section.6.16}\protected@file@percent }
-\newlabel{sec:results-summary}{{6.16}{55}{Summary}{section.6.16}{}}
-\@writefile{toc}{\contentsline {chapter}{\numberline {7}Conclusion}{56}{chapter.7}\protected@file@percent }
+\newlabel{chap:results}{{6}{40}{Results and Discussion}{chapter.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.1}Overview}{40}{section.6.1}\protected@file@percent }
+\newlabel{sec:results-overview}{{6.1}{40}{Overview}{section.6.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.1}{\ignorespaces Result sections and their corresponding evidence.}}{40}{table.6.1}\protected@file@percent }
+\newlabel{tab:results-roadmap}{{6.1}{40}{Result sections and their corresponding evidence}{table.6.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.2}European GBM Validation}{41}{section.6.2}\protected@file@percent }
+\newlabel{sec:results-gbm-validation}{{6.2}{41}{European GBM Validation}{section.6.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.2}{\ignorespaces European GBM baseline validation at \(M=10{,}000\).}}{41}{table.6.2}\protected@file@percent }
+\newlabel{tab:gbm-baseline-validation}{{6.2}{41}{European GBM baseline validation at \(M=10{,}000\)}{table.6.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.3}Local-Volatility Smoke Test}{41}{section.6.3}\protected@file@percent }
+\newlabel{sec:results-lv0}{{6.3}{41}{Local-Volatility Smoke Test}{section.6.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.3}{\ignorespaces LV-0: smoke test (\(M=1{,}000\), \(N=252\), one timed run).}}{41}{table.6.3}\protected@file@percent }
+\newlabel{tab:lv0-smoke}{{6.3}{41}{LV-0: smoke test (\(M=1{,}000\), \(N=252\), one timed run)}{table.6.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.4}{\ignorespaces Local-volatility uncertainty check against an independent batched NumPy reference.}}{42}{table.6.4}\protected@file@percent }
+\newlabel{tab:localvol-uncertainty}{{6.4}{42}{Local-volatility uncertainty check against an independent batched NumPy reference}{table.6.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.4}Local-Volatility Engine Scalability}{42}{section.6.4}\protected@file@percent }
+\newlabel{sec:results-lv1}{{6.4}{42}{Local-Volatility Engine Scalability}{section.6.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.5}{\ignorespaces LV-1: engine scalability on local volatility (\(N=252\), no AD).}}{42}{table.6.5}\protected@file@percent }
+\newlabel{tab:lv1-engine-scalability}{{6.5}{42}{LV-1: engine scalability on local volatility (\(N=252\), no AD)}{table.6.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.5}Local-Volatility AD Scaling with Path Count}{42}{section.6.5}\protected@file@percent }
+\newlabel{sec:results-lv2}{{6.5}{42}{Local-Volatility AD Scaling with Path Count}{section.6.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.6}{\ignorespaces LV-2: JAX AD path-count scaling on local volatility (\(N=252\)).}}{43}{table.6.6}\protected@file@percent }
+\newlabel{tab:lv2-ad-m-scaling}{{6.6}{43}{LV-2: JAX AD path-count scaling on local volatility (\(N=252\))}{table.6.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.6}Local-Volatility Scaling with Time Steps}{43}{section.6.6}\protected@file@percent }
+\newlabel{sec:results-lv3}{{6.6}{43}{Local-Volatility Scaling with Time Steps}{section.6.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.7}{\ignorespaces LV-3: time-step scaling on local volatility (\(M=50{,}000\), no AD).}}{43}{table.6.7}\protected@file@percent }
+\newlabel{tab:lv3-n-scaling}{{6.7}{43}{LV-3: time-step scaling on local volatility (\(M=50{,}000\), no AD)}{table.6.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.7}Local-Volatility AD Scaling with Time Steps}{43}{section.6.7}\protected@file@percent }
+\newlabel{sec:results-lv4}{{6.7}{43}{Local-Volatility AD Scaling with Time Steps}{section.6.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.8}{\ignorespaces LV-4: JAX AD time-step scaling on local volatility (\(M=25{,}000\)).}}{43}{table.6.8}\protected@file@percent }
+\newlabel{tab:lv4-ad-n-scaling}{{6.8}{43}{LV-4: JAX AD time-step scaling on local volatility (\(M=25{,}000\))}{table.6.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.8}Memory Pressure and Practical Resource Limits}{44}{section.6.8}\protected@file@percent }
+\newlabel{sec:results-memory}{{6.8}{44}{Memory Pressure and Practical Resource Limits}{section.6.8}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.9}{\ignorespaces LV-5: JAX memory-pressure experiment.}}{44}{table.6.9}\protected@file@percent }
+\newlabel{tab:lv5-memory}{{6.9}{44}{LV-5: JAX memory-pressure experiment}{table.6.9}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.9}Thread Scalability on Local Volatility}{44}{section.6.9}\protected@file@percent }
+\newlabel{sec:results-thread-scalability}{{6.9}{44}{Thread Scalability on Local Volatility}{section.6.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.9.1}Strong Scaling}{44}{subsection.6.9.1}\protected@file@percent }
+\newlabel{subsec:results-lv6-strong}{{6.9.1}{44}{Strong Scaling}{subsection.6.9.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.10}{\ignorespaces LV-6: strong thread scaling (\(M=100{,}000\), \(N=252\)).}}{44}{table.6.10}\protected@file@percent }
+\newlabel{tab:lv6-strong-scaling}{{6.10}{44}{LV-6: strong thread scaling (\(M=100{,}000\), \(N=252\))}{table.6.10}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.11}{\ignorespaces LV-7: weak thread scaling (base \(M=50{,}000\) paths/thread, \(N=252\)).}}{45}{table.6.11}\protected@file@percent }
+\newlabel{tab:lv7-weak-scaling}{{6.11}{45}{LV-7: weak thread scaling (base \(M=50{,}000\) paths/thread, \(N=252\))}{table.6.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.9.2}Weak Scaling}{45}{subsection.6.9.2}\protected@file@percent }
+\newlabel{subsec:results-lv7-weak}{{6.9.2}{45}{Weak Scaling}{subsection.6.9.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.10}Surface-Shape Sensitivity}{45}{section.6.10}\protected@file@percent }
+\newlabel{sec:results-surface-sensitivity}{{6.10}{45}{Surface-Shape Sensitivity}{section.6.10}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.12}{\ignorespaces LV-8: surface-shape sensitivity (\(M=50{,}000\), \(N=252\)).}}{45}{table.6.12}\protected@file@percent }
+\newlabel{tab:lv8-surface-sensitivity}{{6.12}{45}{LV-8: surface-shape sensitivity (\(M=50{,}000\), \(N=252\))}{table.6.12}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.11}Timing Stability}{45}{section.6.11}\protected@file@percent }
+\newlabel{sec:results-timing-stability}{{6.11}{45}{Timing Stability}{section.6.11}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.13}{\ignorespaces LV-9: timing stability (\(M=100{,}000\), \(N=252\), 20 timed runs).}}{46}{table.6.13}\protected@file@percent }
+\newlabel{tab:lv9-timing-stability}{{6.13}{46}{LV-9: timing stability (\(M=100{,}000\), \(N=252\), 20 timed runs)}{table.6.13}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.12}Stress Limit}{46}{section.6.12}\protected@file@percent }
+\newlabel{sec:results-stress-limit}{{6.12}{46}{Stress Limit}{section.6.12}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.14}{\ignorespaces LV-10: stress limit (\(N=252\), large \(M\)).}}{46}{table.6.14}\protected@file@percent }
+\newlabel{tab:lv10-stress-limit}{{6.14}{46}{LV-10: stress limit (\(N=252\), large \(M\))}{table.6.14}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.13}Final Cloud Cost-Performance and Profiler Results}{46}{section.6.13}\protected@file@percent }
+\newlabel{sec:results-cloud-profiler}{{6.13}{46}{Final Cloud Cost-Performance and Profiler Results}{section.6.13}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.1}Correctness and AD Overhead in the Final Cloud Run}{46}{subsection.6.13.1}\protected@file@percent }
+\newlabel{subsec:cloud-correctness-ad}{{6.13.1}{46}{Correctness and AD Overhead in the Final Cloud Run}{subsection.6.13.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.15}{\ignorespaces European GBM AD validation against Black--Scholes analytical values at $M=100{,}000$.}}{46}{table.6.15}\protected@file@percent }
+\newlabel{tab:correctness-validation}{{6.15}{46}{European GBM AD validation against Black--Scholes analytical values at $M=100{,}000$}{table.6.15}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.16}{\ignorespaces JAX automatic differentiation overhead at $M=100{,}000$ on n2-standard-4.}}{47}{table.6.16}\protected@file@percent }
+\newlabel{tab:ad-overhead}{{6.16}{47}{JAX automatic differentiation overhead at $M=100{,}000$ on n2-standard-4}{table.6.16}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.2}Cloud Cost-Performance}{47}{subsection.6.13.2}\protected@file@percent }
+\newlabel{subsec:cloud-cost-performance}{{6.13.2}{47}{Cloud Cost-Performance}{subsection.6.13.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.17}{\ignorespaces Best no-AD cost-performance per priced cloud instance at $M=100{,}000$.}}{47}{table.6.17}\protected@file@percent }
+\newlabel{tab:cloud-cost-performance}{{6.17}{47}{Best no-AD cost-performance per priced cloud instance at $M=100{,}000$}{table.6.17}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.3}Pareto Frontier}{47}{subsection.6.13.3}\protected@file@percent }
+\newlabel{subsec:cloud-pareto}{{6.13.3}{47}{Pareto Frontier}{subsection.6.13.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.4}Old Profiler versus SHA}{47}{subsection.6.13.4}\protected@file@percent }
+\newlabel{subsec:cloud-profiler-comparison}{{6.13.4}{47}{Old Profiler versus SHA}{subsection.6.13.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6.1}{\ignorespaces Runtime and log-scale estimated cost per run for best no-AD cloud configurations at \(M=100{,}000\). Lower-left points are preferable.}}{48}{figure.6.1}\protected@file@percent }
+\newlabel{fig:cloud-cost-performance}{{6.1}{48}{Runtime and log-scale estimated cost per run for best no-AD cloud configurations at \(M=100{,}000\). Lower-left points are preferable}{figure.6.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6.2}{\ignorespaces Runtime versus estimated cost for the final \nolinkurl  {n2-standard-4} grid. Pareto-optimal points are highlighted.}}{48}{figure.6.2}\protected@file@percent }
+\newlabel{fig:pareto-runtime-cost}{{6.2}{48}{Runtime versus estimated cost for the final \code {n2-standard-4} grid. Pareto-optimal points are highlighted}{figure.6.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.18}{\ignorespaces Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment.}}{48}{table.6.18}\protected@file@percent }
+\newlabel{tab:profiler-comparison}{{6.18}{48}{Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment}{table.6.18}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.5}Cross-Instance Profiler Robustness}{49}{subsection.6.13.5}\protected@file@percent }
+\newlabel{subsec:cloud-profiler-robustness}{{6.13.5}{49}{Cross-Instance Profiler Robustness}{subsection.6.13.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.19}{\ignorespaces Cross-instance robustness audit for SHA on sha\_cloud\_profiler\_v4.}}{49}{table.6.19}\protected@file@percent }
+\newlabel{tab:profiler-cross-instance}{{6.19}{49}{Cross-instance robustness audit for SHA on sha\_cloud\_profiler\_v4}{table.6.19}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.13.6}SHA Progression}{49}{subsection.6.13.6}\protected@file@percent }
+\newlabel{subsec:sha-progression}{{6.13.6}{49}{SHA Progression}{subsection.6.13.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.14}Cross-Question Discussion}{49}{section.6.14}\protected@file@percent }
+\newlabel{sec:results-discussion}{{6.14}{49}{Cross-Question Discussion}{section.6.14}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.1}Software Stack and Engine Performance}{49}{subsection.6.14.1}\protected@file@percent }
+\newlabel{subsec:discussion-software-stack}{{6.14.1}{49}{Software Stack and Engine Performance}{subsection.6.14.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6.3}{\ignorespaces SHA active configuration count as probe path budget increases.}}{50}{figure.6.3}\protected@file@percent }
+\newlabel{fig:sha-progression}{{6.3}{50}{SHA active configuration count as probe path budget increases}{figure.6.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.2}Programming-Language, Runtime and AD-Support Trade-offs}{50}{subsection.6.14.2}\protected@file@percent }
+\newlabel{subsec:discussion-language-ad}{{6.14.2}{50}{Programming-Language, Runtime and AD-Support Trade-offs}{subsection.6.14.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.3}Parallelism and Bottlenecks}{50}{subsection.6.14.3}\protected@file@percent }
+\newlabel{subsec:discussion-parallelism}{{6.14.3}{50}{Parallelism and Bottlenecks}{subsection.6.14.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.4}Compiler and AD Runtime Techniques}{50}{subsection.6.14.4}\protected@file@percent }
+\newlabel{subsec:discussion-ai-techniques}{{6.14.4}{50}{Compiler and AD Runtime Techniques}{subsection.6.14.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.14.5}Integrated Scope of the Completed Evaluation}{51}{subsection.6.14.5}\protected@file@percent }
+\newlabel{subsec:discussion-scope}{{6.14.5}{51}{Integrated Scope of the Completed Evaluation}{subsection.6.14.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.15}Limitations and Threats to Validity}{51}{section.6.15}\protected@file@percent }
+\newlabel{sec:results-limitations}{{6.15}{51}{Limitations and Threats to Validity}{section.6.15}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.1}Hardware and Cloud Scope}{51}{subsection.6.15.1}\protected@file@percent }
+\newlabel{subsec:limitations-single-machine}{{6.15.1}{51}{Hardware and Cloud Scope}{subsection.6.15.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.2}Local-Volatility Correctness}{51}{subsection.6.15.2}\protected@file@percent }
+\newlabel{subsec:limitations-localvol-correctness}{{6.15.2}{51}{Local-Volatility Correctness}{subsection.6.15.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.3}Random Number Generation as a Confounder}{51}{subsection.6.15.3}\protected@file@percent }
+\newlabel{subsec:limitations-rng}{{6.15.3}{51}{Random Number Generation as a Confounder}{subsection.6.15.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.4}Warm versus Cold JAX Execution}{51}{subsection.6.15.4}\protected@file@percent }
+\newlabel{subsec:limitations-cold-warm}{{6.15.4}{51}{Warm versus Cold JAX Execution}{subsection.6.15.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.5}Memory Measurement}{52}{subsection.6.15.5}\protected@file@percent }
+\newlabel{subsec:limitations-memory-measurement}{{6.15.5}{52}{Memory Measurement}{subsection.6.15.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.15.6}Thread Control}{52}{subsection.6.15.6}\protected@file@percent }
+\newlabel{subsec:limitations-thread-control}{{6.15.6}{52}{Thread Control}{subsection.6.15.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6.16}Summary}{52}{section.6.16}\protected@file@percent }
+\newlabel{sec:results-summary}{{6.16}{52}{Summary}{section.6.16}{}}
+\@writefile{toc}{\contentsline {chapter}{\numberline {7}Conclusion}{53}{chapter.7}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\newlabel{chap:conclusion}{{7}{56}{Conclusion}{chapter.7}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {7.1}Summary of Work}{56}{section.7.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7.2}Key Findings}{56}{section.7.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7.3}Answering Research Questions}{56}{section.7.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Hardware and software stacks.}{56}{section*.56}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Programming languages and AD libraries.}{57}{section*.57}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Cloud cost-performance.}{57}{section*.58}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{AI/ML techniques.}{57}{section*.59}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Parallelism and bottlenecks.}{57}{section*.60}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7.4}Future Work}{57}{section.7.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7.5}Final Remarks}{57}{section.7.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {chapter}{Declarations}{58}{chapter*.61}\protected@file@percent }
-\bibstyle{alpha}
+\newlabel{chap:conclusion}{{7}{53}{Conclusion}{chapter.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7.1}Summary of Work}{53}{section.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.2}Key Findings}{53}{section.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.3}Answering Research Questions}{53}{section.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Hardware and software stacks.}{53}{section*.27}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Programming languages, runtimes and AD support.}{54}{section*.28}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Cloud cost-performance.}{54}{section*.29}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Compiler and AD runtime techniques.}{54}{section*.30}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Parallelism and bottlenecks.}{54}{section*.31}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.4}Future Work}{54}{section.7.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7.5}Final Remarks}{54}{section.7.5}\protected@file@percent }
+\bibstyle{unsrt}
 \bibdata{bibs/sample}
-\@writefile{toc}{\contentsline {chapter}{\numberline {8}Appendix}{59}{chapter.8}\protected@file@percent }
-\@writefile{lof}{\addvspace {10\p@ }}
-\@writefile{lot}{\addvspace {10\p@ }}
-\@writefile{toc}{\contentsline {section}{\numberline {8.1}Additional Results}{59}{section.8.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {8.2}Configuration Files}{59}{section.8.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {8.3}Extended Tables}{59}{section.8.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {8.4}Code Snippets}{59}{section.8.4}\protected@file@percent }
-\gdef \@abspage@last{62}
+\@writefile{toc}{\contentsline {chapter}{Declarations}{55}{chapter*.32}\protected@file@percent }
+\bibcite{glasserman2004}{1}
+\bibcite{griewank2008}{2}
+\bibcite{baydin2018}{3}
+\bibcite{jax2018}{4}
+\bibcite{moses2021enzyme}{5}
+\bibcite{innes2019zygote}{6}
+\bibcite{hu2020difftaichi}{7}
+\bibcite{weber2025carlojl}{8}
+\bibcite{pouchet2012polybench}{9}
+\bibcite{treibig2010likwid}{10}
+\bibcite{intelvtune}{11}
+\bibcite{xprof2025}{12}
+\bibcite{lattner2020mlir}{13}
+\bibcite{chen2018tvm}{14}
+\bibcite{zheng2020ansor}{15}
+\bibcite{micikevicius2017mixed}{16}
+\bibcite{coleman2017dawnbench}{17}
+\bibcite{coleman2019dawnbench}{18}
+\bibcite{mattson2020mlperf}{19}
+\bibcite{blackscholes1973}{20}
+\gdef \@abspage@last{59}

@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{Local-volatility uncertainty check against an independent batched NumPy reference.}
+\label{tab:localvol-uncertainty}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Estimate} &
+\textbf{\(M\)} &
+\textbf{Price} &
+\textbf{Difference} &
+\textbf{\(z\)-score} \\
+\midrule
+Independent NumPy reference & \(1{,}000{,}000\) & \(10.44452 \pm 0.01465\) & --- & --- \\
+\texttt{cpu} LV-1 & \(500{,}000\) & \(10.47542\) & \(+0.03089\) & \(1.22\) \\
+\texttt{cpp} LV-1 & \(500{,}000\) & \(10.46301\) & \(+0.01848\) & \(0.73\) \\
+\texttt{jax} LV-1 & \(500{,}000\) & \(10.46082\) & \(+0.01629\) & \(0.64\) \\
+\texttt{rust} LV-1 & \(500{,}000\) & \(10.54431\) & \(+0.09979\) & \(3.93\) \\
+\bottomrule
+\end{tabular}
+\end{table}

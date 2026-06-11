@@ -5,9 +5,9 @@
 \label{sec:impl-overview}
 
 This chapter describes the concrete implementation of the framework laid out in
-Chapter~\ref{chap:system-design}. The codebase is hosted on GitHub at
-\url{https://github.com/Vivian-Lopez/Monte-Carlo-and-Automatic-Differentiation-Systematic-Benchmarking-Framework}
-and is organised as a single Python package with optional native subpackages.
+Chapter~\ref{chap:system-design}. The codebase is hosted in the project
+GitHub repository and is organised as a single Python package with optional
+native subpackages.
 The top-level directory structure is:
 
 \begin{verbatim}
@@ -25,13 +25,13 @@ results/              # SQLite database, generated tables
 tests/                # pytest suite
 \end{verbatim}
 
-The Python package is pure-Python apart from optional native extensions. The C++
-extension is built with \texttt{pip install -e benchmarking/cpp/} (using a
-\texttt{setup.py} that invokes pybind11); the Rust extension is built with
-\texttt{maturin develop --release} inside \texttt{benchmarking/rust/}. If either
+The Python package is pure-Python apart from optional native extensions. The
+C++ extension is built with \code{pip install -e benchmarking/cpp/}, using a
+\code{setup.py} file that invokes pybind11. The Rust extension is built with
+\code{maturin develop --release} inside \code{benchmarking/rust/}. If either
 extension is not built, the corresponding engine is silently excluded from the
-engine registry at runtime, so the framework remains fully functional on systems
-without a C++ or Rust toolchain.
+engine registry at runtime, so the framework remains fully functional on
+systems without a C++ or Rust toolchain.
 
 \section{Core Modules}
 \label{sec:core-modules}
@@ -56,13 +56,16 @@ deserialisation, so configurations stored by older versions of the framework
 continue to load even after new fields are added. \texttt{config\_hash()}
 serialises the configuration with \texttt{json.dumps(\dots, sort\_keys=True)}
 and returns the first eight characters of the SHA-256 digest as a stable,
-machine-independent fingerprint.
+machine-independent workload fingerprint. It does not include execution-context
+fields such as engine, AD mode, requested thread count or OpenMP/Rayon
+environment variables; those are recorded separately in the result database and
+must be considered alongside the hash when reproducing a specific timed run.
 
 \subsection{Monte Carlo Engine Interface}
 \label{sec:impl-engine-interface}
 
-All engines are subclasses of the abstract base class \texttt{MonteCarloEngine}
-defined in \texttt{benchmarking/engines/base.py}:
+All engines are subclasses of the abstract base class
+\texttt{MonteCarloEngine}, defined in \code{benchmarking/engines/base.py}:
 
 \begin{verbatim}
 class MonteCarloEngine:
@@ -194,17 +197,20 @@ double price = std::exp(-r * T) * sum / M;
 \end{verbatim}
 
 The local-volatility kernel reuses the same RNG strategy and implements the
-log-Euler loop with the numerically stable softplus
-\texttt{(raw > 0 ? raw : 0) + std::log1p(std::exp(-std::abs(raw)))}, identical
-to the Python and Rust formulations.
+log-Euler loop with the same numerically stable softplus used by the Python
+and Rust formulations:
+\[
+    \max(\texttt{raw}, 0) + \log\!\left(1 + \exp(-|\texttt{raw}|)\right).
+\]
 
 \subsection{Rust Engine}
 \label{sec:impl-rust}
 
-The native implementation lives in \texttt{benchmarking/rust/src/lib.rs} and is
-exposed to Python via PyO3 bindings, built with \texttt{maturin develop
---release}. The Python wrapper \texttt{benchmarking/engines/mc\_rust.py} mirrors
-the C++ wrapper: lazy import, graceful fallback, identical engine interface.
+The native implementation lives in \code{benchmarking/rust/src/lib.rs} and is
+exposed to Python via PyO3 bindings, built with
+\code{maturin develop --release}. The Python wrapper
+\code{benchmarking/engines/mc_rust.py} mirrors the C++ wrapper: lazy import,
+graceful fallback, identical engine interface.
 
 The Rust implementation uses \texttt{SmallRng} (Xoshiro128++) from the
 \texttt{rand} crate for high-throughput sampling, with each Rayon worker thread
@@ -395,8 +401,8 @@ Three workloads are implemented and validated end-to-end:
           accuracy, language comparison and throughput scaling experiments.
     \item \texttt{european\_local\_vol} (\texttt{EuropeanLocalVolConfig}):
           $N$-step log-Euler simulation of GBM with a parametric
-          local-volatility surface. Supported by NumPy, JAX, C++ and Rust;
-          CUDA support is not implemented in the current iteration. Used to
+          local-volatility surface. Evaluated through NumPy, JAX, C++ and Rust
+          in the completed experiments. Used to
           stress-test AD on a deeper computation graph and to expose the cost
           of multi-step over single-step simulation.
     \item \texttt{asian} (\texttt{AsianOptionConfig}): arithmetic-average
@@ -410,24 +416,71 @@ Three workloads are implemented and validated end-to-end:
 \label{sec:impl-ad}
 
 Automatic differentiation is implemented exclusively in the JAX and CUDA
-engines. The JAX engine supports both forward and reverse mode for both
-workloads; the CUDA engine implements only forward-mode pathwise Delta on the
-European workload.
+engines. The JAX engine supports both forward and reverse mode for the
+European, local-volatility, and Asian workloads used in the final results; the
+CUDA engine implements only forward-mode pathwise Delta on the European
+workload and is not part of the final cloud comparison.
+
+Table~\ref{tab:impl-support-matrix} makes the implemented workload and AD
+support explicit. Each cell lists the AD modes available for that workload and
+engine; a dash denotes an unsupported combination that the runner skips before
+dispatch.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Implemented workload and AD support by engine.}
+\label{tab:impl-support-matrix}
+\begin{tabularx}{\textwidth}{p{0.20\textwidth}YYYYY}
+\toprule
+\textbf{Workload} &
+\textbf{NumPy} &
+\textbf{JAX} &
+\textbf{C++} &
+\textbf{Rust} &
+\textbf{CUDA} \\
+\midrule
+European GBM & none & none, forward, reverse & none & none & none, forward \\
+Local volatility & none & none, forward, reverse & none & none & -- \\
+Asian arithmetic-average & none & none, forward, reverse & -- & -- & -- \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 For the European workload the AD output is a three-tuple
-$(\Delta, \rho, \mathrm{Vega}) = (\partial P/\partial S_0,\ \partial P/\partial r,\ \partial P/\partial \sigma)$.
+\[
+    (\Delta,\rho,\mathrm{Vega})
+    =
+    \left(
+        \frac{\partial P}{\partial S_0},
+        \frac{\partial P}{\partial r},
+        \frac{\partial P}{\partial \sigma}
+    \right).
+\]
 Forward mode is implemented as three \texttt{jax.jvp} calls (one per input
 direction), and reverse mode as a single \texttt{jax.grad} call with
 \texttt{argnums=(0,1,2)}.
 
 For the local-volatility workload the AD output is a six-tuple
-$(\partial P/\partial S_0,\ \partial P/\partial a_0,\ \partial P/\partial a_1,\ \partial P/\partial a_2,\ \partial P/\partial b_1,\ \partial P/\partial \sigma_{\min})$.
+\[
+    \left(
+        \frac{\partial P}{\partial S_0},
+        \frac{\partial P}{\partial a_0},
+        \frac{\partial P}{\partial a_1},
+        \frac{\partial P}{\partial a_2},
+        \frac{\partial P}{\partial b_1},
+        \frac{\partial P}{\partial \sigma_{\min}}
+    \right).
+\]
 Forward mode therefore requires six \texttt{jax.jvp} calls, while reverse mode
 again computes the full gradient in a single backward pass.
 
-Both modes feed into the runner's overhead-ratio computation. Because the
-gradient and the baseline price share the same forward computation, the
-overhead ratio is a clean measure of the marginal cost of differentiation.
+For the Asian workload, JAX differentiates the arithmetic-average payoff with
+respect to the same scalar market parameters used by the European GBM
+configuration. Both AD modes feed into the runner's overhead-ratio
+computation. Because the gradient and the baseline price share the same forward
+computation, the overhead ratio is a clean measure of the marginal cost of
+differentiation.
 
 \section{GPU Support}
 \label{sec:impl-gpu}
@@ -489,7 +542,8 @@ Both the C++ and Rust engines use per-thread RNG streams seeded from the global
 seed plus the thread index. Changing the thread count therefore changes the
 RNG assignment and produces statistically equivalent but numerically different
 results. This is recorded by storing \texttt{num\_threads} on every run, so
-that runs at different thread counts are treated as distinct configurations.
+that runs at different thread counts are treated as distinct execution settings
+even when the workload-level \texttt{config\_hash} is unchanged.
 
 \paragraph{Optional native components.}
 Both the C++ and Rust engines require non-trivial native toolchains
@@ -614,8 +668,13 @@ and a Vite-based toolchain.
 
 The implementation realises the design of Chapter~\ref{chap:system-design} in
 roughly $4{,}000$ lines of Python plus native C++ and Rust extensions and a
-TypeScript frontend. Five engines (NumPy, JAX, C++, Rust, CUDA), two workloads
-(European GBM, European local volatility) and three AD modes (none, forward,
-reverse) are supported, with full SQLite persistence, a REST API, a React
-dashboard and a $55$-test pytest suite. The next chapter describes the
-experimental protocol applied to this implementation.
+TypeScript frontend. The engine registry includes NumPy, JAX, C++, Rust, and
+CUDA paths, while the completed experiments focus on the supported NumPy, JAX,
+C++ and Rust combinations. Three workloads (European GBM, European local
+volatility, and Asian arithmetic-average options) are represented in the
+framework. The no-AD mode is available across the relevant engine set, while
+forward and reverse AD are evaluated through JAX for the completed results,
+with a narrower European-only CUDA AD path implemented but not used in the
+final cloud comparison. The system also includes full SQLite persistence, a
+REST API, a React dashboard and a $55$-test pytest suite. The next chapter
+describes the experimental protocol applied to this implementation.

@@ -9,20 +9,31 @@ The framework is designed around four guiding principles: \emph{reproducibility}
 constrain almost every interface, data structure and naming convention in the codebase.
 
 \paragraph{Reproducibility.}
-Every benchmark run is fully described by a single, serialisable
-\texttt{WorkloadConfig} object. The \texttt{config\_hash()} method serialises this
-object into canonically sorted JSON and computes a truncated (8-character) SHA-256
-digest. The hash is stable across machines and Python versions and is used to group
-repeated runs of the same experiment for statistical comparison.
+Every benchmark run is fully described by a single serialisable workload
+configuration object. The \code{config_hash()} method serialises this object into
+canonically sorted JSON and computes a truncated (8-character) SHA-256 digest. The
+hash is stable across machines and Python versions and is used to group repeated
+runs of the same workload specification for statistical comparison.
 
-All sources of randomness are explicitly seeded. For a given engine on a given
-machine, the same configuration produces bit-identical prices and paths. Different
-engines use different RNG implementations (NumPy \texttt{default\_rng}, JAX
-\texttt{PRNGKey}, C++ \texttt{mt19937\_64}, Rust \texttt{SmallRng}, CUDA \texttt{curand}),
-so the same seed produces statistically equivalent but numerically distinct results
-across engines --- this is an intentional design choice rather than a defect, and is
-documented in the codebase. Cross-engine validation is therefore performed against
-the Black--Scholes analytical solution rather than against bit-equal outputs.
+The \texttt{config\_hash()} is deliberately a workload hash rather than a full
+execution-context hash. Backend choice, AD mode, requested thread count,
+observed thread count, OpenMP/Rayon environment variables, software versions and
+hardware metadata are stored in separate database fields. The effective
+reproducibility key for a timed result is therefore the combination of
+\texttt{config\_hash}, engine, AD mode, parallelism metadata and environment
+metadata, not \texttt{config\_hash} alone.
+
+All sources of randomness are explicitly seeded. For a given engine, machine,
+thread setting and software environment, the same effective configuration
+produces repeatable prices. Different engines use different RNG implementations
+(NumPy \texttt{default\_rng}, JAX \texttt{PRNGKey}, C++ \texttt{mt19937\_64},
+Rust \texttt{SmallRng}, CUDA \texttt{curand}), so the same seed produces
+statistically equivalent but numerically distinct results across engines. In
+addition, the C++ and Rust engines use per-thread RNG streams, so changing the
+thread count changes the path-to-RNG-stream assignment and can change bit-level
+outputs even when the workload hash is unchanged. Cross-engine validation is
+therefore performed against analytical references and tolerances rather than
+against bit-equal outputs.
 
 \paragraph{Extensibility.}
 The framework is organised around two minimal abstractions:
@@ -63,7 +74,7 @@ layers below it, so any component can be replaced or extended in isolation.
 \centering
 \fbox{
 \parbox{0.9\textwidth}{
-\textbf{Diagram Placeholder: System Architecture}
+\textbf{System Architecture Schematic}
 
 \vspace{0.5em}
 The architecture is composed of six vertically stacked layers:
@@ -259,7 +270,8 @@ rather than raising errors.
 
 \paragraph{Engine~1 --- NumPy / CPU.}
 \texttt{CPUMonteCarloEngine} is the single-threaded NumPy reference
-implementation. It supports both workloads and \texttt{ad\_mode = "none"} only.
+implementation. It supports the implemented non-AD workloads and
+\texttt{ad\_mode = "none"} only.
 For the European workload it uses \texttt{np.random.default\_rng(seed)} to
 generate all $M$ standard normals as a single array and evaluates the terminal
 price and payoff vectorially --- no Python-level loop over paths. For the
@@ -293,11 +305,11 @@ is cheaper than reverse when the number of inputs is small relative to the
 number of outputs.
 
 For the local-volatility workload, reverse-mode uses a single
-\texttt{jax.grad(price\_fn, argnums=(0,1,2,3,4,5))} call that differentiates
-through the full $N$-step \texttt{scan}; forward-mode uses six \texttt{jax.jvp}
-calls. JAX differentiates through \texttt{jax.lax.scan} efficiently via its
-reverse-mode accumulation, avoiding the explosion in graph size that would occur
-if the loop were unrolled.
+\code{jax.grad(..., argnums=(0,1,2,3,4,5))} call that differentiates through
+the full $N$-step \texttt{scan}; forward-mode uses six \texttt{jax.jvp} calls.
+JAX differentiates through \texttt{jax.lax.scan} efficiently via its
+reverse-mode accumulation, avoiding the explosion in graph size that would
+occur if the loop were unrolled.
 
 \paragraph{Engine~3 --- C++ / OpenMP.}
 \texttt{CPPMonteCarloEngine} is a thin Python wrapper around a native
@@ -376,53 +388,53 @@ $\max(\mathrm{rss}_{\text{during}}) - \mathrm{rss}_{\text{before}}$. If
 \section{Layer~4 --- Storage}
 \label{sec:storage-layer}
 
-\texttt{BenchmarkDB} is a thread-safe SQLite wrapper using a per-call connection
-with \texttt{check\_same\_thread=False} and an explicit
-\texttt{threading.Lock} that serialises writes. The database is opened in
-Write-Ahead Logging (WAL) mode, which allows concurrent reads during writes ---
-important because the Flask API serves read requests from the main thread while
-the background worker writes results. The database file lives at
-\texttt{results/benchmarks.db} and is created on first use.
+\code{BenchmarkDB} is a thread-safe SQLite wrapper. It uses a per-call connection
+with \code{check_same_thread=False} and an explicit \code{threading.Lock} that
+serialises writes. The database is opened in Write-Ahead Logging (WAL) mode, which
+allows concurrent reads during writes. This matters because the Flask API serves
+read requests from the main thread while the background worker writes results.
+The database file lives at \code{results/benchmarks.db} and is created on first
+use.
 
 \paragraph{Schema.}
-The schema consists of a single \texttt{runs} table whose columns are defined
-declaratively by the \texttt{\_FULL\_SCHEMA\_COLUMNS} list. Columns are grouped as
+The schema consists of a single \code{runs} table whose columns are defined
+declaratively by the \code{_FULL_SCHEMA_COLUMNS} list. Columns are grouped as
 follows:
 
 \begin{itemize}
-    \item \textbf{Identity:} \texttt{id} (UUID, primary key), \texttt{experiment\_id},
-          \texttt{experiment\_type}, \texttt{config\_hash}.
-    \item \textbf{Status lifecycle:} \texttt{status} (\texttt{pending}/\texttt{running}/%
-          \texttt{completed}/\texttt{failed}), \texttt{error\_message},
-          \texttt{created\_at}, \texttt{started\_at}, \texttt{completed\_at}
+    \item \textbf{Identity:} \code{id} (UUID, primary key), \code{experiment_id},
+          \code{experiment_type}, \code{config_hash}.
+    \item \textbf{Status lifecycle:} \code{status} (\code{pending}/\code{running}/%
+          \code{completed}/\code{failed}), \code{error_message},
+          \code{created_at}, \code{started_at}, \code{completed_at}
           (all UTC ISO-8601).
-    \item \textbf{Workload definition:} \texttt{workload\_type}, \texttt{M},
-          \texttt{N}, \texttt{seed}, \texttt{config\_json}.
-    \item \textbf{Engine / implementation:} \texttt{engine}, \texttt{language},
-          \texttt{backend}.
-    \item \textbf{Parallelism metadata:} \texttt{num\_threads},
-          \texttt{vectorization\_flag}, \texttt{batch\_size}.
-    \item \textbf{Runtime performance:} \texttt{mean\_runtime\_ms},
-          \texttt{std\_runtime\_ms}, \texttt{min\_runtime\_ms},
-          \texttt{max\_runtime\_ms}, \texttt{throughput\_paths\_per\_sec}.
-    \item \textbf{AD metadata:} \texttt{ad\_mode}, \texttt{baseline\_mean\_ms},
-          \texttt{ad\_overhead\_ratio}.
-    \item \textbf{Numerical results:} \texttt{result\_value}, \texttt{greek\_delta},
-          \texttt{greek\_vega}, \texttt{greek\_rho}.
-    \item \textbf{Analytical reference:} \texttt{analytical\_price},
-          \texttt{analytical\_delta}, \texttt{analytical\_vega},
-          \texttt{analytical\_rho}.
-    \item \textbf{Error metrics:} \texttt{abs\_price\_error}, \texttt{rel\_price\_error}
+    \item \textbf{Workload definition:} \code{workload_type}, \code{M},
+          \code{N}, \code{seed}, \code{config_json}.
+    \item \textbf{Engine / implementation:} \code{engine}, \code{language},
+          \code{backend}.
+    \item \textbf{Parallelism metadata:} \code{num_threads},
+          \code{vectorization_flag}, \code{batch_size}.
+    \item \textbf{Runtime performance:} \code{mean_runtime_ms},
+          \code{std_runtime_ms}, \code{min_runtime_ms},
+          \code{max_runtime_ms}, \code{throughput_paths_per_sec}.
+    \item \textbf{AD metadata:} \code{ad_mode}, \code{baseline_mean_ms},
+          \code{ad_overhead_ratio}.
+    \item \textbf{Numerical results:} \code{result_value}, \code{greek_delta},
+          \code{greek_vega}, \code{greek_rho}.
+    \item \textbf{Analytical reference:} \code{analytical_price},
+          \code{analytical_delta}, \code{analytical_vega},
+          \code{analytical_rho}.
+    \item \textbf{Error metrics:} \code{abs_price_error}, \code{rel_price_error}
           and matching columns for Delta, Vega and Rho.
-    \item \textbf{Resources:} \texttt{memory\_peak\_mb}.
-    \item \textbf{Environment:} \texttt{cpu\_model}, \texttt{cpu\_architecture},
-          \texttt{cpu\_count}, \texttt{memory\_gb}, \texttt{platform},
-          \texttt{python\_version}, \texttt{numpy\_version},
-          \texttt{jax\_version}, \texttt{blas\_backend}.
-    \item \textbf{Cloud and profiling:} \texttt{cloud\_provider},
-          \texttt{instance\_type}, \texttt{cloud\_region},
-          \texttt{cloud\_zone}, \texttt{hourly\_price\_usd},
-          \texttt{cost\_per\_run}, profiler-selection fields, and
+    \item \textbf{Resources:} \code{memory_peak_mb}.
+    \item \textbf{Environment:} \code{cpu_model}, \code{cpu_architecture},
+          \code{cpu_count}, \code{memory_gb}, \code{platform},
+          \code{python_version}, \code{numpy_version},
+          \code{jax_version}, \code{blas_backend}.
+    \item \textbf{Cloud and profiling:} \code{cloud_provider},
+          \code{instance_type}, \code{cloud_region},
+          \code{cloud_zone}, \code{hourly_price_usd},
+          \code{cost_per_run}, profiler-selection fields, and
           SHA promotion metadata where available.
 \end{itemize}
 
@@ -497,9 +509,9 @@ application has five pages:
 \section{Cloud Cost-Performance Design}
 \label{sec:cloud-cost-design}
 
-The original proposal emphasised cloud resource selection as a practical
-systems question rather than a purely local benchmark. The final design
-therefore extends each benchmark row with cloud metadata whenever the run is
+Cloud resource selection is treated as a practical systems question rather
+than a purely local benchmark. The final design therefore extends each
+benchmark row with cloud metadata whenever the run is
 executed on a cloud instance. The relevant fields record the provider, instance
 type, region, zone, hourly price assumption, git commit, and derived cost per
 run. This keeps cost-performance analysis tied to the exact environment in
@@ -624,16 +636,15 @@ SQLite with WAL is sufficient for the expected single-machine workload (up to a
 few hundred runs per day). It requires no external service, ships as part of
 Python, and is straightforward to back up by copying a single file. WAL allows
 concurrent reads during writes, which is the only concurrency requirement
-imposed by the architecture. Should the framework be scaled out to a
-distributed Ray-based execution model (Stage~8 of the future-work plan),
-PostgreSQL would be a natural replacement.
+imposed by the architecture. If the framework were scaled beyond a
+single-machine execution model, PostgreSQL would be a natural replacement.
 
 \paragraph{Per-thread RNG streams.}
 The C++ and Rust engines seed each worker thread independently. This sacrifices
 bitwise reproducibility across thread counts in exchange for lock-free parallel
 sampling. The framework records \texttt{num\_threads} in the database so that
-runs at different thread counts are treated as statistically distinct
-configurations rather than as repeats.
+runs at different thread counts are treated as statistically distinct execution
+settings rather than as bitwise repeats of the same run.
 
 \section{Summary}
 \label{sec:design-summary}

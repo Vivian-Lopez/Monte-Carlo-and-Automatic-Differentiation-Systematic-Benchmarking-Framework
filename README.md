@@ -12,7 +12,7 @@ A modular, extensible framework for systematically benchmarking Monte Carlo simu
 - **Cross-engine comparison** — evaluate NumPy (CPU), JAX (XLA-compiled), C++ (OpenMP), and Rust (Rayon) on identical workloads with identical seeds
 - **AD analysis** — measure the overhead of forward vs. reverse-mode AD and validate computed Greeks against Black-Scholes analytical solutions
 - **Scalability** — characterise throughput scaling as path count M grows from 1k to 100k
-- **Reproducibility** — every result is fully traceable: config hash, seed, engine version, platform metadata, and all timing samples are stored in SQLite
+- **Reproducibility** — every result is fully traceable: workload config hash, seed, engine, AD mode, thread metadata, platform metadata, and all timing samples are stored in SQLite
 
 Planned extensions: CPU architecture comparison (AMD vs Intel, SIMD backends), GPU/CUDA acceleration, Mojo implementations, cloud resource profiling on Google Cloud, and mixed-precision / operator-fusion techniques drawn from the ML community.
 
@@ -251,8 +251,8 @@ The runner, storage, and API pick up the new workload automatically.
 ## Design principles
 
 - **Warmup before timing** — JIT compilation (JAX/XLA: ~115 ms cold, ~0.6 ms warm at M=10k) is always excluded from measurements
-- **Fixed seeds** — same `seed` in config produces bit-identical prices and paths across runs and engines
-- **`config_hash`** — SHA-256 fingerprint of the sorted serialised config; stable across machines; groups repeated runs of the same experiment
+- **Fixed seeds** — same `seed` gives repeatable results for a fixed engine, thread setting, and environment; different engines or thread counts can produce statistically equivalent but numerically distinct paths
+- **`config_hash`** — SHA-256 fingerprint of the sorted serialised workload config; stable across machines; combine it with engine, AD mode, thread metadata, and platform metadata to reproduce a specific timed run
 - **Single backward pass** — reverse-mode AD uses `jax.grad(argnums=(0,1,2))`, not three separate calls; overhead ratio is measured against an identical no-AD baseline
 - **Auto-migration** — new DB columns are added with `ALTER TABLE` at startup; existing databases are never invalidated
 

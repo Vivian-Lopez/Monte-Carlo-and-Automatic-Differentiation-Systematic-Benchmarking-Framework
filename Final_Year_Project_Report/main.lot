@@ -2,31 +2,34 @@
 \addvspace {10\p@ }
 \addvspace {10\p@ }
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {3.1}{\ignorespaces Fields of \texttt {EuropeanOptionConfig}.}}{15}{table.3.1}%
-\contentsline {table}{\numberline {3.2}{\ignorespaces Additional fields of \texttt {EuropeanLocalVolConfig}.}}{15}{table.3.2}%
-\contentsline {table}{\numberline {3.3}{\ignorespaces REST API endpoints.}}{19}{table.3.3}%
+\contentsline {table}{\numberline {3.1}{\ignorespaces Fields of \texttt {EuropeanOptionConfig}.}}{16}{table.3.1}%
+\contentsline {table}{\numberline {3.2}{\ignorespaces Additional fields of \texttt {EuropeanLocalVolConfig}.}}{16}{table.3.2}%
+\contentsline {table}{\numberline {3.3}{\ignorespaces REST API endpoints.}}{20}{table.3.3}%
 \addvspace {10\p@ }
+\contentsline {table}{\numberline {4.1}{\ignorespaces Implemented workload and AD support by engine.}}{28}{table.4.1}%
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {5.1}{\ignorespaces Mapping from research questions to local experiment evidence.}}{31}{table.5.1}%
-\contentsline {table}{\numberline {5.2}{\ignorespaces Engine configurations used in the local experimental programme.}}{33}{table.5.2}%
-\contentsline {table}{\numberline {5.3}{\ignorespaces Core experiment scripts and their roles.}}{37}{table.5.3}%
+\contentsline {table}{\numberline {5.1}{\ignorespaces Mapping from research questions to experimental evidence.}}{33}{table.5.1}%
+\contentsline {table}{\numberline {5.2}{\ignorespaces Engine configurations used in the local experimental programme.}}{35}{table.5.2}%
+\contentsline {table}{\numberline {5.3}{\ignorespaces Core experiment scripts and their roles.}}{39}{table.5.3}%
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {6.1}{\ignorespaces Result sections and their corresponding evidence.}}{45}{table.6.1}%
-\contentsline {table}{\numberline {6.2}{\ignorespaces European GBM baseline validation at \(M=10{,}000\).}}{45}{table.6.2}%
-\contentsline {table}{\numberline {6.3}{\ignorespaces LV-0: smoke test (\(M=1{,}000\), \(N=252\), one timed run).}}{45}{table.6.3}%
-\contentsline {table}{\numberline {6.4}{\ignorespaces LV-1: engine scalability on local volatility (\(N=252\), no AD).}}{46}{table.6.4}%
-\contentsline {table}{\numberline {6.5}{\ignorespaces LV-2: JAX AD path-count scaling on local volatility (\(N=252\)).}}{46}{table.6.5}%
-\contentsline {table}{\numberline {6.6}{\ignorespaces LV-3: time-step scaling on local volatility (\(M=50{,}000\), no AD).}}{47}{table.6.6}%
-\contentsline {table}{\numberline {6.7}{\ignorespaces LV-4: JAX AD time-step scaling on local volatility (\(M=25{,}000\)).}}{47}{table.6.7}%
-\contentsline {table}{\numberline {6.8}{\ignorespaces LV-5: JAX memory-pressure experiment.}}{48}{table.6.8}%
-\contentsline {table}{\numberline {6.9}{\ignorespaces LV-6: strong thread scaling (\(M=100{,}000\), \(N=252\)).}}{48}{table.6.9}%
-\contentsline {table}{\numberline {6.10}{\ignorespaces LV-7: weak thread scaling (base \(M=50{,}000\) paths/thread, \(N=252\)).}}{48}{table.6.10}%
-\contentsline {table}{\numberline {6.11}{\ignorespaces LV-8: surface-shape sensitivity (\(M=50{,}000\), \(N=252\)).}}{49}{table.6.11}%
-\contentsline {table}{\numberline {6.12}{\ignorespaces LV-9: timing stability (\(M=100{,}000\), \(N=252\), 20 timed runs).}}{49}{table.6.12}%
-\contentsline {table}{\numberline {6.13}{\ignorespaces LV-10: stress limit (\(N=252\), large \(M\)).}}{50}{table.6.13}%
-\contentsline {table}{\numberline {6.14}{\ignorespaces European GBM AD validation against Black--Scholes analytical values at $M=100{,}000$.}}{50}{table.6.14}%
-\contentsline {table}{\numberline {6.15}{\ignorespaces JAX automatic differentiation overhead at $M=100{,}000$ on n2-standard-4.}}{50}{table.6.15}%
-\contentsline {table}{\numberline {6.16}{\ignorespaces Best no-AD cost-performance per priced cloud instance at $M=100{,}000$.}}{51}{table.6.16}%
-\contentsline {table}{\numberline {6.17}{\ignorespaces Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment.}}{52}{table.6.17}%
+\contentsline {table}{\numberline {6.1}{\ignorespaces Result sections and their corresponding evidence.}}{46}{table.6.1}%
+\contentsline {table}{\numberline {6.2}{\ignorespaces European GBM baseline validation at \(M=10{,}000\).}}{47}{table.6.2}%
+\contentsline {table}{\numberline {6.3}{\ignorespaces LV-0: smoke test (\(M=1{,}000\), \(N=252\), one timed run).}}{47}{table.6.3}%
+\contentsline {table}{\numberline {6.4}{\ignorespaces Local-volatility uncertainty check against an independent batched NumPy reference.}}{48}{table.6.4}%
+\contentsline {table}{\numberline {6.5}{\ignorespaces LV-1: engine scalability on local volatility (\(N=252\), no AD).}}{48}{table.6.5}%
+\contentsline {table}{\numberline {6.6}{\ignorespaces LV-2: JAX AD path-count scaling on local volatility (\(N=252\)).}}{49}{table.6.6}%
+\contentsline {table}{\numberline {6.7}{\ignorespaces LV-3: time-step scaling on local volatility (\(M=50{,}000\), no AD).}}{49}{table.6.7}%
+\contentsline {table}{\numberline {6.8}{\ignorespaces LV-4: JAX AD time-step scaling on local volatility (\(M=25{,}000\)).}}{49}{table.6.8}%
+\contentsline {table}{\numberline {6.9}{\ignorespaces LV-5: JAX memory-pressure experiment.}}{50}{table.6.9}%
+\contentsline {table}{\numberline {6.10}{\ignorespaces LV-6: strong thread scaling (\(M=100{,}000\), \(N=252\)).}}{50}{table.6.10}%
+\contentsline {table}{\numberline {6.11}{\ignorespaces LV-7: weak thread scaling (base \(M=50{,}000\) paths/thread, \(N=252\)).}}{51}{table.6.11}%
+\contentsline {table}{\numberline {6.12}{\ignorespaces LV-8: surface-shape sensitivity (\(M=50{,}000\), \(N=252\)).}}{51}{table.6.12}%
+\contentsline {table}{\numberline {6.13}{\ignorespaces LV-9: timing stability (\(M=100{,}000\), \(N=252\), 20 timed runs).}}{52}{table.6.13}%
+\contentsline {table}{\numberline {6.14}{\ignorespaces LV-10: stress limit (\(N=252\), large \(M\)).}}{52}{table.6.14}%
+\contentsline {table}{\numberline {6.15}{\ignorespaces European GBM AD validation against Black--Scholes analytical values at $M=100{,}000$.}}{52}{table.6.15}%
+\contentsline {table}{\numberline {6.16}{\ignorespaces JAX automatic differentiation overhead at $M=100{,}000$ on n2-standard-4.}}{53}{table.6.16}%
+\contentsline {table}{\numberline {6.17}{\ignorespaces Best no-AD cost-performance per priced cloud instance at $M=100{,}000$.}}{53}{table.6.17}%
+\contentsline {table}{\numberline {6.18}{\ignorespaces Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment.}}{54}{table.6.18}%
+\contentsline {table}{\numberline {6.19}{\ignorespaces Cross-instance robustness audit for SHA on sha\_cloud\_profiler\_v4.}}{55}{table.6.19}%
 \addvspace {10\p@ }
 \addvspace {10\p@ }
