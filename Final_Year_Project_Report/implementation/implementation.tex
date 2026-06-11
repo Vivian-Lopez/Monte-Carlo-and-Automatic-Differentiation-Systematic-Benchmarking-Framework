@@ -393,7 +393,8 @@ changes.
 \section{Supported Workloads}
 \label{sec:impl-workloads}
 
-Three workloads are implemented and validated end-to-end:
+Three workloads are implemented, with validation strength depending on the
+available reference:
 
 \begin{itemize}
     \item \texttt{european} (\texttt{EuropeanOptionConfig}): single-step exact
@@ -404,7 +405,9 @@ Three workloads are implemented and validated end-to-end:
           local-volatility surface. Evaluated through NumPy, JAX, C++ and Rust
           in the completed experiments. Used to
           stress-test AD on a deeper computation graph and to expose the cost
-          of multi-step over single-step simulation.
+          of multi-step over single-step simulation. Its prices are checked by
+          cross-engine agreement and convergence rather than a closed-form
+          reference, with the Rust discrepancy treated as a validation caveat.
     \item \texttt{asian} (\texttt{AsianOptionConfig}): arithmetic-average
           path-dependent option workload. Supported by the Python and JAX
           engines in the final cloud-profiler experiments. Used to check that
@@ -608,6 +611,16 @@ because the profiler is an optimisation of the benchmarking process, not a
 replacement for evaluation. Its success is judged by whether it reduces
 expensive full runs while preserving the decisions that the full grid would
 have supported.
+
+The guarded local-volatility profiler is implemented in a dedicated
+\texttt{guarded\_sha} package and executed by
+\texttt{run\_guarded\_sha\_local\_vol.py}. This keeps the new policy reusable
+rather than embedding it in the older monolithic profiler script. The
+implementation defines typed candidate, objective and guard objects, filters
+unsupported engine--AD combinations using engine capability metadata, records
+promotion/elimination reasons, and writes JSON, CSV and Markdown artefacts. A
+GCP wrapper script runs the same experiment across the selected instance types
+and then performs a combined cross-instance analysis locally.
 
 \section{Testing}
 \label{sec:impl-testing}

@@ -98,8 +98,11 @@ commit hash where available. This means the hash alone is not the full
 reproducibility key; a specific timed run is identified by the workload hash
 plus the execution context stored in the same row.
 
-The cloud-profiler conclusions in Chapter~\ref{chap:results} are based on the
-\code{sha\_cloud\_profiler\_v4} result set. The headline
-\code{n2-standard-4} profiler result is supplemented by a post-hoc audit across
-the other stored instance slices to avoid overstating general reliability from
-a single favourable grid.
+The cloud-profiler conclusions in Chapter~\ref{chap:results} use both the
+\code{sha\_cloud\_profiler\_v4} result set and the guarded local-volatility
+artefacts under
+\code{results/guarded\_sha\_local\_vol\_gcp/20260611\_152107/combined\_clean/20260611\_153812/}.
+The key guarded-SHA files are \code{candidate\_observations.csv},
+\code{recommendations.csv}, \code{oracle\_comparison.csv},
+\code{sha\_rounds.csv}, \code{summary.json}, and
+\code{guarded\_sha\_report.md}.

@@ -1,0 +1,13 @@
+{
+  "num_decisions": 125,
+  "num_observations": 120,
+  "num_recommendations": 18,
+  "rejected_candidates": {
+    "cpp|forward|*": "unsupported AD mode",
+    "cpp|reverse|*": "unsupported AD mode",
+    "cpu|forward|*": "unsupported AD mode",
+    "cpu|reverse|*": "unsupported AD mode",
+    "rust|forward|*": "unsupported AD mode",
+    "rust|reverse|*": "unsupported AD mode"
+  }
+}

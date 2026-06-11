@@ -593,6 +593,14 @@ successful. Conversely, a profiler that preserves the full-grid decisions while
 reducing full runs contributes directly to the cloud resource-selection goal of
 the project.
 
+The final revision adds guarded SHA for the local-volatility deployment task.
+The guarded version keeps the efficient SHA structure, but separates price-only
+and AD-required candidate pools and applies explicit near-tie, engine-diversity,
+instance-family, scaling-improvement, and correctness/AD guards before final
+elimination. This design responds directly to the observed risk that a plain
+small-budget SHA ranking can discard configurations whose larger-budget scaling
+or cost-performance later improves.
+
 \section{Design Decisions and Trade-offs}
 \label{sec:design-decisions}
 

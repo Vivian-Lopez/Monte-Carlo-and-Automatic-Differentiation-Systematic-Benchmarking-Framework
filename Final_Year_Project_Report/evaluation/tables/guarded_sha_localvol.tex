@@ -1,0 +1,37 @@
+\begin{table}[htbp]
+\centering
+\scriptsize
+\caption{Guarded SHA local-volatility recommendations and pure runtime/cost baselines.}
+\label{tab:guarded-sha-localvol}
+\begin{tabularx}{\textwidth}{l l l l l r}
+\toprule
+\textbf{Pool/task} & \textbf{Objective} & \textbf{Weighted rec.} & \textbf{Fastest} & \textbf{Cheapest} & \textbf{Regret} \\
+\midrule
+All price-only & Speed & \code{rust/none/t2d} & \code{rust/none/c2d} & \code{rust/none/t2d} & 0.0\% \\
+All price-only & Balanced & \code{rust/none/t2d} & \code{rust/none/c2d} & \code{rust/none/t2d} & 0.0\% \\
+All price-only & Cost & \code{rust/none/t2d} & \code{rust/none/c2d} & \code{rust/none/t2d} & 0.0\% \\
+Validated price-only & Speed & \code{cpp/none/t2d} & \code{cpp/none/t2d} & \code{cpp/none/t2d} & 0.0\% \\
+Validated price-only & Balanced & \code{cpp/none/t2d} & \code{cpp/none/t2d} & \code{cpp/none/t2d} & 0.0\% \\
+Validated price-only & Cost & \code{cpp/none/t2d} & \code{cpp/none/t2d} & \code{cpp/none/t2d} & 0.0\% \\
+AD-required & Speed & \code{jax/reverse/t2d} & \code{jax/reverse/c2d} & \code{jax/reverse/t2d} & 0.0\% \\
+AD-required & Balanced & \code{jax/reverse/t2d} & \code{jax/reverse/c2d} & \code{jax/reverse/t2d} & 0.0\% \\
+AD-required & Cost & \code{jax/reverse/t2d} & \code{jax/reverse/c2d} & \code{jax/reverse/t2d} & 0.0\% \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\scriptsize
+\caption{Same-grid profiler comparison for the balanced guarded-SHA objective.}
+\label{tab:guarded-sha-method-comparison}
+\begin{tabularx}{\textwidth}{l r r l r r r l}
+\toprule
+\textbf{Method} & \textbf{Used} & \textbf{Saved} & \textbf{Selected config.} & \textbf{Obj.} & \textbf{Run} & \textbf{Cost} & \textbf{Validity status} \\
+\midrule
+Full-grid oracle & 30 & 0 & Price: \code{rust} perf./\code{cpp} valid; AD: \code{jax} & 0.0\% & 0.0\% & 0.0\% & Reference grid \\
+Plain SHA & 7 & 23 & Price: \code{rust} perf./\code{cpp} valid; AD: \code{jax} & 0.0\% & 0.0\% & 0.0\% & Less guarded \\
+Guarded SHA & 17 & 13 & Price: \code{rust} perf./\code{cpp} valid; AD: \code{jax} & 0.0\% & 0.0\% & 0.0\% & Preferred policy \\
+\bottomrule
+\end{tabularx}
+\end{table}
