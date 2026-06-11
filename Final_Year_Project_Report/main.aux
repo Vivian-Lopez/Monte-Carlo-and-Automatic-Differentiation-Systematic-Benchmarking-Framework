@@ -77,7 +77,7 @@
 \newlabel{sec:engine-layer}{{3.4}{15}{Layer~2 --- Engine Interface}{section.3.4}{}}
 \@writefile{toc}{\contentsline {paragraph}{Engine~1 --- NumPy / CPU.}{15}{section*.6}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Engine~2 --- JAX / XLA.}{15}{section*.7}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Engine~3 --- C++ / OpenMP.}{16}{section*.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Engine~3 --- C++ / OpenMP.}{15}{section*.8}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Engine~4 --- Rust / Rayon.}{16}{section*.9}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Engine~5 --- CUDA / PyCUDA.}{16}{section*.10}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {3.5}Layer~3 --- Benchmark Runner}{16}{section.3.5}\protected@file@percent }
@@ -89,10 +89,10 @@
 \@writefile{toc}{\contentsline {paragraph}{Write paths.}{17}{section*.13}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {3.7}Layer~5 --- REST API}{17}{section.3.7}\protected@file@percent }
 \newlabel{sec:api-layer}{{3.7}{17}{Layer~5 --- REST API}{section.3.7}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3.8}Layer~6 --- Frontend}{17}{section.3.8}\protected@file@percent }
-\newlabel{sec:frontend-layer}{{3.8}{17}{Layer~6 --- Frontend}{section.3.8}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3.3}{\ignorespaces REST API endpoints.}}{18}{table.3.3}\protected@file@percent }
-\newlabel{tab:api-endpoints}{{3.3}{18}{REST API endpoints}{table.3.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3.3}{\ignorespaces REST API endpoints.}}{17}{table.3.3}\protected@file@percent }
+\newlabel{tab:api-endpoints}{{3.3}{17}{REST API endpoints}{table.3.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.8}Layer~6 --- Frontend}{18}{section.3.8}\protected@file@percent }
+\newlabel{sec:frontend-layer}{{3.8}{18}{Layer~6 --- Frontend}{section.3.8}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {3.9}Cloud Cost-Performance Design}{18}{section.3.9}\protected@file@percent }
 \newlabel{sec:cloud-cost-design}{{3.9}{18}{Cloud Cost-Performance Design}{section.3.9}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {3.10}Budget-Aware Profiler Design}{18}{section.3.10}\protected@file@percent }
@@ -309,14 +309,14 @@
 \newlabel{fig:pareto-runtime-cost}{{6.2}{47}{Runtime versus estimated cost for the final \code {n2-standard-4} grid. Pareto-optimal points are highlighted}{figure.6.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {6.13.4}Old Profiler versus SHA}{48}{subsection.6.13.4}\protected@file@percent }
 \newlabel{subsec:cloud-profiler-comparison}{{6.13.4}{48}{Old Profiler versus SHA}{subsection.6.13.4}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.18}{\ignorespaces Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment.}}{48}{table.6.18}\protected@file@percent }
-\newlabel{tab:profiler-comparison}{{6.18}{48}{Full-grid, old-profiler and SHA comparison for the final n2-standard-4 cloud experiment}{table.6.18}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.18}{\ignorespaces Full-grid, old-profiler and SHA comparison for the final \nolinkurl  {n2-standard-4} cloud experiment. SHA preserves the full-grid decision on this slice while reducing full-scale runs.}}{48}{table.6.18}\protected@file@percent }
+\newlabel{tab:profiler-comparison}{{6.18}{48}{Full-grid, old-profiler and SHA comparison for the final \code {n2-standard-4} cloud experiment. SHA preserves the full-grid decision on this slice while reducing full-scale runs}{table.6.18}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {6.13.5}Guarded SHA Local-Volatility Profiler}{48}{subsection.6.13.5}\protected@file@percent }
 \newlabel{subsec:guarded-sha-localvol}{{6.13.5}{48}{Guarded SHA Local-Volatility Profiler}{subsection.6.13.5}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.19}{\ignorespaces Guarded SHA local-volatility recommendations and pure runtime/cost baselines.}}{48}{table.6.19}\protected@file@percent }
-\newlabel{tab:guarded-sha-localvol}{{6.19}{48}{Guarded SHA local-volatility recommendations and pure runtime/cost baselines}{table.6.19}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6.20}{\ignorespaces Same-grid profiler comparison for the balanced guarded-SHA objective.}}{48}{table.6.20}\protected@file@percent }
-\newlabel{tab:guarded-sha-method-comparison}{{6.20}{48}{Same-grid profiler comparison for the balanced guarded-SHA objective}{table.6.20}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.19}{\ignorespaces Guarded SHA local-volatility recommendations and pure runtime/cost baselines. The weighted recommendation is compared with the pure fastest and pure cheapest configuration in the same candidate pool.}}{48}{table.6.19}\protected@file@percent }
+\newlabel{tab:guarded-sha-localvol}{{6.19}{48}{Guarded SHA local-volatility recommendations and pure runtime/cost baselines. The weighted recommendation is compared with the pure fastest and pure cheapest configuration in the same candidate pool}{table.6.19}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6.20}{\ignorespaces Same-grid profiler comparison for the balanced guarded-SHA objective. Guarded SHA uses more full runs than plain SHA, but adds explicit safeguards.}}{49}{table.6.20}\protected@file@percent }
+\newlabel{tab:guarded-sha-method-comparison}{{6.20}{49}{Same-grid profiler comparison for the balanced guarded-SHA objective. Guarded SHA uses more full runs than plain SHA, but adds explicit safeguards}{table.6.20}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {6.13.6}SHA Progression in the Earlier Multi-Workload Grid}{49}{subsection.6.13.6}\protected@file@percent }
 \newlabel{subsec:sha-progression}{{6.13.6}{49}{SHA Progression in the Earlier Multi-Workload Grid}{subsection.6.13.6}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {6.3}{\ignorespaces SHA promotion path on the earlier \nolinkurl  {n2-standard-4} multi-workload grid. Most configurations receive only cheap probes, while the active set shrinks as the path budget increases.}}{49}{figure.6.3}\protected@file@percent }

@@ -2,8 +2,10 @@
 
 %% Language and font encodings
 \usepackage[english]{babel}
-\usepackage[utf8x]{inputenc}
+\usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{cmap}
 
 %% Page layout
 \usepackage[
@@ -26,6 +28,7 @@
 \usepackage{enumitem}
 \usepackage{listings}
 \usepackage{xurl}
+\usepackage{microtype}
 \usepackage[hidelinks]{hyperref}
 \usepackage{multirow}
 \usepackage{threeparttable}
@@ -67,15 +70,36 @@
 % \end{abstract}
 \begin{abstract}
 
-Monte Carlo (MC) simulation with automatic differentiation (AD) is widely used in quantitative finance and scientific computing, where both numerical estimates and parameter sensitivities must be computed efficiently. However, the performance characteristics of MC+AD workloads are difficult to evaluate systematically. Runtime, scalability, memory behaviour, and numerical stability depend not only on the underlying stochastic model, but also on differentiation mode, execution backend, compiler/runtime behaviour, threading strategy, and hardware configuration. Existing studies often evaluate these factors in isolation, making it difficult to determine which software and hardware choices are appropriate for a given workload and deployment budget.
+Monte Carlo (MC) simulation with automatic differentiation (AD) is widely used
+in quantitative finance and scientific computing, where both numerical
+estimates and parameter sensitivities must be computed efficiently. However,
+MC+AD performance is difficult to predict because runtime, memory behaviour,
+scalability, and numerical stability depend jointly on the stochastic workload,
+differentiation mode, execution backend, compiler/runtime behaviour, threading
+strategy, and hardware configuration. This makes it hard to choose appropriate
+software and cloud hardware for a given workload and deployment budget.
 
-This project develops a reproducible benchmarking and profiling framework for MC+AD option-pricing workloads across modern software and hardware environments. The framework provides explicit workload specifications, a common engine interface, controlled warm-up and repeated measurement, deterministic random seeding, numerical validation against reference solutions, structured result storage, and environment metadata capture. Using this framework, a set of representative workloads is evaluated across Python/NumPy, JAX, C++, and Rust implementations on both local and cloud-based hardware platforms. Automatic differentiation is evaluated primarily through JAX, while C++ and Rust act as compiled no-AD throughput baselines for the same workload definitions.
+This project develops a reproducible benchmarking and profiling framework for
+MC+AD option-pricing workloads. The framework provides explicit workload
+specifications, a common engine interface, controlled warm-up and repeated
+measurement, deterministic seeding, numerical validation, structured result
+storage, and environment metadata capture. It evaluates European,
+local-volatility, and Asian option workloads across Python/NumPy, JAX, C++,
+and Rust implementations on local and Google Cloud CPU platforms. AD is
+evaluated primarily through JAX, while C++ and Rust provide compiled no-AD
+throughput baselines. The evaluation shows that no single backend or hardware
+configuration is uniformly optimal: backend rankings change with workload
+structure, scale, differentiation requirements, and cost constraints.
 
-The experimental study focuses on workload regimes rather than isolated headline timings. Constant-volatility European options are used as a baseline terminal-payoff workload, while parametric local-volatility models introduce additional arithmetic complexity and state-dependent dynamics. A path-dependent Asian option workload further adds a non-terminal-payoff case to the final cloud-profiler grid. Across these workloads, the project investigates how backend rankings change with workload scale, how forward- and reverse-mode AD alter runtime and memory costs, and how cloud hardware selection affects cost-performance trade-offs.
-
-The primary contribution is a workload-aware profiling methodology for MC+AD systems. Short probe runs and successive-halving style promotion reduce expensive full-scale evaluations. SHA recovered the Pareto frontier in the main \code{n2-standard-4} case while halving full-scale evaluations, but cross-instance robustness was mixed; this motivates guarded promotion checks rather than a claim of universal profiler reliability.
-
-The results demonstrate that no single backend or hardware configuration is uniformly optimal across all workloads. Instead, effective deployment depends on workload structure, differentiation requirements, execution scale, and cost constraints. Overall, the project contributes both a practical benchmarking framework and an empirical methodology for analysing MC+AD workloads, providing evidence-based guidance for the design and selection of efficient Monte Carlo simulation systems with automatic differentiation.
+The project also implements a workload-aware cloud profiling methodology using
+short probe runs and successive-halving style promotion to reduce expensive
+full-scale benchmarking. SHA recovered the Pareto frontier in the main
+\code{n2-standard-4} case while halving full-scale evaluations, but
+cross-instance robustness was mixed, motivating guarded promotion checks rather
+than a claim of universal profiler reliability. Overall, the work provides a
+practical framework and empirical methodology for analysing MC+AD systems, and
+points towards future extensions in broader AD-system coverage, GPU evaluation,
+and more uncertainty-aware cloud profiling.
 
 \end{abstract}
 

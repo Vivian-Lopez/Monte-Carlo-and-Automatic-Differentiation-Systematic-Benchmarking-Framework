@@ -30,7 +30,7 @@
 \contentsline {section}{\numberline {3.4}Layer~2 --- Engine Interface}{15}{section.3.4}%
 \contentsline {paragraph}{Engine~1 --- NumPy / CPU.}{15}{section*.6}%
 \contentsline {paragraph}{Engine~2 --- JAX / XLA.}{15}{section*.7}%
-\contentsline {paragraph}{Engine~3 --- C++ / OpenMP.}{16}{section*.8}%
+\contentsline {paragraph}{Engine~3 --- C++ / OpenMP.}{15}{section*.8}%
 \contentsline {paragraph}{Engine~4 --- Rust / Rayon.}{16}{section*.9}%
 \contentsline {paragraph}{Engine~5 --- CUDA / PyCUDA.}{16}{section*.10}%
 \contentsline {section}{\numberline {3.5}Layer~3 --- Benchmark Runner}{16}{section.3.5}%
@@ -39,7 +39,7 @@
 \contentsline {paragraph}{Auto-migration.}{17}{section*.12}%
 \contentsline {paragraph}{Write paths.}{17}{section*.13}%
 \contentsline {section}{\numberline {3.7}Layer~5 --- REST API}{17}{section.3.7}%
-\contentsline {section}{\numberline {3.8}Layer~6 --- Frontend}{17}{section.3.8}%
+\contentsline {section}{\numberline {3.8}Layer~6 --- Frontend}{18}{section.3.8}%
 \contentsline {section}{\numberline {3.9}Cloud Cost-Performance Design}{18}{section.3.9}%
 \contentsline {section}{\numberline {3.10}Budget-Aware Profiler Design}{18}{section.3.10}%
 \contentsline {subsection}{\numberline {3.10.1}Probe-Based Baseline}{18}{subsection.3.10.1}%

@@ -1,7 +1,9 @@
 \begin{table}[htbp]
 \centering
-\scriptsize
-\caption{Guarded SHA local-volatility recommendations and pure runtime/cost baselines.}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\caption{Guarded SHA local-volatility recommendations and pure runtime/cost baselines. The weighted recommendation is compared with the pure fastest and pure cheapest configuration in the same candidate pool.}
 \label{tab:guarded-sha-localvol}
 \begin{tabularx}{\textwidth}{l l l l l r}
 \toprule
@@ -22,8 +24,10 @@ AD-required & Cost & \code{jax/reverse/t2d} & \code{jax/reverse/c2d} & \code{jax
 
 \begin{table}[htbp]
 \centering
-\scriptsize
-\caption{Same-grid profiler comparison for the balanced guarded-SHA objective.}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\caption{Same-grid profiler comparison for the balanced guarded-SHA objective. Guarded SHA uses more full runs than plain SHA, but adds explicit safeguards.}
 \label{tab:guarded-sha-method-comparison}
 \begin{tabularx}{\textwidth}{l r r l r r r l}
 \toprule
