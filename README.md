@@ -195,7 +195,7 @@ $$S_{n+1} = S_n \exp\!\left[\left(r - \tfrac{1}{2}\sigma_n^2\right)\Delta t + \s
 
 $$x_n = \ln(S_n/S_0), \qquad \text{raw}_n = a_0 + a_1 x_n + a_2 x_n^2 + b_1 t_n$$
 
-$$\sigma_n = \sigma_{\min} + \operatorname{softplus}(\text{raw}_n), \qquad \operatorname{softplus}(z) = \max(z,0) + \ln(1+e^{-|z|})$$
+$$\sigma_n = \sigma_{\min} + \mathrm{softplus}(\text{raw}_n), \qquad \mathrm{softplus}(z) = \max(z,0) + \ln(1+e^{-|z|})$$
 
 ```python
 from benchmarking.core.config import EuropeanLocalVolConfig
