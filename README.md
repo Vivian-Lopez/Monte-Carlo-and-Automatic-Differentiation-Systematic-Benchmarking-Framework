@@ -1,3 +1,17 @@
+## Project at a glance
+
+A research framework for **benchmarking the performance and cost of Monte Carlo derivatives pricing**, developed as an Imperial College London MEng project in collaboration with HSBC Quant Equity Derivatives.
+
+**What it does:** Compares Monte Carlo implementations across Python, JAX, C++ and Rust, measuring execution speed, numerical accuracy, automatic differentiation overhead and estimated cloud costs.
+
+**My contribution:** Designed the modular system architecture and benchmarking interfaces, guided framework development, and evaluated performance and cost optimisation strategies.
+
+**Key result:** Reduced full-scale benchmark evaluations by **50% (48 → 24)** in the primary Google Cloud experiment while retaining all observed optimal runtime/cost trade-offs. Results varied across other cloud configurations.
+
+**Tech stack:** Python · C++ · Rust · JAX · OpenMP · Google Cloud · SQLite · Flask · React
+
+**Explore:** [Architecture](#architecture-and-technology-stack) · [Research findings](#selected-research-findings) · [Full research report](Final_Year_Project_Report/main.pdf)
+
 # Monte Carlo + Automatic Differentiation Systematic Benchmarking Framework
 
 **Imperial College London · MEng Computing (AI/ML) final-year research project**
