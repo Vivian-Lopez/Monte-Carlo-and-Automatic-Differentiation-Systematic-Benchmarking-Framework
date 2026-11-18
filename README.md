@@ -1,24 +1,24 @@
-## Project at a glance
-
-A research framework for **benchmarking the performance and cost of Monte Carlo derivatives pricing**, developed as an Imperial College London MEng project in collaboration with HSBC Quant Equity Derivatives.
-
-**What it does:** Compares Monte Carlo implementations across Python, JAX, C++ and Rust, measuring execution speed, numerical accuracy, automatic differentiation overhead and estimated cloud costs.
-
-**My contribution:** Designed the modular system architecture and benchmarking interfaces, guided framework development, and evaluated performance and cost optimisation strategies.
-
-**Key result:** Reduced full-scale benchmark evaluations by **50% (48 → 24)** in the primary Google Cloud experiment while retaining all observed optimal runtime/cost trade-offs. Results varied across other cloud configurations.
-
-**Tech stack:** Python · C++ · Rust · JAX · OpenMP · Google Cloud · SQLite · Flask · React
-
-**Explore:** [Architecture](#architecture-and-technology-stack) · [Research findings](#selected-research-findings) · [Full research report](Final_Year_Project_Report/main.pdf)
-
 # Monte Carlo + Automatic Differentiation Systematic Benchmarking Framework
 
 **Imperial College London · MEng Computing (AI/ML) final-year research project**
 
 Industrial collaboration: **HSBC Quant Equity Derivatives** · Supervisor: William Knottenbelt
 
-A research framework for measuring how simulation engines, automatic differentiation (AD), parallelism and cloud configurations affect the runtime and estimated cost of Monte Carlo option pricing. Implemented in Python, C++ and Rust, with JAX/XLA for differentiable simulation, it combines numerical validation, repeatable experiments and cost-aware configuration selection. The problem matters when many simulated paths and price sensitivities must be computed within limited time, memory and compute budgets.
+A research and software engineering project exploring **how to make Monte Carlo option pricing faster and more cost-effective**. The framework compares Python, JAX, C++ and Rust implementations, measuring runtime, numerical accuracy, automatic differentiation (AD) overhead and estimated cloud costs through repeatable experiments.
+
+**[View the deployed research dashboard →](https://mcad-pareto-research.pages.dev/#summary)**
+
+Explore the research through a frontend presenting historical benchmark results, engine comparisons, scaling experiments and cloud measurements.
+
+## Project at a glance
+
+**My contribution:** Designed the modular system architecture and shared benchmarking interfaces, guided framework development, and evaluated performance and cost optimisation strategies. The work spans numerical computing, native-language integration, cloud experimentation and data analysis.
+
+**Key result:** Selected **24 instead of 48 full-scale benchmark evaluations (50% fewer)** in the primary Google Cloud experiment while retaining all observed optimal runtime/cost trade-offs. Results varied across other cloud configurations.
+
+**Tech stack:** Python · C++ · Rust · JAX/XLA · OpenMP · Google Cloud · SQLite · Flask · React · TypeScript
+
+**Explore:** [Live dashboard](https://mcad-pareto-research.pages.dev/#summary) · [Architecture](#architecture-and-technology-stack) · [Research findings](#selected-research-findings) · [Full research report](Final_Year_Project_Report/main.pdf)
 
 ## Implementation highlights
 
